@@ -1,0 +1,35 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "AURA Flutter: Chrome (Web PWA)",
+      "request": "launch",
+      "type": "dart",
+      "deviceId": "chrome",
+      "program": "lib/main.dart",
+      "args": [
+        "--dart-define=GEMINI_API_KEY=REDACTED_API_KEY"
+      ]
+    },
+    {
+      "name": "AURA Flutter: Android",
+      "request": "launch",
+      "type": "dart",
+      "deviceId": "android",
+      "program": "lib/main.dart",
+      "args": [
+        "--dart-define=GEMINI_API_KEY=REDACTED_API_KEY"
+      ]
+    },
+    {
+      "name": "AURA Flutter: iOS Simulator",
+      "request": "launch",
+      "type": "dart",
+      "deviceId": "ios",
+      "program": "lib/main.dart",
+      "args": [
+        "--dart-define=GEMINI_API_KEY=REDACTED_API_KEY"
+      ]
+    }
+  ]
+}

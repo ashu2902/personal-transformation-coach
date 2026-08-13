@@ -1,0 +1,6 @@
+{
+  "name": "Personal Transformation Coach",
+  "description": "AI-assisted mobile-first personal transformation app for training, nutrition, recovery, and progressive adaptation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
