@@ -446,7 +446,7 @@ class WorkoutScreen extends ConsumerWidget {
                     children: [
                       Icon(LucideIcons.sparkles, color: Color(0xFF10B981), size: 20),
                       SizedBox(width: 8),
-                      Text('Adapt Workout with Gemini AI', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                      Text('Adapt Workout with AURA AI', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
                     ],
                   ),
                   IconButton(
@@ -510,7 +510,7 @@ class WorkoutScreen extends ConsumerWidget {
                       nav.pop();
                       messenger.showSnackBar(
                         const SnackBar(
-                          content: Text('⚡ Gemini AI adapting your workout program...'),
+                          content: Text('⚡ AURA AI adapting your workout program...'),
                           backgroundColor: Color(0xFF10B981),
                         ),
                       );

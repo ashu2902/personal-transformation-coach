@@ -616,7 +616,7 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
     final adaptedWorkout = await _aiService.adaptWorkoutWithAI(request, state);
     state = state.copyWith(
       workout: adaptedWorkout,
-      adaptationNotice: 'Workout adapted via Gemini AI: "${adaptedWorkout.adaptationNote}"',
+      adaptationNotice: 'Workout adapted via AURA AI: "${adaptedWorkout.adaptationNote}"',
     );
     await _repository.saveTodayWorkout(adaptedWorkout);
   }

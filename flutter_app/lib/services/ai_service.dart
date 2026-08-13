@@ -242,7 +242,7 @@ Prescribe 4-5 targeted exercises customized to their baseline, gender, and joint
       final title = parsed['title']?.toString() ?? '${profile.daysPerWeek}-Day AI Plan';
       final focus = parsed['focusArea']?.toString() ?? 'Full Body';
       final duration = (parsed['estimatedDurationMin'] as num?)?.toInt() ?? 45;
-      final note = parsed['adaptationNote']?.toString() ?? 'Tailored for ${profile.name} by Gemini AI';
+      final note = parsed['adaptationNote']?.toString() ?? 'Tailored for ${profile.name} by AURA AI';
       final exercises = _parseExerciseList(parsed['exercises'], focus, profile.availableEquipment, 'ai_init');
       return DailyWorkout(
         id: 'workout_$todayStr',
@@ -380,7 +380,7 @@ Return JSON:
 
   DailyWorkout _parseWorkoutJson(Map<String, dynamic> parsed, DailyWorkout current, UserProfile profile) {
     final title = parsed['title']?.toString() ?? '${current.title} (AI Adapted)';
-    final note = parsed['adaptationNote']?.toString() ?? 'Adapted by Gemini AI';
+    final note = parsed['adaptationNote']?.toString() ?? 'Adapted by AURA AI';
     final exercises = _parseExerciseList(parsed['exercises'], current.focusArea, profile.availableEquipment, 'ai_adapt');
     if (exercises.isEmpty) throw Exception('Gemini returned empty exercise list');
     return current.copyWith(

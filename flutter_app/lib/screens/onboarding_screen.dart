@@ -477,7 +477,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Single
         ),
         const SizedBox(height: 6),
         const Text(
-          'Gemini AI uses your biological baseline to synthesize your exact BMR and target macros.',
+          'AURA AI uses your biological baseline to synthesize your exact BMR and target macros.',
           style: TextStyle(color: Color(0xFFA1A1AA), fontSize: 12),
         ),
         const SizedBox(height: 20),
@@ -568,7 +568,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Single
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      'BMR, TDEE, and macro split will be synthesized by Gemini AI tailored for a ${_selectedGender == 'female' ? 'Female' : _selectedGender == 'male' ? 'Male' : 'Individual'} baseline.',
+                      'BMR, TDEE, and macro split will be synthesized by AURA AI tailored for a ${_selectedGender == 'female' ? 'Female' : _selectedGender == 'male' ? 'Male' : 'Individual'} baseline.',
                       style: const TextStyle(color: Color(0xFFA1A1AA), fontSize: 11),
                     ),
                   ],
@@ -954,7 +954,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Single
         const SizedBox(height: 24),
 
         const Text(
-          'Gemini 3.6 Flash AI Synthesizing...',
+          'AURA AI Engine Synthesizing...',
           style: TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 6),
@@ -1003,7 +1003,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Single
 
         // Staggered Animated Step Check Items
         _buildCalibrationCheckItem('Analyzing body composition & baseline stats', stepIndex: 1),
-        _buildCalibrationCheckItem('Synthesizing caloric deficit & protein targets via Gemini 3.6', stepIndex: 2),
+        _buildCalibrationCheckItem('Synthesizing caloric deficit & protein targets via AURA AI', stepIndex: 2),
         _buildCalibrationCheckItem('Prescribing $_daysPerWeek-day workout split & joint safeguards', stepIndex: 3),
         _buildCalibrationCheckItem('Finalizing your personalized transformation blueprint', stepIndex: 4),
       ],
