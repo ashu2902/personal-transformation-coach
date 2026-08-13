@@ -27,16 +27,16 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Single
   ];
 
   // Step 2: Body Profile
-  final _nameController = TextEditingController(text: 'Alex Vance');
+  final _nameController = TextEditingController();
   String _selectedGender = 'male';
-  final _heightController = TextEditingController(text: '178');
-  final _weightController = TextEditingController(text: '76.5');
-  final _targetWeightController = TextEditingController(text: '80.0');
+  final _heightController = TextEditingController();
+  final _weightController = TextEditingController();
+  final _targetWeightController = TextEditingController();
   final int _age = 26;
 
-  double get _heightCm => double.tryParse(_heightController.text) ?? 178;
-  double get _weightKg => double.tryParse(_weightController.text) ?? 76.5;
-  double get _targetWeightKg => double.tryParse(_targetWeightController.text) ?? 80.0;
+  double get _heightCm => double.tryParse(_heightController.text) ?? 175;
+  double get _weightKg => double.tryParse(_weightController.text) ?? 75;
+  double get _targetWeightKg => double.tryParse(_targetWeightController.text) ?? 75;
 
   // Step 3: Experience & Strength Baseline
   ExperienceLevel _experienceLevel = ExperienceLevel.intermediate;
@@ -108,7 +108,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Single
       _currentStep = 4;
     });
 
-    final name = _nameController.text.trim().isEmpty ? 'Alex Vance' : _nameController.text.trim();
+    final name = _nameController.text.trim().isEmpty ? 'User' : _nameController.text.trim();
     final bench = _benchController.text.trim().isEmpty ? null : double.tryParse(_benchController.text);
     final squat = _squatController.text.trim().isEmpty ? null : double.tryParse(_squatController.text);
     final deadlift = _deadliftController.text.trim().isEmpty ? null : double.tryParse(_deadliftController.text);
@@ -153,7 +153,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Single
     setState(() => _isCalibrating = true);
     await Future.delayed(const Duration(milliseconds: 600));
 
-    final name = _nameController.text.trim().isEmpty ? 'Alex Vance' : _nameController.text.trim();
+    final name = _nameController.text.trim().isEmpty ? 'User' : _nameController.text.trim();
     final bench = _benchController.text.trim().isEmpty ? null : double.tryParse(_benchController.text);
     final squat = _squatController.text.trim().isEmpty ? null : double.tryParse(_squatController.text);
     final deadlift = _deadliftController.text.trim().isEmpty ? null : double.tryParse(_deadliftController.text);
@@ -487,6 +487,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Single
           controller: _nameController,
           style: const TextStyle(color: Colors.white, fontSize: 14),
           decoration: InputDecoration(
+            hintText: 'e.g. Alex',
+            hintStyle: const TextStyle(color: Color(0xFF4B5563), fontSize: 13),
             labelText: 'Your Name',
             labelStyle: const TextStyle(color: Color(0xFFA1A1AA)),
             filled: true,
@@ -521,6 +523,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Single
                 controller: _heightController,
                 label: 'Height',
                 unit: 'cm',
+                hint: 'e.g. 175',
                 onChanged: (_) => setState(() {}),
               ),
             ),
@@ -530,6 +533,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Single
                 controller: _weightController,
                 label: 'Current Weight',
                 unit: 'kg',
+                hint: 'e.g. 75',
                 onChanged: (_) => setState(() {}),
               ),
             ),
@@ -539,6 +543,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Single
                 controller: _targetWeightController,
                 label: 'Target Weight',
                 unit: 'kg',
+                hint: 'e.g. 70',
                 onChanged: (_) => setState(() {}),
               ),
             ),

@@ -220,7 +220,7 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
     final todayStr = DateTime.now().toIso8601String().split('T')[0];
 
     final profile = UserProfile(
-      name: 'Alex Vance',
+      name: 'Athlete',
       age: 28,
       gender: 'male',
       heightCm: 180,

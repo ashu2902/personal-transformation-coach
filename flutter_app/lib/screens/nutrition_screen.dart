@@ -317,7 +317,7 @@ class FoodSearchLoggerModal extends StatefulWidget {
 
 class _FoodSearchLoggerModalState extends State<FoodSearchLoggerModal> {
   final _searchCtrl = TextEditingController();
-  final _portionCtrl = TextEditingController(text: '150');
+  final _portionCtrl = TextEditingController();
   FoodItemDefinition? _selectedFood;
 
   @override
