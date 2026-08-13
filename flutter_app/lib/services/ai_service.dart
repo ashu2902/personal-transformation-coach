@@ -26,9 +26,9 @@ class GeminiAIProvider implements AIService {
   });
 
   String get _effectiveApiKey {
-    if (apiKey.trim().isNotEmpty) return apiKey.trim();
     const envKey = String.fromEnvironment('GEMINI_API_KEY');
-    if (envKey.trim().isNotEmpty) return envKey.trim();
+    if (envKey.trim().isNotEmpty && !envKey.contains('REDACTED')) return envKey.trim();
+    if (apiKey.trim().isNotEmpty && !apiKey.contains('REDACTED')) return apiKey.trim();
     return '';
   }
 

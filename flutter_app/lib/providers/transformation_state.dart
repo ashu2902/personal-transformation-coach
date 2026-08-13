@@ -144,18 +144,19 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
 
   Future<void> initFromRepository() async {
     debugPrint('[AURA STATE] Initializing state from repository...');
-    final savedProfile = await _repository.loadProfile();
     final todayStr = DateTime.now().toIso8601String().split('T')[0];
-
-    if (savedProfile == null || savedProfile.name.isEmpty) {
-      debugPrint('[AURA STATE] No saved profile found. Setting isOnboardingComplete = false');
-      state = state.copyWith(isOnboardingComplete: false);
-      return;
-    }
 
     final savedApiKey = await _repository.loadApiKey() ?? const String.fromEnvironment('GEMINI_API_KEY');
     if (savedApiKey.isNotEmpty) {
       _aiService = GeminiAIProvider(apiKey: savedApiKey);
+      state = state.copyWith(apiKey: savedApiKey);
+    }
+
+    final savedProfile = await _repository.loadProfile();
+    if (savedProfile == null || savedProfile.name.isEmpty) {
+      debugPrint('[AURA STATE] No saved profile found. Setting isOnboardingComplete = false');
+      state = state.copyWith(isOnboardingComplete: false);
+      return;
     }
 
     // Load today's workout — if none saved, use a lean placeholder (AI will set it during onboarding)
