@@ -5,12 +5,15 @@ import '../providers/transformation_state.dart';
 import '../models/models.dart';
 
 abstract class AIService {
+  Future<AIOrchestratorResult> processCoachMessage(
+      String userPrompt, TransformationEngineState contextState);
   Future<String> generateCoachResponse(
       String userPrompt, TransformationEngineState contextState);
   Future<QuickLogParsedResult> parseQuickLog(
       String rawText, TransformationEngineState contextState);
   Future<DailyWorkout> adaptWorkoutWithAI(
-      String adaptationRequest, TransformationEngineState contextState);
+      String adaptationRequest, TransformationEngineState contextState,
+      {List<EquipmentType>? explicitEquipment, double? maxWeightKg});
   Future<String> generateEngineDailyInsight(
       TransformationEngineState contextState);
   Future<DailyWorkout> generateAIInitialWorkout(UserProfile profile);
@@ -80,23 +83,31 @@ class GeminiAIProvider implements AIService {
   }
 
   Future<Map<String, dynamic>> _callGeminiJson(
-      String method, String prompt) async {
+      String method, String prompt, {String? systemInstruction}) async {
     _logRequest(method, prompt);
     final timer = Stopwatch()..start();
+    final body = <String, dynamic>{
+      'generationConfig': {'responseMimeType': 'application/json'},
+      'contents': [
+        {
+          'role': 'user',
+          'parts': [
+            {'text': prompt}
+          ]
+        }
+      ],
+    };
+    if (systemInstruction != null) {
+      body['system_instruction'] = {
+        'parts': [
+          {'text': systemInstruction}
+        ]
+      };
+    }
     final response = await http.post(
       _url,
       headers: _headers,
-      body: jsonEncode({
-        'generationConfig': {'responseMimeType': 'application/json'},
-        'contents': [
-          {
-            'role': 'user',
-            'parts': [
-              {'text': prompt}
-            ]
-          }
-        ],
-      }),
+      body: jsonEncode(body),
     );
     _logResponse(
         method, response.statusCode, timer.elapsedMilliseconds, response.body);
@@ -152,14 +163,155 @@ class GeminiAIProvider implements AIService {
   }
 
   @override
+  Future<AIOrchestratorResult> processCoachMessage(
+      String userPrompt, TransformationEngineState contextState) async {
+    final prompt = '''
+You are the AI Transformation Coach Orchestrator for AURA.
+Your job is to analyze the user's message in the context of their profile, workout, nutrition, and recovery, and decide what action(s) to execute, if any, along with an empathetic coach reply.
+
+USER TRANSFORMATION CONTEXT:
+${_buildSystemContext(contextState)}
+
+INCOMING USER MESSAGE:
+"$userPrompt"
+
+AVAILABLE FUNCTIONS / ACTIONS:
+1. "updateEquipment": Call when the user mentions having new, limited, or specific workout equipment (e.g. "I only have a 10kg weight bag", "no gym today, only dumbbells", "I have dumbbells and bodyweight").
+   Parameters:
+   - "equipment": Array of strings from ["bodyweight", "dumbbells", "barbell", "cables", "machines"]. If they have a weight bag, map to ["dumbbells", "bodyweight"].
+   - "maxWeightKg": Optional number for equipment weight limits (e.g. 10.0 for 10kg bag).
+   - "equipmentNote": Optional string note (e.g. "10kg weight bag only").
+
+2. "adaptWorkout": Call when the user wants to adapt/update/modify their workout, requests exercise substitutions, reports aches/pains/injuries, or has equipment constraints that require recalculating the workout exercises and weights.
+   Parameters:
+   - "reason": String describing why and how to adapt (e.g., "Adjust for 10kg weight bag limit, cap all dumbbell weights at 10kg", or "Lower back pain, replace deadlifts").
+   - "maxWeightKg": Optional number if a maximum weight limit is set (e.g. 10.0).
+
+3. "logNutrition": Call when the user explicitly mentions meals, food eaten, or water drunk.
+   Parameters:
+   - "meals": Array of objects [{"name": string, "calories": number, "proteinG": number, "carbsG": number, "fatG": number}]
+   - "waterMl": Optional number of ml of water added.
+
+4. "logRecovery": Call when the user mentions sleep hours/quality, soreness, energy, or stress.
+   Parameters:
+   - "sleepHours": Optional number
+   - "sleepQuality": Optional number (1-10)
+   - "muscleSoreness": Optional number (1-10)
+   - "energyLevel": Optional number (1-10)
+   - "stressLevel": Optional number (1-10)
+
+5. "logWeight": Call ONLY IF the user explicitly stated their current scale weight in this message (e.g. "weighed in at 74.5kg", "current weight is 75kg").
+   CRITICAL SAFETY RULE: NEVER extract target weight (e.g. 80kg) or context weight from the background profile as a new logged weight! If the user did not explicitly state a new body weight measurement in their message, DO NOT call logWeight.
+   Parameters:
+   - "weightKg": number
+
+6. "updateWorkoutStatus": Call when the user explicitly states they finished/completed today's workout or skipped it.
+   Parameters:
+   - "status": "completed" | "skipped"
+
+SEQUENCING RULE:
+If the user specifies equipment changes and asks to adapt the workout, return ["updateEquipment", "adaptWorkout"] in that order!
+If the user's message is pure conversation, general Q&A, or encouragement without data to log or workouts to change, return "actions": [].
+
+Return JSON:
+{
+  "actions": [
+    {
+      "functionName": string,
+      "arguments": { ... }
+    }
+  ],
+  "coachResponse": string (2-3 warm, supportive sentences in your coach personality answering the user and confirming any changes made)
+}
+''';
+
+    final soul = contextState.profile.coachSoul;
+    String coachInstruction;
+    switch (soul) {
+      case CoachSoul.supporter:
+        coachInstruction =
+            'You are AURA, an empathetic, warm, and gentle personal fitness coach (The Supporter). '
+            'Your tone is encouraging, validating, and focused on celebrating small wins and self-compassion. '
+            'In "coachResponse", speak warmly and clearly.';
+        break;
+      case CoachSoul.pro:
+        coachInstruction =
+            'You are AURA, a direct, no-nonsense, and results-driven personal fitness coach (The Pro). '
+            'Your tone is direct, metrics-focused, and highly motivating. '
+            'In "coachResponse", be punchy and action-oriented.';
+        break;
+      case CoachSoul.teacher:
+        coachInstruction =
+            'You are AURA, an analytical, educational, and scientific personal fitness coach (The Teacher). '
+            'Your tone is educational, insightful, and explaining the science behind fitness and nutrition. '
+            'In "coachResponse", provide informative, clear explanations.';
+        break;
+    }
+
+    try {
+      final parsed = await _callGeminiJson('processCoachMessage', prompt,
+          systemInstruction: coachInstruction);
+      final List<AIActionCall> actions = [];
+      if (parsed['actions'] is List) {
+        for (var act in parsed['actions']) {
+          if (act is Map) {
+            final fnName = act['functionName']?.toString() ??
+                act['name']?.toString() ??
+                '';
+            final args = (act['arguments'] is Map)
+                ? Map<String, dynamic>.from(act['arguments'])
+                : (act['parameters'] is Map)
+                    ? Map<String, dynamic>.from(act['parameters'])
+                    : <String, dynamic>{};
+            if (fnName.isNotEmpty) {
+              actions.add(AIActionCall(functionName: fnName, arguments: args));
+            }
+          }
+        }
+      }
+      final coachResp = parsed['coachResponse']?.toString() ??
+          parsed['response']?.toString() ??
+          parsed['message']?.toString() ??
+          'I have updated your transformation plan!';
+      return AIOrchestratorResult(actions: actions, coachResponse: coachResp);
+    } catch (e) {
+      _logError('processCoachMessage', e);
+      rethrow;
+    }
+  }
+
+  @override
   Future<String> generateCoachResponse(
       String userPrompt, TransformationEngineState contextState) async {
+    final soul = contextState.profile.coachSoul;
+    String systemInstruction;
+    
+    switch (soul) {
+      case CoachSoul.supporter:
+        systemInstruction = 
+            'You are AURA, an empathetic, warm, and gentle personal fitness coach (The Supporter). '
+            'Your tone is encouraging, validating, and focused on celebrating small wins and self-compassion. '
+            'Always be kind and conversational. Use simple language. Keep answers warm and concise (2-3 sentences max).';
+        break;
+      case CoachSoul.pro:
+        systemInstruction = 
+            'You are AURA, a direct, no-nonsense, and results-driven personal fitness coach (The Pro). '
+            'Your tone is direct, metrics-focused, action-oriented, and highly motivating. '
+            'Cut the fluff, focus on target goals, and call out execution. Keep answers extremely concise (1-2 punchy sentences max).';
+        break;
+      case CoachSoul.teacher:
+        systemInstruction = 
+            'You are AURA, an analytical, educational, and scientific personal fitness coach (The Teacher). '
+            'Your tone is educational, insightful, and explaining the "why" and "how" behind physiology, recovery, and nutrition. '
+            'Be informative but keep it clear and easy to understand. Keep answers concise (2-3 sentences max).';
+        break;
+    }
+
     try {
       return await _callGeminiText(
         'generateCoachResponse',
         'User Transformation Context:\n${_buildSystemContext(contextState)}\n\nUser Message: $userPrompt',
-        systemInstruction:
-            'You are AURA, a friendly and encouraging personal fitness coach. Speak in simple, everyday language without technical jargon. Keep answers warm, concise (2-3 sentences max), and easy to understand for everyday people.',
+        systemInstruction: systemInstruction,
       );
     } catch (e) {
       _logError('generateCoachResponse', e);
@@ -171,8 +323,11 @@ class GeminiAIProvider implements AIService {
   Future<QuickLogParsedResult> parseQuickLog(
       String rawText, TransformationEngineState contextState) async {
     final prompt = '''
+User Context:
+${_buildSystemContext(contextState)}
+
 Analyze this natural language daily fitness log entry: "$rawText"
-User: ${contextState.profile.name}, Scheduled Workout: ${contextState.workout.title}
+Scheduled Workout for today: ${contextState.workout.title}
 
 Extract structured data. Return JSON:
 {
@@ -183,11 +338,35 @@ Extract structured data. Return JSON:
   "sleepHours": number or null,
   "weightKg": number or null,
   "energyLevel": number (1-5) or null,
-  "coachFeedback": string (1-2 empathetic sentences)
+  "coachFeedback": string (1-2 sentences feedback written in your specific personality style)
 }
 ''';
+
+    final soul = contextState.profile.coachSoul;
+    String coachInstruction = '';
+    switch (soul) {
+      case CoachSoul.supporter:
+        coachInstruction = 
+            'You are AURA, an empathetic, warm, and gentle personal fitness coach (The Supporter). '
+            'Your tone is encouraging and focused on self-compassion. '
+            'In the "coachFeedback" field, write 1-2 empathetic, warm sentences celebrating progress or supporting a struggle.';
+        break;
+      case CoachSoul.pro:
+        coachInstruction = 
+            'You are AURA, a direct, no-nonsense, and results-driven personal fitness coach (The Pro). '
+            'Your tone is direct, action-oriented, and metrics-focused. '
+            'In the "coachFeedback" field, write 1-2 direct, motivating, and punchy sentences keeping them on track.';
+        break;
+      case CoachSoul.teacher:
+        coachInstruction = 
+            'You are AURA, an analytical, educational, and scientific personal fitness coach (The Teacher). '
+            'Your tone is analytical, clear, and explanatory. '
+            'In the "coachFeedback" field, write 1-2 educational sentences explaining the science/physiology behind their log entry.';
+        break;
+    }
+
     try {
-      final parsed = await _callGeminiJson('parseQuickLog', prompt);
+      final parsed = await _callGeminiJson('parseQuickLog', prompt, systemInstruction: coachInstruction);
       WorkoutStatus? status;
       if (parsed['workoutStatus'] == 'completed')
         status = WorkoutStatus.completed;
@@ -228,15 +407,24 @@ Extract structured data. Return JSON:
 
   @override
   Future<DailyWorkout> adaptWorkoutWithAI(
-      String adaptationRequest, TransformationEngineState contextState) async {
+      String adaptationRequest, TransformationEngineState contextState,
+      {List<EquipmentType>? explicitEquipment, double? maxWeightKg}) async {
+    final effectiveEquipment = explicitEquipment ?? contextState.profile.availableEquipment;
+    final equipStr = effectiveEquipment.map((e) => e.name).join(', ');
+    final weightConstraint = maxWeightKg != null
+        ? 'STRICT CONSTRAINT: The user has a maximum equipment weight limit of ${maxWeightKg}kg (e.g. 10kg weight bag). All prescribed dumbbell/weighted exercises must use <= ${maxWeightKg}kg.'
+        : '';
+
     final prompt = '''
 User Request: "$adaptationRequest"
 Current Workout: "${contextState.workout.title}" — ${contextState.workout.focusArea}
 Current Exercises: ${contextState.workout.exercises.map((e) => e.name).join(', ')}
-Available Equipment: ${contextState.profile.availableEquipment.map((e) => e.name).join(', ')}
+Available Equipment: $equipStr
 Active Safeguards: ${contextState.profile.activeInjuries.isEmpty ? 'None' : contextState.profile.activeInjuries.join(', ')}
+$weightConstraint
 
-Adapt the workout accordingly. Return JSON:
+Adapt the workout accordingly. If equipment is limited (e.g. weight bag, dumbbells), prescribe effective functional and hypertrophy movements tailored to what they have.
+Return JSON:
 {
   "title": string,
   "adaptationNote": string,
@@ -246,7 +434,8 @@ Adapt the workout accordingly. Return JSON:
     try {
       final parsed = await _callGeminiJson('adaptWorkoutWithAI', prompt);
       return _parseWorkoutJson(
-          parsed, contextState.workout, contextState.profile);
+          parsed, contextState.workout, contextState.profile,
+          overrideEquipment: effectiveEquipment);
     } catch (e) {
       _logError('adaptWorkoutWithAI', e);
       rethrow;
@@ -449,12 +638,14 @@ Return JSON:
   }
 
   DailyWorkout _parseWorkoutJson(
-      Map<String, dynamic> parsed, DailyWorkout current, UserProfile profile) {
+      Map<String, dynamic> parsed, DailyWorkout current, UserProfile profile,
+      {List<EquipmentType>? overrideEquipment}) {
     final title =
         parsed['title']?.toString() ?? '${current.title} (AI Adapted)';
     final note = parsed['adaptationNote']?.toString() ?? 'Adapted by AURA AI';
+    final equipList = overrideEquipment ?? profile.availableEquipment;
     final exercises = _parseExerciseList(parsed['exercises'], current.focusArea,
-        profile.availableEquipment, 'ai_adapt');
+        equipList, 'ai_adapt');
     if (exercises.isEmpty)
       throw Exception('Gemini returned empty exercise list');
     return current.copyWith(
@@ -503,13 +694,50 @@ Return JSON:
     final r = state.recovery;
     final totalCal = n.meals.fold(0, (sum, m) => sum + m.calories);
     final totalProt = n.meals.fold(0, (sum, m) => sum + m.proteinG);
+
+    final exercisesStr = w.exercises.isEmpty
+        ? 'No exercises prescribed yet.'
+        : w.exercises.map((e) {
+            final firstSet = e.sets.isNotEmpty ? e.sets.first : null;
+            final repsStr = firstSet != null ? '${firstSet.targetReps} reps' : 'N/A';
+            final weightStr = firstSet != null ? '${firstSet.targetWeightKg}kg' : 'N/A';
+            return '- ${e.name} (${e.targetMuscle}): ${e.sets.length} sets x $repsStr @ $weightStr. Notes: ${e.notes ?? "none"}';
+          }).join('\n');
+
+    final mealsStr = n.meals.isEmpty
+        ? 'No meals logged yet today.'
+        : n.meals.map((m) => '- ${m.name}: ${m.calories} kcal (P: ${m.proteinG}g, C: ${m.carbsG}g, F: ${m.fatG}g)').join('\n');
+
     return '''
 Name: ${p.name} | Gender: ${p.gender} | Age: ${p.age} | Weight: ${p.weightKg}kg → ${p.targetWeightKg}kg
 Goal: ${p.goal.name} (${p.targetPhysique})
-Workout: ${w.title} (${w.status.name}) | Focus: ${w.focusArea}
-Nutrition: $totalCal / ${n.targetCalories} kcal | Protein: $totalProt / ${n.targetProteinG}g
-Recovery: ${r.recoveryScore}% (${r.status}) | Sleep: ${r.sleepHours}hrs
-Adaptation: ${state.adaptationNotice ?? 'None'}
+Experience Level: ${p.experienceLevel.name}
+Coach Personality/Soul: ${p.coachSoul.name}
+
+[CURRENT WORKOUT PLAN FOR TODAY]
+Title: ${w.title}
+Status: ${w.status.name}
+Focus Area: ${w.focusArea}
+Adaptation Note: ${w.adaptationNote ?? 'None'}
+Prescribed Exercises:
+$exercisesStr
+
+[CURRENT NUTRITION STATUS]
+Target: ${n.targetCalories} kcal | Protein: ${n.targetProteinG}g | Carbs: ${n.targetCarbsG}g | Fat: ${n.targetFatG}g
+Logged Today: $totalCal / ${n.targetCalories} kcal | Protein: $totalProt / ${n.targetProteinG}g | Water: ${n.waterMl} / ${n.targetWaterMl} ml
+Logged Meals:
+$mealsStr
+
+[CURRENT RECOVERY STATUS]
+Recovery Score: ${r.recoveryScore}%
+Status Label: ${r.status}
+Sleep: ${r.sleepHours} hrs (Quality: ${r.sleepQuality}/10)
+Muscle Soreness: ${r.muscleSoreness}/10
+Energy Level: ${r.energyLevel}/10
+Stress Level: ${r.stressLevel}/10
+
+[AURA SYSTEM NOTICES]
+Recent AI Adaptation Notice: ${state.adaptationNotice ?? 'None'}
 ''';
   }
 }

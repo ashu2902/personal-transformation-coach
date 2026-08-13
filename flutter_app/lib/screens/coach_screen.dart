@@ -1,4 +1,3 @@
-import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
@@ -52,16 +51,7 @@ class _CoachScreenState extends ConsumerState<CoachScreen> {
 
     final notifier = ref.read(transformationEngineProvider.notifier);
     
-    // Simulate user attaching an image log in chat first
-    final userImageMsg = ChatMessage(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      sender: 'user',
-      text: '📎 Sent a screenshot of my Apple Watch activity summary.',
-      timestamp: 'Just now',
-    );
-    stateNotifier.state = stateNotifier.state.copyWith(
-      chatMessages: List.from(stateNotifier.state.chatMessages)..add(userImageMsg)
-    );
+    notifier.appendUserMessage('📎 Sent a screenshot of my Apple Watch activity summary.');
     _scrollToBottom();
     
     await notifier.simulateWatchScreenshotScan();

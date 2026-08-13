@@ -3,6 +3,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
+import 'package:firebase_core/firebase_core.dart';
+import 'firebase_options.dart';
+
 import 'providers/transformation_state.dart';
 import 'models/models.dart';
 import 'screens/today_screen.dart';
@@ -12,8 +15,11 @@ import 'screens/coach_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/onboarding_screen.dart';
 
-void main() {
+void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await Firebase.initializeApp(
+    options: DefaultFirebaseOptions.currentPlatform,
+  );
   runApp(const ProviderScope(child: AuraPwaApp()));
 }
 
@@ -92,13 +98,52 @@ class MainShell extends StatefulWidget {
 
 class _MainShellState extends State<MainShell> {
   int _selectedIndex = 0;
-  int _planSubIndex = 0;
 
   void _navigateToTab(int tabIndex, {int subIndex = 0}) {
-    setState(() {
-      _selectedIndex = tabIndex;
-      _planSubIndex = subIndex;
-    });
+    if (tabIndex == 1) {
+      // Push Workouts / Nutrition logs as a detailed sub-page
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => Scaffold(
+            appBar: AppBar(
+              backgroundColor: const Color(0xFF0B0B0E),
+              title: Text(
+                subIndex == 0 ? 'Workout Outline' : 'Nutrition Balance',
+                style: GoogleFonts.syne(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              elevation: 0,
+            ),
+            body: PlanLogScreen(key: ValueKey('plan_sub_$subIndex'), initialSubIndex: subIndex),
+          ),
+        ),
+      );
+    } else if (tabIndex == 2) {
+      // Push Progress trends as a detailed sub-page
+      Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (context) => Scaffold(
+            appBar: AppBar(
+              backgroundColor: const Color(0xFF0B0B0E),
+              title: Text(
+                'Progress Trends',
+                style: GoogleFonts.syne(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              elevation: 0,
+            ),
+            body: const ProgressScreen(),
+          ),
+        ),
+      );
+    } else if (tabIndex == 3) {
+      // Toggle to Coach screen index (now index 1)
+      setState(() {
+        _selectedIndex = 1;
+      });
+    } else {
+      setState(() {
+        _selectedIndex = 0;
+      });
+    }
   }
 
   @override
@@ -110,8 +155,6 @@ class _MainShellState extends State<MainShell> {
 
         final List<Widget> screens = [
           TodayScreen(onNavigateToTab: _navigateToTab),
-          PlanLogScreen(key: ValueKey('plan_sub_$_planSubIndex'), initialSubIndex: _planSubIndex),
-          const ProgressScreen(),
           const CoachScreen(),
         ];
 
@@ -188,8 +231,6 @@ class _MainShellState extends State<MainShell> {
             unselectedFontSize: 11,
             items: const [
               BottomNavigationBarItem(icon: Icon(LucideIcons.home, size: 20), label: 'Today'),
-              BottomNavigationBarItem(icon: Icon(LucideIcons.layoutGrid, size: 20), label: 'Workouts'),
-              BottomNavigationBarItem(icon: Icon(LucideIcons.trendingUp, size: 20), label: 'Progress'),
               BottomNavigationBarItem(icon: Icon(LucideIcons.bot, size: 20), label: 'Coach'),
             ],
           ),

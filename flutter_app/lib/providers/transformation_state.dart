@@ -1,10 +1,13 @@
+import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/models.dart';
 import '../services/transformation_repository.dart';
 import '../engine/exercise_database.dart';
 import '../engine/transformation_orchestrator.dart';
 import '../services/ai_service.dart';
+import '../services/firebase_service.dart';
 
 class DayTrackingStatus {
   final String date;
@@ -135,6 +138,10 @@ class TransformationEngineState {
 
 class TransformationEngineNotifier extends StateNotifier<TransformationEngineState> {
   final ITransformationRepository _repository;
+  final FirebaseFirestoreService _firestore = FirebaseFirestoreService();
+  final FirebaseAuthService _auth = FirebaseAuthService();
+  StreamSubscription<DocumentSnapshot>? _dailyLogSubscription;
+  StreamSubscription<QuerySnapshot>? _chatMessagesSubscription;
 
   TransformationEngineNotifier({ITransformationRepository? repository})
       : _repository = repository ?? LocalTransformationRepository(),
@@ -143,8 +150,7 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
   }
 
   Future<void> initFromRepository() async {
-    debugPrint('[AURA STATE] Initializing state from repository...');
-    final todayStr = DateTime.now().toIso8601String().split('T')[0];
+    debugPrint('[AURA STATE] Initializing state from online Firestore...');
 
     final savedApiKey = await _repository.loadApiKey() ?? const String.fromEnvironment('GEMINI_API_KEY');
     if (savedApiKey.isNotEmpty) {
@@ -152,62 +158,85 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
       state = state.copyWith(apiKey: savedApiKey);
     }
 
-    final savedProfile = await _repository.loadProfile();
-    if (savedProfile == null || savedProfile.name.isEmpty) {
-      debugPrint('[AURA STATE] No saved profile found. Setting isOnboardingComplete = false');
+    final uid = _auth.uid;
+    if (uid == null) {
+      debugPrint('[AURA STATE] No authenticated Firebase user. Setting isOnboardingComplete = false');
       state = state.copyWith(isOnboardingComplete: false);
       return;
     }
 
-    // Load today's workout — if none saved, use a lean placeholder (AI will set it during onboarding)
-    final savedWorkout = await _repository.loadTodayWorkout(todayStr);
-    final savedNutrition = await _repository.loadTodayNutrition(todayStr);
-    final savedRecovery = await _repository.loadTodayRecovery(todayStr) ?? state.recovery;
-    final savedProgress = await _repository.loadProgressHistory();
-
-    // If high fatigue, ask AI to adapt asynchronously
-    if (savedRecovery.recoveryScore < 50 && savedWorkout != null) {
-      try {
-        final adaptedWorkout = await _aiService.generateAIAdaptedWorkout(
-          state.copyWith(
-            profile: savedProfile,
-            workout: savedWorkout,
-            nutrition: savedNutrition ?? state.nutrition,
-            recovery: savedRecovery,
-            progressHistory: savedProgress,
-          ),
-          'High fatigue detected (Score: ${savedRecovery.recoveryScore}%). Deload for active recovery.',
-        );
-        debugPrint('[AURA STATE] AI adapted workout for high fatigue.');
-        state = state.copyWith(
-          profile: savedProfile,
-          workout: adaptedWorkout,
-          nutrition: savedNutrition ?? state.nutrition,
-          recovery: savedRecovery,
-          progressHistory: savedProgress.isEmpty ? state.progressHistory : savedProgress,
-          chatMessages: state.chatMessages,
-          isOnboardingComplete: true,
-          adaptationNotice: 'High fatigue detected. Your workout has been adjusted for active recovery.',
-          apiKey: savedApiKey,
-        );
-        return;
-      } catch (e) {
-        debugPrint('[AURA STATE] AI adaptation failed: $e');
-      }
+    // Load profile from Firestore
+    final profile = await _firestore.getUserProfile(uid);
+    if (profile == null || profile.name.isEmpty) {
+      debugPrint('[AURA STATE] No remote profile found for UID $uid. Setting isOnboardingComplete = false');
+      state = state.copyWith(isOnboardingComplete: false);
+      return;
     }
 
-    debugPrint('[AURA STATE] State successfully initialized for user: ${savedProfile.name}');
-    state = TransformationEngineState(
-      profile: savedProfile,
-      workout: savedWorkout ?? state.workout,
-      nutrition: savedNutrition ?? state.nutrition,
-      recovery: savedRecovery,
-      progressHistory: savedProgress.isEmpty ? state.progressHistory : savedProgress,
-      chatMessages: state.chatMessages,
+    // Set onboarding complete and initial profile
+    state = state.copyWith(
+      profile: profile,
       isOnboardingComplete: true,
-      adaptationNotice: null,
-      apiKey: savedApiKey,
     );
+
+    // Setup real-time subscriptions for logs and chats
+    setupSubscriptions(uid);
+  }
+
+  void setupSubscriptions(String uid) {
+    debugPrint('[AURA STATE] Subscribing to real-time streams for UID: $uid');
+    final todayStr = DateTime.now().toIso8601String().split('T')[0];
+
+    // Cancel existing subscriptions
+    _dailyLogSubscription?.cancel();
+    _chatMessagesSubscription?.cancel();
+
+    // 1. Subscribe to Today's Daily Log document
+    _dailyLogSubscription = _firestore.getDailyLogStream(uid, todayStr).listen((doc) {
+      if (doc.exists && doc.data() != null) {
+        final data = doc.data() as Map<String, dynamic>;
+        DailyWorkout? remoteWorkout;
+        DailyNutrition? remoteNutrition;
+        RecoveryCheckIn? remoteRecovery;
+
+        if (data['workout'] != null) {
+          remoteWorkout = _firestore.workoutFromMap(data['workout']);
+        }
+        if (data['nutrition'] != null) {
+          remoteNutrition = _firestore.nutritionFromMap(data['nutrition']);
+        }
+        if (data['recovery'] != null) {
+          remoteRecovery = _firestore.recoveryFromMap(data['recovery']);
+        }
+
+        state = state.copyWith(
+          workout: remoteWorkout ?? state.workout,
+          nutrition: remoteNutrition ?? state.nutrition,
+          recovery: remoteRecovery ?? state.recovery,
+        );
+      }
+    }, onError: (err) {
+      debugPrint('[AURA STATE] Daily Log subscription error: $err');
+    });
+
+    // 2. Subscribe to Chat Messages
+    _chatMessagesSubscription = _firestore.getChatMessagesStream(uid).listen((snapshot) {
+      final List<ChatMessage> messages = [];
+      for (var doc in snapshot.docs) {
+        final data = doc.data() as Map<String, dynamic>;
+        messages.add(ChatMessage(
+          id: data['id'] ?? doc.id,
+          sender: data['sender'] ?? 'ai',
+          text: data['text'] ?? '',
+          timestamp: data['timestamp'] ?? 'Just now',
+        ));
+      }
+      if (messages.isNotEmpty) {
+        state = state.copyWith(chatMessages: messages);
+      }
+    }, onError: (err) {
+      debugPrint('[AURA STATE] Chat Messages subscription error: $err');
+    });
   }
 
   Future<void> updateApiKey(String apiKey) async {
@@ -284,11 +313,12 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
         ChatMessage(
           id: 'm1',
           sender: 'ai',
-          text: "Welcome back, Alex. Transformation baseline active. Ready for today's workout?",
+          text: "Welcome back, Vance. Transformation baseline active. Ready for today's workout?",
           timestamp: '09:00 AM',
         )
       ],
       isOnboardingComplete: true,
+      adaptationNotice: "Welcome to AURA! Tap 'Sleep' or 'Aches' below to log your state, or message me in the Coach tab to begin.",
     );
   }
 
@@ -311,13 +341,17 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
       workout: workout,
       progressHistory: [initProgress],
       isOnboardingComplete: true,
+      adaptationNotice: "Welcome to AURA, ${newProfile.name}! Tap 'Sleep' or 'Aches' below to log your state, or message me in the Coach tab to begin.",
     );
 
-    await _repository.saveProfile(newProfile);
-    await _repository.saveTodayNutrition(nutrition);
-    await _repository.saveTodayWorkout(workout);
+    final uid = _auth.uid ?? 'firebase_user_vance_77';
+    await _firestore.saveUserProfile(uid, newProfile);
+    await _firestore.saveDailyWorkout(uid, todayStr, workout);
+    await _firestore.saveDailyNutrition(uid, todayStr, nutrition);
     await _repository.saveProgressEntry(initProgress);
-    debugPrint('[AURA STATE] Onboarding completed & baseline saved to localStorage!');
+    
+    setupSubscriptions(uid);
+    debugPrint('[AURA STATE] Onboarding completed & baseline saved online!');
   }
 
   void updateExerciseSet(String exerciseId, int setIndex, bool completed) {
@@ -344,9 +378,10 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
       exercises: updatedExercises,
       status: newStatus,
     );
-
     state = state.copyWith(workout: updatedWorkout);
-    _repository.saveTodayWorkout(updatedWorkout);
+
+    final uid = _auth.uid ?? 'firebase_user_vance_77';
+    _firestore.saveDailyWorkout(uid, state.workout.date, updatedWorkout);
   }
 
   void substituteExercise(String exerciseId, ExerciseDefinition newDefinition) {
@@ -363,7 +398,8 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
 
     final updatedWorkout = state.workout.copyWith(exercises: updatedExercises);
     state = state.copyWith(workout: updatedWorkout);
-    _repository.saveTodayWorkout(updatedWorkout);
+    final uid = _auth.uid ?? 'firebase_user_vance_77';
+    _firestore.saveDailyWorkout(uid, state.workout.date, updatedWorkout);
   }
 
   void trackProgressForToday() {
@@ -371,7 +407,6 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
     final todayStr = DateTime.now().toIso8601String().split('T')[0];
     final existing = state.progressHistory.any((p) => p.date == todayStr);
 
-    List<ProgressEntry> newHistory = List.from(state.progressHistory);
     final todayEntry = ProgressEntry(
       date: todayStr,
       weightKg: state.profile.weightKg,
@@ -379,7 +414,9 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
     );
 
     if (!existing) {
-      newHistory.add(todayEntry);
+      final newHistory = List<ProgressEntry>.from(state.progressHistory)..add(todayEntry);
+      state = state.copyWith(progressHistory: newHistory);
+      _repository.saveProgressEntry(todayEntry);
     }
 
     WorkoutStatus updatedWorkoutStatus = state.workout.status;
@@ -388,30 +425,24 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
     }
 
     final updatedWorkout = state.workout.copyWith(status: updatedWorkoutStatus);
-
-    state = state.copyWith(
-      progressHistory: newHistory,
-      workout: updatedWorkout,
-    );
-
-    _repository.saveProgressEntry(todayEntry);
-    _repository.saveTodayWorkout(updatedWorkout);
+    final uid = _auth.uid ?? 'firebase_user_vance_77';
+    _firestore.saveDailyWorkout(uid, todayStr, updatedWorkout);
   }
 
   void addWater(int amountMl) {
     final newWater = state.nutrition.waterMl + amountMl;
     debugPrint('[AURA STATE] Added +${amountMl}ml water (Total: ${newWater}ml)');
     final updatedNutrition = state.nutrition.copyWith(waterMl: newWater);
-    state = state.copyWith(nutrition: updatedNutrition);
-    _repository.saveTodayNutrition(updatedNutrition);
+    final uid = _auth.uid ?? 'firebase_user_vance_77';
+    _firestore.saveDailyNutrition(uid, state.nutrition.date, updatedNutrition);
   }
 
   void addMeal(MealItem meal) {
     debugPrint('[AURA STATE] Added meal: ${meal.name} (${meal.calories} kcal, ${meal.proteinG}g P)');
     final newMeals = List<MealItem>.from(state.nutrition.meals)..add(meal);
     final updatedNutrition = state.nutrition.copyWith(meals: newMeals);
-    state = state.copyWith(nutrition: updatedNutrition);
-    _repository.saveTodayNutrition(updatedNutrition);
+    final uid = _auth.uid ?? 'firebase_user_vance_77';
+    _firestore.saveDailyNutrition(uid, state.nutrition.date, updatedNutrition);
   }
 
   void addProgressEntry(ProgressEntry entry) {
@@ -424,7 +455,8 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
       profile: updatedProfile,
     );
     trackProgressForToday();
-    _repository.saveProfile(updatedProfile);
+    final uid = _auth.uid ?? 'firebase_user_vance_77';
+    _firestore.saveUserProfile(uid, updatedProfile);
     _repository.saveProgressEntry(entry);
 
     // Check for weight stall — ask AI to adapt nutrition asynchronously
@@ -436,11 +468,7 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
           state.copyWith(profile: updatedProfile, progressHistory: newHistory),
           'Weight stalled over 14 days (only ${delta.toStringAsFixed(1)}kg change). Adjust calorie target for continued fat loss.',
         ).then((adaptedNutrition) {
-          state = state.copyWith(
-            nutrition: adaptedNutrition,
-            adaptationNotice: 'Weight progress stalled. AI adjusted your daily calorie target.',
-          );
-          _repository.saveTodayNutrition(adaptedNutrition);
+          _firestore.saveDailyNutrition(uid, state.nutrition.date, adaptedNutrition);
           debugPrint('[AURA STATE] AI nutrition adapted for weight stall.');
         }).catchError((e) {
           debugPrint('[AURA STATE] AI nutrition adaptation failed: $e');
@@ -452,6 +480,17 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
   AIService _aiService = GeminiAIProvider(apiKey: const String.fromEnvironment('GEMINI_API_KEY'));
   AIService get aiService => _aiService;
 
+  void appendUserMessage(String text) {
+    final userMsg = ChatMessage(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      sender: 'user',
+      text: text,
+      timestamp: 'Just now',
+    );
+    final uid = _auth.uid ?? 'firebase_user_vance_77';
+    _firestore.saveChatMessage(uid, userMsg);
+  }
+
   Future<void> addChatMessage(String text) async {
     debugPrint('[AURA STATE] User message: $text');
     final userMsg = ChatMessage(
@@ -461,25 +500,174 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
       timestamp: 'Just now',
     );
 
+    final uid = _auth.uid ?? 'firebase_user_vance_77';
+    await _firestore.saveChatMessage(uid, userMsg);
+
+    // Optimistically show user message in local chat immediately
+    final updatedChat = List<ChatMessage>.from(state.chatMessages)..add(userMsg);
     state = state.copyWith(
-      chatMessages: List.from(state.chatMessages)..add(userMsg),
+      chatMessages: updatedChat,
       isAiThinking: true,
     );
 
-    final responseText = await _aiService.generateCoachResponse(text, state);
-    debugPrint('[AURA STATE] AI Coach reply generated');
+    try {
+      final orchestratorResult = await _aiService.processCoachMessage(text, state);
+      debugPrint('[AURA STATE] Orchestrator determined ${orchestratorResult.actions.length} action(s): ${orchestratorResult.actions.map((a) => a.functionName).toList()}');
 
-    final aiReply = ChatMessage(
-      id: (DateTime.now().millisecondsSinceEpoch + 1).toString(),
-      sender: 'ai',
-      text: responseText,
-      timestamp: 'Just now',
-    );
+      // Sequentially execute actions
+      for (final action in orchestratorResult.actions) {
+        debugPrint('[AURA STATE] Executing action: ${action.functionName} with args: ${action.arguments}');
+        switch (action.functionName) {
+          case 'updateEquipment':
+            final rawEquip = action.arguments['equipment'];
+            final List<EquipmentType> newEquip = [];
+            if (rawEquip is List) {
+              for (var e in rawEquip) {
+                final s = e.toString().toLowerCase();
+                if (s.contains('dumbbell') || s.contains('bag') || s.contains('weight')) {
+                  if (!newEquip.contains(EquipmentType.dumbbells)) newEquip.add(EquipmentType.dumbbells);
+                }
+                if (s.contains('bodyweight')) {
+                  if (!newEquip.contains(EquipmentType.bodyweight)) newEquip.add(EquipmentType.bodyweight);
+                }
+                if (s.contains('barbell')) {
+                  if (!newEquip.contains(EquipmentType.barbell)) newEquip.add(EquipmentType.barbell);
+                }
+                if (s.contains('cable')) {
+                  if (!newEquip.contains(EquipmentType.cables)) newEquip.add(EquipmentType.cables);
+                }
+                if (s.contains('machine')) {
+                  if (!newEquip.contains(EquipmentType.machines)) newEquip.add(EquipmentType.machines);
+                }
+              }
+            }
+            if (newEquip.isEmpty) {
+              newEquip.add(EquipmentType.bodyweight);
+            }
+            final updatedProfile = state.profile.copyWith(availableEquipment: newEquip);
+            state = state.copyWith(profile: updatedProfile);
+            await _firestore.saveUserProfile(uid, updatedProfile);
+            break;
 
-    state = state.copyWith(
-      chatMessages: List.from(state.chatMessages)..add(aiReply),
-      isAiThinking: false,
-    );
+          case 'adaptWorkout':
+            final reason = action.arguments['reason']?.toString() ?? text;
+            final maxWeightNum = (action.arguments['maxWeightKg'] as num?)?.toDouble();
+            final adaptedWorkout = await _aiService.adaptWorkoutWithAI(
+              reason,
+              state,
+              explicitEquipment: state.profile.availableEquipment,
+              maxWeightKg: maxWeightNum,
+            );
+            state = state.copyWith(
+              workout: adaptedWorkout,
+              adaptationNotice: 'Workout adapted via AURA AI: "${adaptedWorkout.adaptationNote ?? reason}"',
+            );
+            await _firestore.saveDailyWorkout(uid, state.workout.date, adaptedWorkout);
+            break;
+
+          case 'logNutrition':
+            DailyNutrition updatedNutrition = state.nutrition;
+            final mealsRaw = action.arguments['meals'];
+            if (mealsRaw is List && mealsRaw.isNotEmpty) {
+              final List<MealItem> newMeals = [];
+              for (var m in mealsRaw) {
+                newMeals.add(MealItem(
+                  name: m['name']?.toString() ?? 'Logged Meal',
+                  calories: (m['calories'] as num?)?.toInt() ?? 300,
+                  proteinG: (m['proteinG'] as num?)?.toInt() ?? 20,
+                  carbsG: (m['carbsG'] as num?)?.toInt() ?? 30,
+                  fatG: (m['fatG'] as num?)?.toInt() ?? 10,
+                ));
+              }
+              final combined = List<MealItem>.from(updatedNutrition.meals)..addAll(newMeals);
+              updatedNutrition = updatedNutrition.copyWith(meals: combined);
+            }
+            final waterNum = (action.arguments['waterMl'] as num?)?.toInt();
+            if (waterNum != null && waterNum > 0) {
+              updatedNutrition = updatedNutrition.copyWith(waterMl: updatedNutrition.waterMl + waterNum);
+            }
+            state = state.copyWith(nutrition: updatedNutrition);
+            await _firestore.saveDailyNutrition(uid, state.nutrition.date, updatedNutrition);
+            break;
+
+          case 'logRecovery':
+            RecoveryCheckIn updatedRecovery = state.recovery;
+            final sleepH = (action.arguments['sleepHours'] as num?)?.toDouble() ?? updatedRecovery.sleepHours;
+            final sleepQ = (action.arguments['sleepQuality'] as num?)?.toInt() ?? updatedRecovery.sleepQuality;
+            final sore = (action.arguments['muscleSoreness'] as num?)?.toInt() ?? updatedRecovery.muscleSoreness;
+            final energy = (action.arguments['energyLevel'] as num?)?.toInt() ?? updatedRecovery.energyLevel;
+            final stress = (action.arguments['stressLevel'] as num?)?.toInt() ?? updatedRecovery.stressLevel;
+
+            final sleepScore = ((sleepH / 8.0).clamp(0.0, 1.2)) * 10 * (sleepQ / 10.0);
+            final score = ((sleepScore * 3.5) + (energy * 3.5) + ((10 - sore) * 2.0) + ((10 - stress) * 1.0)).round().clamp(20, 100);
+
+            updatedRecovery = updatedRecovery.copyWith(
+              sleepHours: sleepH,
+              sleepQuality: sleepQ,
+              muscleSoreness: sore,
+              energyLevel: energy,
+              stressLevel: stress,
+              recoveryScore: score,
+            );
+            state = state.copyWith(recovery: updatedRecovery);
+            await _firestore.saveDailyRecovery(uid, state.recovery.date, updatedRecovery);
+            break;
+
+          case 'logWeight':
+            final weight = (action.arguments['weightKg'] as num?)?.toDouble();
+            if (weight != null && weight > 0) {
+              final updatedProfile = state.profile.copyWith(weightKg: weight);
+              final todayStr = DateTime.now().toIso8601String().split('T')[0];
+              final entry = ProgressEntry(date: todayStr, weightKg: weight, notes: 'Logged via Coach Chat');
+              state = state.copyWith(
+                profile: updatedProfile,
+                progressHistory: List<ProgressEntry>.from(state.progressHistory)..add(entry),
+              );
+              await _firestore.saveUserProfile(uid, updatedProfile);
+              await _repository.saveProgressEntry(entry);
+            }
+            break;
+
+          case 'updateWorkoutStatus':
+            final statusStr = action.arguments['status']?.toString().toLowerCase();
+            WorkoutStatus newStatus = state.workout.status;
+            if (statusStr == 'completed') newStatus = WorkoutStatus.completed;
+            if (statusStr == 'skipped') newStatus = WorkoutStatus.skipped;
+            final updatedWorkout = state.workout.copyWith(status: newStatus);
+            state = state.copyWith(workout: updatedWorkout);
+            await _firestore.saveDailyWorkout(uid, state.workout.date, updatedWorkout);
+            break;
+        }
+      }
+
+      final aiReply = ChatMessage(
+        id: (DateTime.now().millisecondsSinceEpoch + 1).toString(),
+        sender: 'ai',
+        text: orchestratorResult.coachResponse,
+        timestamp: 'Just now',
+      );
+
+      final finalChat = List<ChatMessage>.from(state.chatMessages)..add(aiReply);
+      state = state.copyWith(
+        chatMessages: finalChat,
+        isAiThinking: false,
+      );
+      await _firestore.saveChatMessage(uid, aiReply);
+    } catch (e) {
+      debugPrint('[AURA STATE] Chat processing failed: $e');
+      final errReply = ChatMessage(
+        id: (DateTime.now().millisecondsSinceEpoch + 1).toString(),
+        sender: 'ai',
+        text: "I encountered a hiccup processing that request. Could you please try again?",
+        timestamp: 'Just now',
+      );
+      final finalChat = List<ChatMessage>.from(state.chatMessages)..add(errReply);
+      state = state.copyWith(
+        chatMessages: finalChat,
+        isAiThinking: false,
+      );
+      await _firestore.saveChatMessage(uid, errReply);
+    }
   }
 
   Future<void> simulateWatchScreenshotScan() async {
@@ -493,17 +681,17 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
       timestamp: 'Just now',
     );
     
-    // Simulate updating today's metrics
     final updatedWorkout = state.workout.copyWith(
       status: WorkoutStatus.completed,
     );
     
+    final uid = _auth.uid ?? 'firebase_user_vance_77';
+    await _firestore.saveDailyWorkout(uid, state.workout.date, updatedWorkout);
+    await _firestore.saveChatMessage(uid, scanReply);
+    
     state = state.copyWith(
-      chatMessages: List.from(state.chatMessages)..add(scanReply),
       isAiThinking: false,
-      workout: updatedWorkout,
     );
-    _repository.saveTodayWorkout(updatedWorkout);
   }
 
   void updateRecoveryCheckIn({
@@ -537,10 +725,8 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
       status: statusText,
     );
 
-    state = state.copyWith(
-      recovery: updatedRecovery,
-    );
-    _repository.saveTodayRecovery(updatedRecovery);
+    final uid = _auth.uid ?? 'firebase_user_vance_77';
+    _firestore.saveDailyRecovery(uid, todayStr, updatedRecovery);
 
     // If high fatigue, ask AI to adapt workout asynchronously
     if (score < 50) {
@@ -548,11 +734,10 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
         state,
         'High fatigue detected (Score: $score%). Deload the workout for active recovery.',
       ).then((adaptedWorkout) {
+        _firestore.saveDailyWorkout(uid, todayStr, adaptedWorkout);
         state = state.copyWith(
-          workout: adaptedWorkout,
           adaptationNotice: 'High fatigue detected. AI adjusted your workout to an active recovery session.',
         );
-        _repository.saveTodayWorkout(adaptedWorkout);
         debugPrint('[AURA STATE] AI adapted workout for high fatigue recovery.');
       }).catchError((e) {
         debugPrint('[AURA STATE] AI workout adaptation failed: $e');
@@ -563,6 +748,8 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
   Future<QuickLogParsedResult> parseAndApplyQuickLog(String rawText) async {
     debugPrint('[AURA STATE] Parsing Express Quick-Log: "$rawText"');
     final result = await _aiService.parseQuickLog(rawText, state);
+    final uid = _auth.uid ?? 'firebase_user_vance_77';
+    final todayStr = DateTime.now().toIso8601String().split('T')[0];
 
     // 1. Update Workout Status if extracted
     DailyWorkout updatedWorkout = state.workout;
@@ -571,6 +758,7 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
         status: result.workoutStatus,
         adaptationNote: result.workoutReason ?? 'Updated via Express AI Log',
       );
+      await _firestore.saveDailyWorkout(uid, state.workout.date, updatedWorkout);
     }
 
     // 2. Add Meals if extracted
@@ -578,6 +766,7 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
     if (result.mealsToAdd.isNotEmpty) {
       final newMeals = List<MealItem>.from(updatedNutrition.meals)..addAll(result.mealsToAdd);
       updatedNutrition = updatedNutrition.copyWith(meals: newMeals);
+      await _firestore.saveDailyNutrition(uid, state.nutrition.date, updatedNutrition);
     }
 
     // 3. Update Recovery if extracted
@@ -593,17 +782,15 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
         energyLevel: energy,
         recoveryScore: score,
       );
+      await _firestore.saveDailyRecovery(uid, state.recovery.date, updatedRecovery);
     }
 
     // 4. Update Weight / Progress if extracted
-    UserProfile updatedProfile = state.profile;
-    List<ProgressEntry> updatedHistory = List.from(state.progressHistory);
     if (result.weightKg != null) {
-      updatedProfile = updatedProfile.copyWith(weightKg: result.weightKg!);
-      final todayStr = DateTime.now().toIso8601String().split('T')[0];
+      final updatedProfile = state.profile.copyWith(weightKg: result.weightKg!);
       final entry = ProgressEntry(date: todayStr, weightKg: result.weightKg!, notes: 'Express AI log weight');
-      updatedHistory.add(entry);
-      _repository.saveProgressEntry(entry);
+      await _firestore.saveUserProfile(uid, updatedProfile);
+      await _repository.saveProgressEntry(entry);
     }
 
     // 5. Append to Chat Log
@@ -619,21 +806,9 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
       text: '⚡ Express Log Processed:\n${result.coachFeedback}',
       timestamp: 'Just now',
     );
-    final updatedChat = List<ChatMessage>.from(state.chatMessages)..addAll([userMsg, aiReply]);
 
-    state = state.copyWith(
-      workout: updatedWorkout,
-      nutrition: updatedNutrition,
-      recovery: updatedRecovery,
-      profile: updatedProfile,
-      progressHistory: updatedHistory,
-      chatMessages: updatedChat,
-    );
-
-    _repository.saveTodayWorkout(updatedWorkout);
-    _repository.saveTodayNutrition(updatedNutrition);
-    _repository.saveTodayRecovery(updatedRecovery);
-    _repository.saveProfile(updatedProfile);
+    await _firestore.saveChatMessage(uid, userMsg);
+    await _firestore.saveChatMessage(uid, aiReply);
 
     return result;
   }
@@ -641,24 +816,34 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
   Future<void> adaptTodayWorkoutWithAI(String request) async {
     debugPrint('[AURA STATE] Adapting workout with AI for: "$request"');
     final adaptedWorkout = await _aiService.adaptWorkoutWithAI(request, state);
+    final uid = _auth.uid ?? 'firebase_user_vance_77';
     state = state.copyWith(
       workout: adaptedWorkout,
-      adaptationNotice: 'Workout adapted via AURA AI: "${adaptedWorkout.adaptationNote}"',
+      adaptationNotice: 'Workout adapted via AURA AI: "${adaptedWorkout.adaptationNote ?? request}"',
     );
-    await _repository.saveTodayWorkout(adaptedWorkout);
+    await _firestore.saveDailyWorkout(uid, state.workout.date, adaptedWorkout);
   }
 
   void updateWorkoutStatus(WorkoutStatus status) {
     debugPrint('[AURA STATE] Updating workout status: ${status.name}');
     final updatedWorkout = state.workout.copyWith(status: status);
     state = state.copyWith(workout: updatedWorkout);
-    _repository.saveTodayWorkout(updatedWorkout);
+    final uid = _auth.uid ?? 'firebase_user_vance_77';
+    _firestore.saveDailyWorkout(uid, state.workout.date, updatedWorkout);
   }
 
   void updateProfile(UserProfile updatedProfile) {
     debugPrint('[AURA STATE] Profile updated directly');
     state = state.copyWith(profile: updatedProfile);
-    _repository.saveProfile(updatedProfile);
+    final uid = _auth.uid ?? 'firebase_user_vance_77';
+    _firestore.saveUserProfile(uid, updatedProfile);
+  }
+
+  @override
+  void dispose() {
+    _dailyLogSubscription?.cancel();
+    _chatMessagesSubscription?.cancel();
+    super.dispose();
   }
 }
 

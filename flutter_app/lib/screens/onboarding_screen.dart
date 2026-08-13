@@ -19,7 +19,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   int _currentStep = 0; // 0: Spark, 1: Assessment, 2: Choose Soul, 3: Sunk-Cost Reveal, 4: Calibration
 
   // Assessment Data
-  String _selectedObstacle = "I don't know where to start";
   double _heightCm = 175;
   double _weightKg = 75;
   GoalType _selectedGoal = GoalType.recomp;
@@ -31,7 +30,30 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   int _calibrationProgressStep = 1;
   String? _calibrationError;
 
-  void _runCalibrationAndComplete() async {
+  late TextEditingController _heightController;
+  late TextEditingController _weightController;
+  late TextEditingController _emailController;
+  late TextEditingController _passwordController;
+
+  @override
+  void initState() {
+    super.initState();
+    _heightController = TextEditingController(text: _heightCm.round().toString());
+    _weightController = TextEditingController(text: _weightKg.round().toString());
+    _emailController = TextEditingController();
+    _passwordController = TextEditingController();
+  }
+
+  @override
+  void dispose() {
+    _heightController.dispose();
+    _weightController.dispose();
+    _emailController.dispose();
+    _passwordController.dispose();
+    super.dispose();
+  }
+
+  void _runCalibrationAndComplete({String? email, String? password}) async {
     setState(() {
       _currentStep = 4;
       _calibrationProgressStep = 1;
@@ -59,7 +81,14 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       // Step 1: Firebase Auth & Firestore write
       final auth = FirebaseAuthService();
       final firestore = FirebaseFirestoreService();
-      final uid = await auth.signInWithGoogle();
+      
+      String? uid;
+      if (email != null && email.isNotEmpty && password != null && password.isNotEmpty) {
+        uid = await auth.signUpWithEmailAndPassword(email, password);
+      } else {
+        uid = await auth.signInWithGoogle(); // calls anonymous sign-in fallback
+      }
+
       if (uid != null) {
         await firestore.saveUserProfile(uid, profile);
       }
@@ -204,47 +233,33 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           child: AuraOrb(soul: CoachSoul.supporter, state: OrbState.pulsing, size: 90),
         ),
         const SizedBox(height: 32),
-        Container(
-          padding: const EdgeInsets.all(16),
-          decoration: BoxDecoration(
-            color: const Color(0xFF141217),
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: Colors.white.withOpacity(0.08)),
-          ),
-          child: Text(
-            "First, tell me what's the biggest thing stopping you right now?",
-            style: GoogleFonts.plusJakartaSans(
-              color: Colors.white,
-              fontSize: 15,
-              fontWeight: FontWeight.w600,
-              height: 1.4,
-            ),
-          ),
-        ),
-        const SizedBox(height: 20),
-        ..._buildObstacleChips(),
-        const SizedBox(height: 32),
         Text(
           'Your Starting Point',
-          style: GoogleFonts.syne(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+          style: GoogleFonts.syne(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
         ),
         const SizedBox(height: 16),
-        _buildSliderCard(
+        _buildTextFieldCard(
           label: 'Height',
-          value: _heightCm,
-          min: 120,
-          max: 220,
+          controller: _heightController,
           unit: 'cm',
-          onChanged: (val) => setState(() => _heightCm = val),
+          onChanged: (val) {
+            final double? v = double.tryParse(val);
+            if (v != null) {
+              setState(() => _heightCm = v);
+            }
+          },
         ),
-        const SizedBox(height: 12),
-        _buildSliderCard(
+        const SizedBox(height: 16),
+        _buildTextFieldCard(
           label: 'Weight',
-          value: _weightKg,
-          min: 40,
-          max: 180,
+          controller: _weightController,
           unit: 'kg',
-          onChanged: (val) => setState(() => _weightKg = val),
+          onChanged: (val) {
+            final double? v = double.tryParse(val);
+            if (v != null) {
+              setState(() => _weightKg = v);
+            }
+          },
         ),
         const Spacer(),
         Row(
@@ -281,90 +296,45 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     );
   }
 
-  Widget _buildSliderCard({
+  Widget _buildTextFieldCard({
     required String label,
-    required double value,
-    required double min,
-    required double max,
+    required TextEditingController controller,
     required String unit,
-    required ValueChanged<double> onChanged,
+    required ValueChanged<String> onChanged,
   }) {
     return Container(
-      padding: const EdgeInsets.all(16),
+      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
       decoration: BoxDecoration(
         color: const Color(0xFF141217),
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: Colors.white.withOpacity(0.08)),
       ),
-      child: Column(
+      child: Row(
         children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(label, style: const TextStyle(color: Color(0xFFA1A1AA), fontSize: 13)),
-              Text(
-                '${value.round()} $unit',
-                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+          Expanded(
+            child: TextField(
+              controller: controller,
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              style: GoogleFonts.plusJakartaSans(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+              onChanged: onChanged,
+              decoration: InputDecoration(
+                labelText: label,
+                labelStyle: GoogleFonts.plusJakartaSans(color: const Color(0xFFA1A1AA), fontSize: 14),
+                border: InputBorder.none,
+                focusedBorder: InputBorder.none,
+                enabledBorder: InputBorder.none,
+                contentPadding: EdgeInsets.zero,
               ),
-            ],
+            ),
           ),
-          Slider(
-            value: value,
-            min: min,
-            max: max,
-            activeColor: const Color(0xFF00FFA3),
-            inactiveColor: Colors.white.withOpacity(0.1),
-            onChanged: onChanged,
+          const SizedBox(width: 8),
+          Text(
+            unit,
+            style: GoogleFonts.syne(color: const Color(0xFFA1A1AA), fontSize: 14, fontWeight: FontWeight.bold),
           ),
         ],
       ),
     );
-  }
-
-  List<Widget> _buildObstacleChips() {
-    final list = [
-      "I'm always tired",
-      "I don't know where to start",
-      "I've tried and quit before",
-    ];
-
-    return list.map((item) {
-      final isSelected = _selectedObstacle == item;
-      return GestureDetector(
-        onTap: () {
-          setState(() {
-            _selectedObstacle = item;
-            if (item == "I'm always tired") {
-              _selectedGoal = GoalType.recomp;
-            } else if (item == "I've tried and quit before") {
-              _selectedGoal = GoalType.recomp;
-            } else {
-              _selectedGoal = GoalType.fatLoss;
-            }
-          });
-        },
-        child: Container(
-          width: double.infinity,
-          margin: const EdgeInsets.only(bottom: 8),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
-          decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF00FFA3).withOpacity(0.15) : const Color(0xFF141217),
-            borderRadius: BorderRadius.circular(12),
-            border: Border.all(
-              color: isSelected ? const Color(0xFF00FFA3) : Colors.white.withOpacity(0.08),
-            ),
-          ),
-          child: Text(
-            item,
-            style: GoogleFonts.plusJakartaSans(
-              color: isSelected ? const Color(0xFF00FFA3) : Colors.white,
-              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-              fontSize: 14,
-            ),
-          ),
-        ),
-      );
-    }).toList();
   }
 
   // SCREEN 3: CHOOSE YOUR COACH'S SOUL
@@ -517,122 +487,123 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   Widget _buildSunkCostScreen() {
     String goalText = _selectedGoal == GoalType.fatLoss ? 'Fat Loss' : 'Body Recomposition';
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 20),
-        Center(
-          child: AuraOrb(soul: _selectedSoul, state: OrbState.pulsing, size: 90),
-        ),
-        const SizedBox(height: 24),
-        Text(
-          "I've built your first 7 days.",
-          style: GoogleFonts.syne(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 4),
-        Text(
-          "It focuses on $goalText. Ready to see today's plan?",
-          style: GoogleFonts.plusJakartaSans(color: const Color(0xFFA1A1AA), fontSize: 13),
-        ),
-        const SizedBox(height: 24),
-        Stack(
-          children: [
-            Container(
-              height: 180,
-              decoration: BoxDecoration(
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withOpacity(0.08)),
-              ),
-              child: ClipRRect(
-                borderRadius: BorderRadius.circular(16),
-                child: ImageFiltered(
-                  imageFilter: ImageFilter.blur(sigmaX: 10, sigmaY: 10),
-                  child: Container(
-                    color: const Color(0xFF141217),
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.spaceAround,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceAround,
-                          children: List.generate(7, (index) {
-                            return Column(
-                              children: [
-                                Text('Day ${index + 1}', style: const TextStyle(color: Colors.white30, fontSize: 10)),
-                                const SizedBox(height: 8),
-                                Container(
-                                  width: 24,
-                                  height: 24,
-                                  decoration: BoxDecoration(
-                                    shape: BoxShape.circle,
-                                    border: Border.all(color: Colors.white24),
-                                  ),
-                                  child: const Icon(LucideIcons.check, size: 12, color: Colors.white30),
-                                ),
-                              ],
-                            );
-                          }),
-                        ),
-                        Container(
-                          height: 50,
-                          width: double.infinity,
-                          decoration: BoxDecoration(
-                            color: Colors.white10,
-                            borderRadius: BorderRadius.circular(12),
-                          ),
-                        ),
-                      ],
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 10),
+          Center(
+            child: AuraOrb(soul: _selectedSoul, state: OrbState.pulsing, size: 80),
+          ),
+          const SizedBox(height: 20),
+          Text(
+            "I've built your first 7 days.",
+            style: GoogleFonts.syne(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            "It focuses on $goalText. Here is your baseline plan:",
+            style: GoogleFonts.plusJakartaSans(color: const Color(0xFFA1A1AA), fontSize: 13),
+          ),
+          const SizedBox(height: 16),
+          // Unblurred Plan Card
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              color: const Color(0xFF141217),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white.withOpacity(0.08)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'AURA CALIBRATION PLAN',
+                      style: GoogleFonts.syne(
+                        color: const Color(0xFF00FFA3),
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.2,
+                      ),
                     ),
-                  ),
+                    const Icon(LucideIcons.sparkles, color: Color(0xFF00FFA3), size: 14),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    const Icon(LucideIcons.activity, color: Colors.white70, size: 16),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Focus: $goalText',
+                      style: GoogleFonts.plusJakartaSans(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Icon(LucideIcons.user, color: Colors.white70, size: 16),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Baselines: ${_heightCm.round()} cm / ${_weightKg.round()} kg',
+                      style: GoogleFonts.plusJakartaSans(color: Colors.white70, fontSize: 13),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  children: [
+                    const Icon(LucideIcons.compass, color: Colors.white70, size: 16),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Coach Soul: ${_selectedSoul.name.toUpperCase()}',
+                      style: GoogleFonts.plusJakartaSans(color: Colors.white70, fontSize: 13),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 32),
+          // Single Primary Action Button: "Activate My Plan"
+          SizedBox(
+            width: double.infinity,
+            height: 52,
+            child: ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF00FFA3),
+                foregroundColor: Colors.black,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+              ),
+              onPressed: () => _runCalibrationAndComplete(),
+              child: Text(
+                "Activate My Plan",
+                style: GoogleFonts.syne(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 16,
+                  letterSpacing: 0.5,
                 ),
               ),
             ),
-            Positioned.fill(
-              child: Align(
-                alignment: Alignment.center,
-                child: Container(
-                  padding: const EdgeInsets.all(8),
-                  decoration: const BoxDecoration(
-                    color: Color(0x7F0B0B0E),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(LucideIcons.lock, color: Colors.white, size: 24),
-                ),
+          ),
+          const SizedBox(height: 16),
+          Center(
+            child: TextButton(
+              onPressed: () => setState(() => _currentStep = 2),
+              child: Text(
+                'Back to soul selection',
+                style: GoogleFonts.plusJakartaSans(color: const Color(0xFFA1A1AA), fontSize: 12),
               ),
             ),
-          ],
-        ),
-        const Spacer(),
-        SizedBox(
-          width: double.infinity,
-          height: 56,
-          child: ElevatedButton.icon(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Colors.white,
-              foregroundColor: Colors.black,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-              elevation: 4,
-            ),
-            onPressed: _runCalibrationAndComplete,
-            icon: const Icon(LucideIcons.logIn, size: 18),
-            label: Text(
-              "Continue with Google",
-              style: GoogleFonts.syne(fontWeight: FontWeight.bold, fontSize: 15),
-            ),
           ),
-        ),
-        const SizedBox(height: 12),
-        Center(
-          child: TextButton(
-            onPressed: () => setState(() => _currentStep = 2),
-            child: Text(
-              'Back to soul selection',
-              style: GoogleFonts.plusJakartaSans(color: const Color(0xFFA1A1AA), fontSize: 12),
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-      ],
+          const SizedBox(height: 20),
+        ],
+      ),
     );
   }
 

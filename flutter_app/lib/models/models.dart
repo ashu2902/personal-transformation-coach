@@ -371,3 +371,23 @@ class QuickLogParsedResult {
   });
 }
 
+class AIActionCall {
+  final String functionName;
+  final Map<String, dynamic> arguments;
+
+  AIActionCall({
+    required this.functionName,
+    required this.arguments,
+  });
+}
+
+class AIOrchestratorResult {
+  final List<AIActionCall> actions;
+  final String coachResponse;
+
+  AIOrchestratorResult({
+    this.actions = const [],
+    required this.coachResponse,
+  });
+}
+

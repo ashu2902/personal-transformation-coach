@@ -149,21 +149,33 @@ class OrbPainter extends CustomPainter {
     double rotationAngle = 0.0;
 
     if (orbState == OrbState.pulsing) {
-      // Breathing pulse: range from 0.96 to 1.04
-      pulseScale = 1.0 + (math.sin(animationValue * 2 * math.pi) * 0.04);
+      // Breathing pulse: expand scale multiplier to 0.12 for prominent visual feedback
+      pulseScale = 1.0 + (math.sin(animationValue * 2 * math.pi) * 0.12);
     } else if (orbState == OrbState.swirling) {
-      // Swirling rotation
       rotationAngle = animationValue * 2 * math.pi;
-      pulseScale = 1.0 + (math.sin(animationValue * 4 * math.pi) * 0.02);
+      pulseScale = 1.0 + (math.sin(animationValue * 4 * math.pi) * 0.03);
     }
 
     final activeRadius = baseRadius * pulseScale;
 
-    // Draw the glow background
+    // Draw the glow background: make opacity 0.45 and size multiplier 1.6 for rich depth
     final glowPaint = Paint()
-      ..color = colors[1].withOpacity(0.18)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, activeRadius * 0.8);
-    canvas.drawCircle(center, activeRadius * 1.3, glowPaint);
+      ..color = colors[1].withOpacity(0.45)
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, activeRadius * 1.0);
+    canvas.drawCircle(center, activeRadius * 1.6, glowPaint);
+
+    // Also draw a radiating secondary ring in pulsing state to enhance the aura effect
+    if (orbState == OrbState.pulsing) {
+      final pulseProgress = animationValue;
+      final waveRadius = baseRadius * (1.1 + (pulseProgress * 0.5));
+      final waveOpacity = (1.0 - pulseProgress) * 0.25;
+      final wavePaint = Paint()
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.0
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12)
+        ..color = colors[0].withOpacity(waveOpacity);
+      canvas.drawCircle(center, waveRadius, wavePaint);
+    }
 
     // 3. Main Orb Gradient with rotation if swirling
     final gradient = RadialGradient(
@@ -174,7 +186,7 @@ class OrbPainter extends CustomPainter {
       radius: 0.85,
       colors: [
         colors[0].withOpacity(0.95),
-        colors[1].withOpacity(0.55),
+        colors[1].withOpacity(0.65),
         colors[1].withOpacity(0.0),
       ],
       stops: const [0.0, 0.65, 1.0],
@@ -183,20 +195,20 @@ class OrbPainter extends CustomPainter {
     paint.shader = gradient.createShader(Rect.fromCircle(center: center, radius: activeRadius));
     canvas.drawCircle(center, activeRadius, paint);
 
-    // Inner bright core
+    // Inner bright core: make it larger and brighter
     final corePaint = Paint()
       ..style = PaintingStyle.fill
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10)
       ..shader = RadialGradient(
         colors: [
-          Colors.white.withOpacity(0.8),
-          colors[0].withOpacity(0.2),
+          Colors.white.withOpacity(0.95),
+          colors[0].withOpacity(0.45),
           Colors.transparent,
         ],
-        stops: const [0.0, 0.5, 1.0],
-      ).createShader(Rect.fromCircle(center: center, radius: activeRadius * 0.45));
+        stops: const [0.0, 0.6, 1.0],
+      ).createShader(Rect.fromCircle(center: center, radius: activeRadius * 0.55));
 
-    canvas.drawCircle(center, activeRadius * 0.45, corePaint);
+    canvas.drawCircle(center, activeRadius * 0.55, corePaint);
   }
 
   @override

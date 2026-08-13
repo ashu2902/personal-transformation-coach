@@ -30,8 +30,6 @@ class TodayScreen extends ConsumerWidget {
     final calPercent = (totalCal / (nutrition.targetCalories > 0 ? nutrition.targetCalories : 2000)).clamp(0.0, 1.0);
     final protPercent = (totalProt / (nutrition.targetProteinG > 0 ? nutrition.targetProteinG : 150)).clamp(0.0, 1.0);
 
-    final isWorkoutDone = workout.status == WorkoutStatus.completed;
-
     // Dynamically retrieve accent colors for chosen coach soul
     Color activePrimary;
     Color activeSecondary;
@@ -127,94 +125,87 @@ class TodayScreen extends ConsumerWidget {
           ),
           const SizedBox(height: 24),
 
-          // The Main Card (The "Move")
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                colors: [
-                  activePrimary.withOpacity(0.15),
-                  activeSecondary.withOpacity(0.05),
-                ],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: activePrimary.withOpacity(0.2)),
-              boxShadow: [
-                BoxShadow(
-                  color: activePrimary.withOpacity(0.05),
-                  blurRadius: 20,
-                  offset: const Offset(0, 10),
-                ),
-              ],
+          // TODAY'S WORKOUT Section Header
+          Text(
+            "TODAY'S WORKOUT",
+            style: GoogleFonts.syne(
+              color: Colors.white70,
+              fontSize: 11,
+              fontWeight: FontWeight.bold,
+              letterSpacing: 1.5,
             ),
-            child: Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.05),
-                    shape: BoxShape.circle,
-                  ),
-                  child: Icon(
-                    workout.focusArea.toLowerCase().contains('walk') ? LucideIcons.footprints : LucideIcons.dumbbell,
-                    color: activePrimary,
-                    size: 32,
-                  ),
+          ),
+          const SizedBox(height: 12),
+
+          // The Main Card (The "Move")
+          GestureDetector(
+            onTap: () => onNavigateToTab?.call(1, subIndex: 0),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(24),
+              decoration: BoxDecoration(
+                gradient: LinearGradient(
+                  colors: [
+                    activePrimary.withOpacity(0.15),
+                    activeSecondary.withOpacity(0.05),
+                  ],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
                 ),
-                const SizedBox(height: 16),
-                Text(
-                  workout.title,
-                  style: GoogleFonts.syne(
-                    color: Colors.white,
-                    fontSize: 20,
-                    fontWeight: FontWeight.bold,
+                borderRadius: BorderRadius.circular(24),
+                border: Border.all(color: activePrimary.withOpacity(0.2)),
+                boxShadow: [
+                  BoxShadow(
+                    color: activePrimary.withOpacity(0.05),
+                    blurRadius: 20,
+                    offset: const Offset(0, 10),
                   ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 6),
-                Text(
-                  workout.focusArea,
-                  style: GoogleFonts.plusJakartaSans(
-                    color: Colors.white60,
-                    fontSize: 13,
-                  ),
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  width: double.infinity,
-                  height: 52,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: isWorkoutDone ? Colors.white10 : Colors.white,
-                      foregroundColor: isWorkoutDone ? Colors.white60 : Colors.black,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+                ],
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.05),
+                      shape: BoxShape.circle,
                     ),
-                    onPressed: isWorkoutDone
-                        ? null
-                        : () {
-                            notifier.updateWorkoutStatus(WorkoutStatus.completed);
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(
-                                content: Text('Workout completed! Momentum added.', style: GoogleFonts.plusJakartaSans(color: Colors.black, fontWeight: FontWeight.bold)),
-                                backgroundColor: activePrimary,
-                                duration: const Duration(seconds: 2),
-                              ),
-                            );
-                          },
-                    child: Text(
-                      isWorkoutDone ? 'Completed ✓' : 'I did it!',
-                      style: GoogleFonts.syne(
-                        fontWeight: FontWeight.bold,
-                        fontSize: 15,
-                      ),
+                    child: Icon(
+                      workout.focusArea.toLowerCase().contains('walk') ? LucideIcons.footprints : LucideIcons.dumbbell,
+                      color: activePrimary,
+                      size: 32,
                     ),
                   ),
-                ),
-              ],
+                  const SizedBox(height: 16),
+                  Text(
+                    workout.title,
+                    style: GoogleFonts.syne(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.bold,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    workout.focusArea,
+                    style: GoogleFonts.plusJakartaSans(
+                      color: Colors.white60,
+                      fontSize: 13,
+                    ),
+                    textAlign: TextAlign.center,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    'Tap card to view workout outline',
+                    style: GoogleFonts.plusJakartaSans(
+                      color: activePrimary.withOpacity(0.7),
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
           const SizedBox(height: 24),
@@ -427,6 +418,22 @@ class TodayScreen extends ConsumerWidget {
                       child: Text(d, style: GoogleFonts.plusJakartaSans(color: Colors.white70, fontSize: 14)),
                     )),
                 const SizedBox(height: 20),
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: OutlinedButton(
+                    style: OutlinedButton.styleFrom(
+                      foregroundColor: Colors.white,
+                      side: BorderSide(color: Colors.white.withOpacity(0.12)),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                    ),
+                    onPressed: () {
+                      Navigator.of(context).pop();
+                      onNavigateToTab?.call(1, subIndex: 1); // Open Nutrition sub-tab
+                    },
+                    child: Text('View Nutrition Logs', style: GoogleFonts.syne(fontWeight: FontWeight.bold, fontSize: 13)),
+                  ),
+                ),
               ],
             ),
           ),
