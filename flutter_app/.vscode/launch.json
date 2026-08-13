@@ -8,7 +8,7 @@
       "deviceId": "chrome",
       "program": "lib/main.dart",
       "args": [
-        "--dart-define=GEMINI_API_KEY=REDACTED_API_KEY"
+        "--dart-define-from-file=.env"
       ]
     },
     {
@@ -18,7 +18,7 @@
       "deviceId": "android",
       "program": "lib/main.dart",
       "args": [
-        "--dart-define=GEMINI_API_KEY=REDACTED_API_KEY"
+        "--dart-define-from-file=.env"
       ]
     },
     {
@@ -28,7 +28,7 @@
       "deviceId": "ios",
       "program": "lib/main.dart",
       "args": [
-        "--dart-define=GEMINI_API_KEY=REDACTED_API_KEY"
+        "--dart-define-from-file=.env"
       ]
     }
   ]

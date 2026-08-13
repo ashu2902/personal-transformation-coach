@@ -448,6 +448,7 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
   }
 
   AIService _aiService = GeminiAIProvider(apiKey: const String.fromEnvironment('GEMINI_API_KEY'));
+  AIService get aiService => _aiService;
 
   Future<void> addChatMessage(String text) async {
     debugPrint('[AURA STATE] User message: $text');
