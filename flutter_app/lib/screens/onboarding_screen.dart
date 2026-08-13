@@ -64,6 +64,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Single
   // Step 5: AI Calibration state & Animations
   bool _isCalibrating = false;
   int _calibrationProgressStep = 1;
+  String? _synthesisError;
   DailyNutrition? _aiGeneratedNutrition;
   DailyWorkout? _aiGeneratedWorkout;
 
@@ -152,75 +153,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Single
     } catch (e) {
       debugPrint('[ONBOARDING] Synthesis failed: $e');
       if (mounted) {
-        setState(() => _isCalibrating = false);
-        _showApiKeyInputDialog(e.toString());
+        setState(() {
+          _isCalibrating = false;
+          _synthesisError = e.toString();
+        });
       }
     }
-  }
-
-  void _showApiKeyInputDialog([String? errorMsg]) {
-    final keyCtrl = TextEditingController();
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: const Color(0xFF141923),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        title: Row(
-          children: const [
-            Icon(LucideIcons.keyRound, color: Color(0xFF10B981), size: 20),
-            SizedBox(width: 10),
-            Text('Gemini API Key Required', style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-          ],
-        ),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              errorMsg != null && errorMsg.contains('API key not valid')
-                  ? 'Your current Gemini API Key is invalid or expired. Please enter a valid API key from aistudio.google.com'
-                  : 'Please enter your Gemini API Key to calibrate your AI plan.',
-              style: const TextStyle(color: Color(0xFFA1A1AA), fontSize: 12),
-            ),
-            const SizedBox(height: 14),
-            TextField(
-              controller: keyCtrl,
-              style: const TextStyle(color: Colors.white, fontSize: 13),
-              decoration: InputDecoration(
-                hintText: 'AIzaSy...',
-                hintStyle: const TextStyle(color: Color(0xFF4B5563), fontSize: 12),
-                filled: true,
-                fillColor: const Color(0xFF0B0F17),
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(10), borderSide: const BorderSide(color: Color(0xFF1E2638))),
-              ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx),
-            child: const Text('Cancel', style: TextStyle(color: Color(0xFFA1A1AA))),
-          ),
-          ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF10B981),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            onPressed: () async {
-              final newKey = keyCtrl.text.trim();
-              if (newKey.isNotEmpty) {
-                Navigator.pop(ctx);
-                final notifier = ref.read(transformationEngineProvider.notifier);
-                await notifier.updateApiKey(newKey);
-                _synthesizeAIPlan();
-              }
-            },
-            child: const Text('Save & Retry', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-          ),
-        ],
-      ),
-    );
   }
 
   void _completeOnboarding(TransformationEngineNotifier notifier) async {
@@ -987,6 +925,64 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Single
 
   // STEP 5: AI CALIBRATION SCREEN
   Widget _buildCalibrationStep() {
+    if (_synthesisError != null) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const SizedBox(height: 24),
+          Container(
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              color: const Color(0xFF141923),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: const Color(0x4010B981)),
+            ),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: const BoxDecoration(
+                    color: Color(0x2010B981),
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(LucideIcons.refreshCw, color: Color(0xFF10B981), size: 32),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'AURA is Recalibrating...',
+                  style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                const SizedBox(height: 8),
+                const Text(
+                  'Connecting to the AI engine took longer than expected. Tap below to resume your personalized blueprint calibration.',
+                  style: TextStyle(color: Color(0xFFA1A1AA), fontSize: 12, height: 1.4),
+                  textAlign: TextAlign.center,
+                ),
+                const SizedBox(height: 24),
+                SizedBox(
+                  width: double.infinity,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF10B981),
+                      padding: const EdgeInsets.symmetric(vertical: 14),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    onPressed: () {
+                      setState(() {
+                        _synthesisError = null;
+                      });
+                      _synthesizeAIPlan();
+                    },
+                    child: const Text('Resume Calibration', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      );
+    }
+
     double progressPercent = (_calibrationProgressStep / 4.0).clamp(0.15, 1.0);
 
     return Column(

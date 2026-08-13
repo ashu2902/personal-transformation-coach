@@ -29,7 +29,7 @@ class GeminiAIProvider implements AIService {
     const envKey = String.fromEnvironment('GEMINI_API_KEY');
     if (envKey.trim().isNotEmpty && !envKey.contains('REDACTED')) return envKey.trim();
     if (apiKey.trim().isNotEmpty && !apiKey.contains('REDACTED')) return apiKey.trim();
-    return '';
+    return envKey.trim();
   }
 
   Uri get _url => Uri.parse(
