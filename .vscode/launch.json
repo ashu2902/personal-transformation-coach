@@ -9,7 +9,7 @@
       "deviceId": "chrome",
       "program": "${workspaceFolder}/flutter_app/lib/main.dart",
       "args": [
-        "--dart-define=GEMINI_API_KEY=REDACTED_API_KEY"
+        "--dart-define-from-file=.env"
       ]
     },
     {
@@ -20,7 +20,7 @@
       "deviceId": "android",
       "program": "${workspaceFolder}/flutter_app/lib/main.dart",
       "args": [
-        "--dart-define=GEMINI_API_KEY=REDACTED_API_KEY"
+        "--dart-define-from-file=.env"
       ]
     },
     {
@@ -31,7 +31,7 @@
       "deviceId": "ios",
       "program": "${workspaceFolder}/flutter_app/lib/main.dart",
       "args": [
-        "--dart-define=GEMINI_API_KEY=REDACTED_API_KEY"
+        "--dart-define-from-file=.env"
       ]
     }
   ]

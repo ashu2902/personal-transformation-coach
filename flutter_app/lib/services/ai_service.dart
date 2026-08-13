@@ -5,15 +5,21 @@ import '../providers/transformation_state.dart';
 import '../models/models.dart';
 
 abstract class AIService {
-  Future<String> generateCoachResponse(String userPrompt, TransformationEngineState contextState);
-  Future<QuickLogParsedResult> parseQuickLog(String rawText, TransformationEngineState contextState);
-  Future<DailyWorkout> adaptWorkoutWithAI(String adaptationRequest, TransformationEngineState contextState);
-  Future<String> generateEngineDailyInsight(TransformationEngineState contextState);
+  Future<String> generateCoachResponse(
+      String userPrompt, TransformationEngineState contextState);
+  Future<QuickLogParsedResult> parseQuickLog(
+      String rawText, TransformationEngineState contextState);
+  Future<DailyWorkout> adaptWorkoutWithAI(
+      String adaptationRequest, TransformationEngineState contextState);
+  Future<String> generateEngineDailyInsight(
+      TransformationEngineState contextState);
   Future<DailyWorkout> generateAIInitialWorkout(UserProfile profile);
   Future<DailyNutrition> generateAIMetabolicPlan(UserProfile profile);
   Future<String> synthesizeAITodayFocus(TransformationEngineState contextState);
-  Future<DailyNutrition> generateAIAdaptedNutrition(TransformationEngineState contextState, String reason);
-  Future<DailyWorkout> generateAIAdaptedWorkout(TransformationEngineState contextState, String reason);
+  Future<DailyNutrition> generateAIAdaptedNutrition(
+      TransformationEngineState contextState, String reason);
+  Future<DailyWorkout> generateAIAdaptedWorkout(
+      TransformationEngineState contextState, String reason);
 }
 
 class GeminiAIProvider implements AIService {
@@ -22,13 +28,15 @@ class GeminiAIProvider implements AIService {
 
   GeminiAIProvider({
     required this.apiKey,
-    this.modelName = 'gemini-3.6-flash',
+    this.modelName = 'gemini-3.5-flash-lite',
   });
 
   String get _effectiveApiKey {
     const envKey = String.fromEnvironment('GEMINI_API_KEY');
-    if (envKey.trim().isNotEmpty && !envKey.contains('REDACTED')) return envKey.trim();
-    if (apiKey.trim().isNotEmpty && !apiKey.contains('REDACTED')) return apiKey.trim();
+    if (envKey.trim().isNotEmpty && !envKey.contains('REDACTED'))
+      return envKey.trim();
+    if (apiKey.trim().isNotEmpty && !apiKey.contains('REDACTED'))
+      return apiKey.trim();
     return envKey.trim();
   }
 
@@ -71,7 +79,8 @@ class GeminiAIProvider implements AIService {
     debugPrint('=========================================\n');
   }
 
-  Future<Map<String, dynamic>> _callGeminiJson(String method, String prompt) async {
+  Future<Map<String, dynamic>> _callGeminiJson(
+      String method, String prompt) async {
     _logRequest(method, prompt);
     final timer = Stopwatch()..start();
     final response = await http.post(
@@ -79,36 +88,60 @@ class GeminiAIProvider implements AIService {
       headers: _headers,
       body: jsonEncode({
         'generationConfig': {'responseMimeType': 'application/json'},
-        'contents': [{'role': 'user', 'parts': [{'text': prompt}]}],
+        'contents': [
+          {
+            'role': 'user',
+            'parts': [
+              {'text': prompt}
+            ]
+          }
+        ],
       }),
     );
-    _logResponse(method, response.statusCode, timer.elapsedMilliseconds, response.body);
+    _logResponse(
+        method, response.statusCode, timer.elapsedMilliseconds, response.body);
     if (response.statusCode != 200) {
-      throw Exception('Gemini API error ${response.statusCode}: ${response.body}');
+      throw Exception(
+          'Gemini API error ${response.statusCode}: ${response.body}');
     }
     final data = jsonDecode(response.body);
     final jsonText = data['candidates']?[0]?['content']?['parts']?[0]?['text'];
-    if (jsonText == null) throw Exception('Gemini returned empty JSON for $method');
+    if (jsonText == null)
+      throw Exception('Gemini returned empty JSON for $method');
     return jsonDecode(jsonText.toString()) as Map<String, dynamic>;
   }
 
-  Future<String> _callGeminiText(String method, String prompt, {String? systemInstruction}) async {
+  Future<String> _callGeminiText(String method, String prompt,
+      {String? systemInstruction}) async {
     _logRequest(method, prompt);
     final timer = Stopwatch()..start();
     final body = <String, dynamic>{
-      'contents': [{'role': 'user', 'parts': [{'text': prompt}]}],
+      'contents': [
+        {
+          'role': 'user',
+          'parts': [
+            {'text': prompt}
+          ]
+        }
+      ],
     };
     if (systemInstruction != null) {
-      body['system_instruction'] = {'parts': [{'text': systemInstruction}]};
+      body['system_instruction'] = {
+        'parts': [
+          {'text': systemInstruction}
+        ]
+      };
     }
     final response = await http.post(
       _url,
       headers: _headers,
       body: jsonEncode(body),
     );
-    _logResponse(method, response.statusCode, timer.elapsedMilliseconds, response.body);
+    _logResponse(
+        method, response.statusCode, timer.elapsedMilliseconds, response.body);
     if (response.statusCode != 200) {
-      throw Exception('Gemini API error ${response.statusCode}: ${response.body}');
+      throw Exception(
+          'Gemini API error ${response.statusCode}: ${response.body}');
     }
     final data = jsonDecode(response.body);
     final text = data['candidates']?[0]?['content']?['parts']?[0]?['text'];
@@ -119,7 +152,8 @@ class GeminiAIProvider implements AIService {
   }
 
   @override
-  Future<String> generateCoachResponse(String userPrompt, TransformationEngineState contextState) async {
+  Future<String> generateCoachResponse(
+      String userPrompt, TransformationEngineState contextState) async {
     try {
       return await _callGeminiText(
         'generateCoachResponse',
@@ -134,7 +168,8 @@ class GeminiAIProvider implements AIService {
   }
 
   @override
-  Future<QuickLogParsedResult> parseQuickLog(String rawText, TransformationEngineState contextState) async {
+  Future<QuickLogParsedResult> parseQuickLog(
+      String rawText, TransformationEngineState contextState) async {
     final prompt = '''
 Analyze this natural language daily fitness log entry: "$rawText"
 User: ${contextState.profile.name}, Scheduled Workout: ${contextState.workout.title}
@@ -154,7 +189,8 @@ Extract structured data. Return JSON:
     try {
       final parsed = await _callGeminiJson('parseQuickLog', prompt);
       WorkoutStatus? status;
-      if (parsed['workoutStatus'] == 'completed') status = WorkoutStatus.completed;
+      if (parsed['workoutStatus'] == 'completed')
+        status = WorkoutStatus.completed;
       if (parsed['workoutStatus'] == 'skipped') status = WorkoutStatus.skipped;
       if (parsed['workoutStatus'] == 'adapted') status = WorkoutStatus.adapted;
       List<MealItem> meals = [];
@@ -171,7 +207,8 @@ Extract structured data. Return JSON:
       }
       List<String> skipped = [];
       if (parsed['skippedMeals'] is List) {
-        skipped = (parsed['skippedMeals'] as List).map((e) => e.toString()).toList();
+        skipped =
+            (parsed['skippedMeals'] as List).map((e) => e.toString()).toList();
       }
       return QuickLogParsedResult(
         workoutStatus: status,
@@ -190,7 +227,8 @@ Extract structured data. Return JSON:
   }
 
   @override
-  Future<DailyWorkout> adaptWorkoutWithAI(String adaptationRequest, TransformationEngineState contextState) async {
+  Future<DailyWorkout> adaptWorkoutWithAI(
+      String adaptationRequest, TransformationEngineState contextState) async {
     final prompt = '''
 User Request: "$adaptationRequest"
 Current Workout: "${contextState.workout.title}" — ${contextState.workout.focusArea}
@@ -207,7 +245,8 @@ Adapt the workout accordingly. Return JSON:
 ''';
     try {
       final parsed = await _callGeminiJson('adaptWorkoutWithAI', prompt);
-      return _parseWorkoutJson(parsed, contextState.workout, contextState.profile);
+      return _parseWorkoutJson(
+          parsed, contextState.workout, contextState.profile);
     } catch (e) {
       _logError('adaptWorkoutWithAI', e);
       rethrow;
@@ -215,8 +254,10 @@ Adapt the workout accordingly. Return JSON:
   }
 
   @override
-  Future<String> generateEngineDailyInsight(TransformationEngineState contextState) async {
-    final totalProt = contextState.nutrition.meals.fold(0, (sum, m) => sum + m.proteinG);
+  Future<String> generateEngineDailyInsight(
+      TransformationEngineState contextState) async {
+    final totalProt =
+        contextState.nutrition.meals.fold(0, (sum, m) => sum + m.proteinG);
     final prompt = '''
 Write a 1-2 sentence daily coach briefing for ${contextState.profile.name}.
 Goal: ${contextState.profile.goal.name} | Workout: ${contextState.workout.title} (${contextState.workout.status.name})
@@ -255,11 +296,14 @@ Prescribe 4-5 targeted exercises customized to their baseline, gender, and joint
     try {
       final parsed = await _callGeminiJson('generateAIInitialWorkout', prompt);
       final todayStr = DateTime.now().toIso8601String().split('T')[0];
-      final title = parsed['title']?.toString() ?? '${profile.daysPerWeek}-Day AI Plan';
+      final title =
+          parsed['title']?.toString() ?? '${profile.daysPerWeek}-Day AI Plan';
       final focus = parsed['focusArea']?.toString() ?? 'Full Body';
       final duration = (parsed['estimatedDurationMin'] as num?)?.toInt() ?? 45;
-      final note = parsed['adaptationNote']?.toString() ?? 'Tailored for ${profile.name} by AURA AI';
-      final exercises = _parseExerciseList(parsed['exercises'], focus, profile.availableEquipment, 'ai_init');
+      final note = parsed['adaptationNote']?.toString() ??
+          'Tailored for ${profile.name} by AURA AI';
+      final exercises = _parseExerciseList(
+          parsed['exercises'], focus, profile.availableEquipment, 'ai_init');
       return DailyWorkout(
         id: 'workout_$todayStr',
         date: todayStr,
@@ -320,7 +364,8 @@ Apply correct gender-specific BMR formula. Return JSON:
   }
 
   @override
-  Future<String> synthesizeAITodayFocus(TransformationEngineState contextState) async {
+  Future<String> synthesizeAITodayFocus(
+      TransformationEngineState contextState) async {
     try {
       return await _callGeminiText(
         'synthesizeAITodayFocus',
@@ -333,7 +378,8 @@ Apply correct gender-specific BMR formula. Return JSON:
   }
 
   @override
-  Future<DailyNutrition> generateAIAdaptedNutrition(TransformationEngineState contextState, String reason) async {
+  Future<DailyNutrition> generateAIAdaptedNutrition(
+      TransformationEngineState contextState, String reason) async {
     final p = contextState.profile;
     final n = contextState.nutrition;
     final history = contextState.progressHistory;
@@ -354,14 +400,20 @@ Adjust targets intelligently. Return JSON:
 }
 ''';
     try {
-      final parsed = await _callGeminiJson('generateAIAdaptedNutrition', prompt);
-      debugPrint('[GEMINI ADAPT NUTRITION] Reason: ${parsed['adaptationReason']}');
+      final parsed =
+          await _callGeminiJson('generateAIAdaptedNutrition', prompt);
+      debugPrint(
+          '[GEMINI ADAPT NUTRITION] Reason: ${parsed['adaptationReason']}');
       return n.copyWith(
-        targetCalories: (parsed['targetCalories'] as num?)?.toInt() ?? n.targetCalories,
-        targetProteinG: (parsed['targetProteinG'] as num?)?.toInt() ?? n.targetProteinG,
-        targetCarbsG: (parsed['targetCarbsG'] as num?)?.toInt() ?? n.targetCarbsG,
+        targetCalories:
+            (parsed['targetCalories'] as num?)?.toInt() ?? n.targetCalories,
+        targetProteinG:
+            (parsed['targetProteinG'] as num?)?.toInt() ?? n.targetProteinG,
+        targetCarbsG:
+            (parsed['targetCarbsG'] as num?)?.toInt() ?? n.targetCarbsG,
         targetFatG: (parsed['targetFatG'] as num?)?.toInt() ?? n.targetFatG,
-        targetWaterMl: (parsed['targetWaterMl'] as num?)?.toInt() ?? n.targetWaterMl,
+        targetWaterMl:
+            (parsed['targetWaterMl'] as num?)?.toInt() ?? n.targetWaterMl,
       );
     } catch (e) {
       _logError('generateAIAdaptedNutrition', e);
@@ -370,7 +422,8 @@ Adjust targets intelligently. Return JSON:
   }
 
   @override
-  Future<DailyWorkout> generateAIAdaptedWorkout(TransformationEngineState contextState, String reason) async {
+  Future<DailyWorkout> generateAIAdaptedWorkout(
+      TransformationEngineState contextState, String reason) async {
     final prompt = '''
 Adapt the workout for ${contextState.profile.name} because: "$reason"
 Current workout: "${contextState.workout.title}" — ${contextState.workout.focusArea}
@@ -387,18 +440,23 @@ Return JSON:
 ''';
     try {
       final parsed = await _callGeminiJson('generateAIAdaptedWorkout', prompt);
-      return _parseWorkoutJson(parsed, contextState.workout, contextState.profile);
+      return _parseWorkoutJson(
+          parsed, contextState.workout, contextState.profile);
     } catch (e) {
       _logError('generateAIAdaptedWorkout', e);
       rethrow;
     }
   }
 
-  DailyWorkout _parseWorkoutJson(Map<String, dynamic> parsed, DailyWorkout current, UserProfile profile) {
-    final title = parsed['title']?.toString() ?? '${current.title} (AI Adapted)';
+  DailyWorkout _parseWorkoutJson(
+      Map<String, dynamic> parsed, DailyWorkout current, UserProfile profile) {
+    final title =
+        parsed['title']?.toString() ?? '${current.title} (AI Adapted)';
     final note = parsed['adaptationNote']?.toString() ?? 'Adapted by AURA AI';
-    final exercises = _parseExerciseList(parsed['exercises'], current.focusArea, profile.availableEquipment, 'ai_adapt');
-    if (exercises.isEmpty) throw Exception('Gemini returned empty exercise list');
+    final exercises = _parseExerciseList(parsed['exercises'], current.focusArea,
+        profile.availableEquipment, 'ai_adapt');
+    if (exercises.isEmpty)
+      throw Exception('Gemini returned empty exercise list');
     return current.copyWith(
       title: title,
       status: WorkoutStatus.adapted,
@@ -407,7 +465,8 @@ Return JSON:
     );
   }
 
-  List<Exercise> _parseExerciseList(dynamic rawList, String fallbackMuscle, List<EquipmentType> equipment, String idPrefix) {
+  List<Exercise> _parseExerciseList(dynamic rawList, String fallbackMuscle,
+      List<EquipmentType> equipment, String idPrefix) {
     final List<Exercise> exercises = [];
     if (rawList is! List) return exercises;
     int idCounter = 1;
@@ -420,13 +479,15 @@ Return JSON:
       final notes = ex['notes']?.toString() ?? 'AI Prescribed';
       final sets = List.generate(
         setNum,
-        (i) => ExerciseSet(setNumber: i + 1, targetReps: repNum, targetWeightKg: weight),
+        (i) => ExerciseSet(
+            setNumber: i + 1, targetReps: repNum, targetWeightKg: weight),
       );
       exercises.add(Exercise(
         id: '${idPrefix}_$idCounter',
         name: name,
         targetMuscle: muscle,
-        equipmentRequired: equipment.isNotEmpty ? equipment.first : EquipmentType.dumbbells,
+        equipmentRequired:
+            equipment.isNotEmpty ? equipment.first : EquipmentType.dumbbells,
         sets: sets,
         notes: notes,
       ));
