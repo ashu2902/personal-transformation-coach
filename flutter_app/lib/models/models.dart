@@ -1,3 +1,5 @@
+enum Gender { male, female, other }
+
 enum GoalType { fatLoss, muscleGain, recomp }
 
 extension GoalTypeExtension on GoalType {
@@ -258,6 +260,7 @@ enum ExperienceLevel { beginner, intermediate, advanced }
 class UserProfile {
   final String name;
   final int age;
+  final String gender; // 'male', 'female', 'other'
   final double heightCm;
   final double weightKg;
   final double targetWeightKg;
@@ -274,6 +277,7 @@ class UserProfile {
   UserProfile({
     required this.name,
     required this.age,
+    required this.gender,
     required this.heightCm,
     required this.weightKg,
     required this.targetWeightKg,
@@ -291,6 +295,7 @@ class UserProfile {
   UserProfile copyWith({
     String? name,
     int? age,
+    String? gender,
     double? heightCm,
     double? weightKg,
     double? targetWeightKg,
@@ -307,6 +312,7 @@ class UserProfile {
     return UserProfile(
       name: name ?? this.name,
       age: age ?? this.age,
+      gender: gender ?? this.gender,
       heightCm: heightCm ?? this.heightCm,
       weightKg: weightKg ?? this.weightKg,
       targetWeightKg: targetWeightKg ?? this.targetWeightKg,

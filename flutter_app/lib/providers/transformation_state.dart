@@ -2,9 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/models.dart';
 import '../services/transformation_repository.dart';
-import '../engine/engine_calculators.dart';
 import '../engine/exercise_database.dart';
-import '../engine/adaptation_engine.dart';
 import '../engine/transformation_orchestrator.dart';
 import '../services/ai_service.dart';
 
@@ -160,44 +158,53 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
       _aiService = GeminiAIProvider(apiKey: savedApiKey);
     }
 
-    final savedWorkout = await _repository.loadTodayWorkout(todayStr) ??
-        EngineCalculators.generateWorkoutForSplit(
-          goal: savedProfile.goal,
-          availableEquipment: savedProfile.availableEquipment,
-          daysPerWeek: savedProfile.daysPerWeek,
-        );
-
-    final savedNutrition = await _repository.loadTodayNutrition(todayStr) ??
-        EngineCalculators.calculateInitialNutrition(
-          weightKg: savedProfile.weightKg,
-          heightCm: savedProfile.heightCm,
-          ageYears: savedProfile.age,
-          goal: savedProfile.goal,
-          daysPerWeek: savedProfile.daysPerWeek,
-          targetWeightKg: savedProfile.targetWeightKg,
-        );
-
+    // Load today's workout — if none saved, use a lean placeholder (AI will set it during onboarding)
+    final savedWorkout = await _repository.loadTodayWorkout(todayStr);
+    final savedNutrition = await _repository.loadTodayNutrition(todayStr);
     final savedRecovery = await _repository.loadTodayRecovery(todayStr) ?? state.recovery;
     final savedProgress = await _repository.loadProgressHistory();
 
-    final adaptation = AdaptationEngine.evaluateAdaptation(
-      profile: savedProfile,
-      nutrition: savedNutrition,
-      workout: savedWorkout,
-      recovery: savedRecovery,
-      history: savedProgress,
-    );
+    // If high fatigue, ask AI to adapt asynchronously
+    if (savedRecovery.recoveryScore < 50 && savedWorkout != null) {
+      try {
+        final adaptedWorkout = await _aiService.generateAIAdaptedWorkout(
+          state.copyWith(
+            profile: savedProfile,
+            workout: savedWorkout,
+            nutrition: savedNutrition ?? state.nutrition,
+            recovery: savedRecovery,
+            progressHistory: savedProgress,
+          ),
+          'High fatigue detected (Score: ${savedRecovery.recoveryScore}%). Deload for active recovery.',
+        );
+        debugPrint('[AURA STATE] AI adapted workout for high fatigue.');
+        state = state.copyWith(
+          profile: savedProfile,
+          workout: adaptedWorkout,
+          nutrition: savedNutrition ?? state.nutrition,
+          recovery: savedRecovery,
+          progressHistory: savedProgress.isEmpty ? state.progressHistory : savedProgress,
+          chatMessages: state.chatMessages,
+          isOnboardingComplete: true,
+          adaptationNotice: 'High fatigue detected. Your workout has been adjusted for active recovery.',
+          apiKey: savedApiKey,
+        );
+        return;
+      } catch (e) {
+        debugPrint('[AURA STATE] AI adaptation failed: $e');
+      }
+    }
 
     debugPrint('[AURA STATE] State successfully initialized for user: ${savedProfile.name}');
     state = TransformationEngineState(
       profile: savedProfile,
-      workout: adaptation.workout,
-      nutrition: adaptation.nutrition,
+      workout: savedWorkout ?? state.workout,
+      nutrition: savedNutrition ?? state.nutrition,
       recovery: savedRecovery,
       progressHistory: savedProgress.isEmpty ? state.progressHistory : savedProgress,
       chatMessages: state.chatMessages,
       isOnboardingComplete: true,
-      adaptationNotice: adaptation.adaptationNotice,
+      adaptationNotice: null,
       apiKey: savedApiKey,
     );
   }
@@ -215,6 +222,7 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
     final profile = UserProfile(
       name: 'Alex Vance',
       age: 28,
+      gender: 'male',
       heightCm: 180,
       weightKg: 78.5,
       targetWeightKg: 82.0,
@@ -228,19 +236,25 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
       ],
     );
 
-    final workout = EngineCalculators.generateWorkoutForSplit(
-      goal: profile.goal,
-      availableEquipment: profile.availableEquipment,
-      daysPerWeek: profile.daysPerWeek,
+    final workout = DailyWorkout(
+      id: 'placeholder_$todayStr',
+      date: todayStr,
+      title: 'Your AI Plan is being built...',
+      focusArea: 'AI Calibrating',
+      estimatedDurationMin: 45,
+      status: WorkoutStatus.scheduled,
+      exercises: [],
     );
 
-    final nutrition = EngineCalculators.calculateInitialNutrition(
-      weightKg: profile.weightKg,
-      heightCm: profile.heightCm,
-      ageYears: profile.age,
-      goal: profile.goal,
-      daysPerWeek: profile.daysPerWeek,
-      targetWeightKg: profile.targetWeightKg,
+    final nutrition = DailyNutrition(
+      date: todayStr,
+      targetCalories: 2000,
+      targetProteinG: 150,
+      targetCarbsG: 200,
+      targetFatG: 60,
+      targetWaterMl: 2800,
+      waterMl: 0,
+      meals: [],
     );
 
     final recovery = RecoveryCheckIn(
@@ -403,26 +417,34 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
     final newHistory = List<ProgressEntry>.from(state.progressHistory)..add(entry);
     final updatedProfile = state.profile.copyWith(weightKg: entry.weightKg);
 
-    final adaptation = AdaptationEngine.evaluateAdaptation(
-      profile: updatedProfile,
-      nutrition: state.nutrition,
-      workout: state.workout,
-      recovery: state.recovery,
-      history: newHistory,
-    );
-
     state = state.copyWith(
       progressHistory: newHistory,
       profile: updatedProfile,
-      nutrition: adaptation.nutrition,
-      workout: adaptation.workout,
-      adaptationNotice: adaptation.adaptationNotice,
     );
     trackProgressForToday();
     _repository.saveProfile(updatedProfile);
     _repository.saveProgressEntry(entry);
-    _repository.saveTodayNutrition(adaptation.nutrition);
-    _repository.saveTodayWorkout(adaptation.workout);
+
+    // Check for weight stall — ask AI to adapt nutrition asynchronously
+    if (newHistory.length >= 14) {
+      final recent = newHistory.sublist(newHistory.length - 14);
+      final delta = (recent.last.weightKg - recent.first.weightKg).abs();
+      if (delta < 0.2 && updatedProfile.goal == GoalType.fatLoss) {
+        _aiService.generateAIAdaptedNutrition(
+          state.copyWith(profile: updatedProfile, progressHistory: newHistory),
+          'Weight stalled over 14 days (only ${delta.toStringAsFixed(1)}kg change). Adjust calorie target for continued fat loss.',
+        ).then((adaptedNutrition) {
+          state = state.copyWith(
+            nutrition: adaptedNutrition,
+            adaptationNotice: 'Weight progress stalled. AI adjusted your daily calorie target.',
+          );
+          _repository.saveTodayNutrition(adaptedNutrition);
+          debugPrint('[AURA STATE] AI nutrition adapted for weight stall.');
+        }).catchError((e) {
+          debugPrint('[AURA STATE] AI nutrition adaptation failed: $e');
+        });
+      }
+    }
   }
 
   AIService _aiService = GeminiAIProvider(apiKey: const String.fromEnvironment('GEMINI_API_KEY'));
@@ -488,23 +510,27 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
       status: statusText,
     );
 
-    final adaptation = AdaptationEngine.evaluateAdaptation(
-      profile: state.profile,
-      nutrition: state.nutrition,
-      workout: state.workout,
-      recovery: updatedRecovery,
-      history: state.progressHistory,
-    );
-
     state = state.copyWith(
       recovery: updatedRecovery,
-      workout: adaptation.workout,
-      nutrition: adaptation.nutrition,
-      adaptationNotice: adaptation.adaptationNotice,
     );
     _repository.saveTodayRecovery(updatedRecovery);
-    _repository.saveTodayWorkout(adaptation.workout);
-    _repository.saveTodayNutrition(adaptation.nutrition);
+
+    // If high fatigue, ask AI to adapt workout asynchronously
+    if (score < 50) {
+      _aiService.generateAIAdaptedWorkout(
+        state,
+        'High fatigue detected (Score: $score%). Deload the workout for active recovery.',
+      ).then((adaptedWorkout) {
+        state = state.copyWith(
+          workout: adaptedWorkout,
+          adaptationNotice: 'High fatigue detected. AI adjusted your workout to an active recovery session.',
+        );
+        _repository.saveTodayWorkout(adaptedWorkout);
+        debugPrint('[AURA STATE] AI adapted workout for high fatigue recovery.');
+      }).catchError((e) {
+        debugPrint('[AURA STATE] AI workout adaptation failed: $e');
+      });
+    }
   }
 
   Future<QuickLogParsedResult> parseAndApplyQuickLog(String rawText) async {

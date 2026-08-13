@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../models/models.dart';
 import '../providers/transformation_state.dart';
-import '../engine/engine_calculators.dart';
 import '../services/ai_service.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
@@ -29,6 +28,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Single
 
   // Step 2: Body Profile
   final _nameController = TextEditingController(text: 'Alex Vance');
+  String _selectedGender = 'male';
   final _heightController = TextEditingController(text: '178');
   final _weightController = TextEditingController(text: '76.5');
   final _targetWeightController = TextEditingController(text: '80.0');
@@ -116,6 +116,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Single
     final profile = UserProfile(
       name: name,
       age: _age,
+      gender: _selectedGender,
       heightCm: _heightCm,
       weightKg: _weightKg,
       targetWeightKg: _targetWeightKg,
@@ -160,6 +161,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Single
     final profile = UserProfile(
       name: name,
       age: _age,
+      gender: _selectedGender,
       heightCm: _heightCm,
       weightKg: _weightKg,
       targetWeightKg: _targetWeightKg,
@@ -464,18 +466,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Single
     );
   }
 
-  // STEP 2: BODY PROFILE & LIVE BMR MATH
+  // STEP 2: BODY PROFILE & GENDER SELECTION
   Widget _buildProfileStep() {
-    final bmr = EngineCalculators.calculateBMR(weightKg: _weightKg, heightCm: _heightCm, ageYears: _age);
-    final nutrition = EngineCalculators.calculateInitialNutrition(
-      weightKg: _weightKg,
-      heightCm: _heightCm,
-      ageYears: _age,
-      goal: _selectedGoal,
-      daysPerWeek: _daysPerWeek,
-      targetWeightKg: _targetWeightKg,
-    );
-
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -485,7 +477,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Single
         ),
         const SizedBox(height: 6),
         const Text(
-          'Used to compute your metabolic baseline (BMR) and daily protein requirement.',
+          'Gemini AI uses your biological baseline to synthesize your exact BMR and target macros.',
           style: TextStyle(color: Color(0xFFA1A1AA), fontSize: 12),
         ),
         const SizedBox(height: 20),
@@ -501,6 +493,23 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Single
             fillColor: const Color(0xFF141923),
             border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
           ),
+        ),
+        const SizedBox(height: 16),
+
+        // Gender Selection Chips
+        const Text(
+          'Biological Sex / Gender',
+          style: TextStyle(color: Color(0xFFA1A1AA), fontSize: 11, fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 8),
+        Row(
+          children: [
+            _buildGenderChip('male', 'Male ♂'),
+            const SizedBox(width: 8),
+            _buildGenderChip('female', 'Female ♀'),
+            const SizedBox(width: 8),
+            _buildGenderChip('other', 'Prefer not to say'),
+          ],
         ),
         const SizedBox(height: 16),
 
@@ -537,7 +546,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Single
         ),
         const SizedBox(height: 16),
 
-        // Real-Time Metabolic Preview Card
+        // Gemini AI Metabolic Preview Badge
         Container(
           padding: const EdgeInsets.all(14),
           decoration: BoxDecoration(
@@ -546,11 +555,25 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Single
             border: Border.all(color: const Color(0x4010B981)),
           ),
           child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceAround,
             children: [
-              _buildStatMetric('Base Calories', '${bmr.round()} kcal'),
-              _buildStatMetric('Daily Calorie Target', '${nutrition.targetCalories} kcal'),
-              _buildStatMetric('Protein Target', '${nutrition.targetProteinG}g P'),
+              const Icon(LucideIcons.sparkles, color: Color(0xFF10B981), size: 20),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'AI Metabolic Synthesis Engine',
+                      style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 12),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      'BMR, TDEE, and macro split will be synthesized by Gemini AI tailored for a ${_selectedGender == 'female' ? 'Female' : _selectedGender == 'male' ? 'Male' : 'Individual'} baseline.',
+                      style: const TextStyle(color: Color(0xFFA1A1AA), fontSize: 11),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
@@ -558,17 +581,34 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Single
     );
   }
 
-  Widget _buildStatMetric(String label, String val) {
-    return Column(
-      children: [
-        Text(label, style: const TextStyle(color: Color(0xFFA1A1AA), fontSize: 10, fontWeight: FontWeight.w600)),
-        const SizedBox(height: 2),
-        Text(val, style: const TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 13)),
-      ],
+  Widget _buildGenderChip(String value, String label) {
+    final isSelected = _selectedGender == value;
+    return Expanded(
+      child: GestureDetector(
+        onTap: () => setState(() => _selectedGender = value),
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 10),
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0x3010B981) : const Color(0xFF141923),
+            borderRadius: BorderRadius.circular(10),
+            border: Border.all(
+              color: isSelected ? const Color(0xFF10B981) : const Color(0xFF1E2638),
+            ),
+          ),
+          child: Center(
+            child: Text(
+              label,
+              style: TextStyle(
+                color: isSelected ? const Color(0xFF10B981) : Colors.white,
+                fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                fontSize: 12,
+              ),
+            ),
+          ),
+        ),
+      ),
     );
   }
-
-
 
   Widget _buildBaselineInputField({
     required TextEditingController controller,
@@ -1027,16 +1067,15 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Single
 
   // STEP 6: PLAN REVIEW & APPROVAL SCREEN
   Widget _buildPlanSummaryStep() {
-    final bmr = EngineCalculators.calculateBMR(weightKg: _weightKg, heightCm: _heightCm, ageYears: _age);
-    final nutrition = _aiGeneratedNutrition ?? EngineCalculators.calculateInitialNutrition(
-      weightKg: _weightKg,
-      heightCm: _heightCm,
-      ageYears: _age,
-      goal: _selectedGoal,
-      daysPerWeek: _daysPerWeek,
-      targetWeightKg: _targetWeightKg,
+    final nutrition = _aiGeneratedNutrition ?? DailyNutrition(
+      date: DateTime.now().toIso8601String().split('T')[0],
+      targetCalories: 2000,
+      targetProteinG: 150,
+      targetCarbsG: 200,
+      targetFatG: 60,
+      waterMl: 0,
     );
-    final workoutTitle = _aiGeneratedWorkout?.title ?? '$_daysPerWeek-Day Push / Pull / Legs';
+    final workoutTitle = _aiGeneratedWorkout?.title ?? '$_daysPerWeek-Day Custom AI Split';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1106,7 +1145,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> with Single
             children: [
               _buildSummaryDetailRow('Daily Calorie Target', '${nutrition.targetCalories} kcal'),
               const Divider(color: Color(0xFF1E2638), height: 16),
-              _buildSummaryDetailRow('Base Rest Calories', '${bmr.round()} kcal'),
+              _buildSummaryDetailRow('Hydration Target', '${nutrition.targetWaterMl} ml'),
               const Divider(color: Color(0xFF1E2638), height: 16),
               _buildSummaryDetailRow('Daily Protein Target', '${nutrition.targetProteinG}g P (${(nutrition.targetProteinG / _weightKg).toStringAsFixed(1)}g / kg)'),
               const Divider(color: Color(0xFF1E2638), height: 16),

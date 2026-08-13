@@ -57,6 +57,7 @@ class LocalTransformationRepository implements ITransformationRepository {
       final profile = UserProfile(
         name: map['name'] ?? '',
         age: map['age'] ?? 25,
+        gender: map['gender'] ?? 'male',
         heightCm: (map['heightCm'] as num).toDouble(),
         weightKg: (map['weightKg'] as num).toDouble(),
         targetWeightKg: (map['targetWeightKg'] as num).toDouble(),
@@ -87,6 +88,7 @@ class LocalTransformationRepository implements ITransformationRepository {
     final map = {
       'name': profile.name,
       'age': profile.age,
+      'gender': profile.gender,
       'heightCm': profile.heightCm,
       'weightKg': profile.weightKg,
       'targetWeightKg': profile.targetWeightKg,
