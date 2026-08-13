@@ -1,101 +1,280 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:google_fonts/google_fonts.dart';
 import '../providers/transformation_state.dart';
+import '../models/models.dart';
+import 'widgets/aura_orb.dart';
 
-class CoachScreen extends ConsumerWidget {
+class CoachScreen extends ConsumerStatefulWidget {
   const CoachScreen({super.key});
 
-  static const List<String> _quickPrompts = [
-    'How can I get 40g more protein today?',
-    'Can I substitute flat bench for incline dumbbells?',
-    'Should I train today if muscle soreness is 6/10?',
-    'Explain progressive overload strategy for next week',
+  @override
+  ConsumerState<CoachScreen> createState() => _CoachScreenState();
+}
+
+class _CoachScreenState extends ConsumerState<CoachScreen> {
+  final TextEditingController _inputController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
+  bool _isScanningWatch = false;
+
+  static const List<String> _actionChips = [
+    "I'm feeling sore.",
+    "What should I eat for dinner?",
+    "I don't want to do my walk today.",
   ];
 
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final state = ref.watch(transformationEngineProvider);
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
+  }
+
+  void _sendMessage(String text) async {
+    if (text.trim().isEmpty) return;
+    _inputController.clear();
     final notifier = ref.read(transformationEngineProvider.notifier);
-    final inputController = TextEditingController();
+    await notifier.addChatMessage(text);
+    _scrollToBottom();
+  }
+
+  void _triggerWatchScan() async {
+    setState(() {
+      _isScanningWatch = true;
+    });
+
+    final notifier = ref.read(transformationEngineProvider.notifier);
+    
+    // Simulate user attaching an image log in chat first
+    final userImageMsg = ChatMessage(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      sender: 'user',
+      text: '📎 Sent a screenshot of my Apple Watch activity summary.',
+      timestamp: 'Just now',
+    );
+    stateNotifier.state = stateNotifier.state.copyWith(
+      chatMessages: List.from(stateNotifier.state.chatMessages)..add(userImageMsg)
+    );
+    _scrollToBottom();
+    
+    await notifier.simulateWatchScreenshotScan();
+    
+    setState(() {
+      _isScanningWatch = false;
+    });
+    _scrollToBottom();
+  }
+
+  // Get notifier state helper
+  TransformationEngineNotifier get stateNotifier => ref.read(transformationEngineProvider.notifier);
+
+  @override
+  Widget build(BuildContext context) {
+    final state = ref.watch(transformationEngineProvider);
+    final isThinking = state.isAiThinking;
+
+    // Dynamically retrieve accent colors for chosen coach soul
+    Color activePrimary;
+    Color activeSecondary;
+    switch (state.profile.coachSoul) {
+      case CoachSoul.supporter:
+        activePrimary = const Color(0xFF8EA885);
+        activeSecondary = const Color(0xFF9A7EB8);
+        break;
+      case CoachSoul.pro:
+        activePrimary = const Color(0xFF00B2FF);
+        activeSecondary = const Color(0xFFFF007A);
+        break;
+      case CoachSoul.teacher:
+        activePrimary = const Color(0xFF00BFA5);
+        activeSecondary = const Color(0xFFB0BEC5);
+        break;
+    }
+
+    // Determine Orb state
+    OrbState orbState = OrbState.pulsing;
+    if (_isScanningWatch || isThinking) {
+      orbState = OrbState.swirling;
+    }
 
     return Column(
       children: [
-        // AI Header Sub-banner
+        // The Top Third: Large AURA Orb
         Container(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          decoration: const BoxDecoration(
-            color: Color(0xFF141923),
-            border: Border(bottom: BorderSide(color: Color(0xFF1E2638), width: 1)),
+          padding: const EdgeInsets.symmetric(vertical: 24.0),
+          width: double.infinity,
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              colors: [
+                activePrimary.withOpacity(0.08),
+                Colors.transparent,
+              ],
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+            ),
           ),
-          child: Row(
+          child: Column(
             children: [
-              Container(
-                padding: const EdgeInsets.all(8),
-                decoration: BoxDecoration(
-                  color: const Color(0x2010B981),
-                  borderRadius: BorderRadius.circular(10),
+              Hero(
+                tag: 'aura_orb_hero',
+                child: AuraOrb(
+                  soul: state.profile.coachSoul,
+                  state: orbState,
+                  size: 110,
                 ),
-                child: const Icon(LucideIcons.bot, color: Color(0xFF10B981), size: 18),
               ),
-              const SizedBox(width: 12),
-              const Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text('AURA AI Transformation Coach', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
-                    Text('Context active: User Baseline • Workouts • Nutrition • Recovery', style: TextStyle(color: Color(0xFFA1A1AA), fontSize: 10)),
-                  ],
+              const SizedBox(height: 12),
+              Text(
+                state.profile.coachSoul == CoachSoul.supporter
+                    ? 'The Supporter'
+                    : state.profile.coachSoul == CoachSoul.pro
+                        ? 'The Pro'
+                        : 'The Teacher',
+                style: GoogleFonts.syne(
+                  color: activePrimary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                  letterSpacing: 1.0,
+                ),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                isThinking ? 'AURA is analyzing...' : 'AURA is active',
+                style: GoogleFonts.plusJakartaSans(
+                  color: Colors.white38,
+                  fontSize: 11,
                 ),
               ),
             ],
           ),
         ),
 
-        // Message List
+        // Chat stream
         Expanded(
           child: ListView.builder(
+            controller: _scrollController,
+            physics: const BouncingScrollPhysics(),
             padding: const EdgeInsets.all(16),
             itemCount: state.chatMessages.length,
             itemBuilder: (context, index) {
               final msg = state.chatMessages[index];
               final isAi = msg.sender == 'ai';
+              final isScanPlaceholder = _isScanningWatch && index == state.chatMessages.length - 1 && !isAi;
+
               return Align(
                 alignment: isAi ? Alignment.centerLeft : Alignment.centerRight,
                 child: Container(
                   constraints: BoxConstraints(maxWidth: MediaQuery.of(context).size.width * 0.8),
                   margin: const EdgeInsets.only(bottom: 12),
-                  padding: const EdgeInsets.all(14),
+                  padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: isAi ? const Color(0xFF141923) : const Color(0xFF10B981),
-                    border: Border.all(color: isAi ? const Color(0xFF1E2638) : Colors.transparent),
+                    color: isAi ? Theme.of(context).cardColor : activePrimary.withOpacity(0.15),
                     borderRadius: BorderRadius.only(
                       topLeft: const Radius.circular(16),
                       topRight: const Radius.circular(16),
                       bottomLeft: isAi ? Radius.zero : const Radius.circular(16),
                       bottomRight: isAi ? const Radius.circular(16) : Radius.zero,
                     ),
+                    border: Border.all(
+                      color: isAi ? Colors.white.withOpacity(0.06) : activePrimary.withOpacity(0.3),
+                    ),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(
-                        msg.text,
-                        style: TextStyle(
-                          color: isAi ? Colors.white : Colors.black,
-                          fontSize: 13,
-                          height: 1.4,
-                          fontWeight: isAi ? FontWeight.normal : FontWeight.w600,
+                      if (isScanPlaceholder)
+                        Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Row(
+                              children: [
+                                Icon(LucideIcons.camera, color: Colors.white70, size: 14),
+                                SizedBox(width: 8),
+                                Text('Activity screenshot attached', style: TextStyle(color: Colors.white70, fontSize: 12)),
+                              ],
+                            ),
+                            const SizedBox(height: 12),
+                            // Scanning Laser Animation simulation
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(4),
+                              child: Stack(
+                                children: [
+                                  Container(
+                                    height: 80,
+                                    width: double.infinity,
+                                    color: Colors.white10,
+                                    child: const Center(
+                                      child: Icon(LucideIcons.image, color: Colors.white30, size: 30),
+                                    ),
+                                  ),
+                                  const Positioned(
+                                    left: 0,
+                                    right: 0,
+                                    top: 30,
+                                    child: Divider(
+                                      color: Color(0xFF00FFA3),
+                                      thickness: 2,
+                                      height: 2,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            const Text('Scanning screenshot metrics...', style: TextStyle(color: Colors.white38, fontSize: 11)),
+                          ],
+                        )
+                      else
+                        Text(
+                          msg.text,
+                          style: GoogleFonts.plusJakartaSans(
+                            color: Colors.white,
+                            fontSize: 14,
+                            height: 1.45,
+                            fontWeight: isAi ? FontWeight.normal : FontWeight.w600,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 4),
+                      const SizedBox(height: 6),
                       Text(
                         msg.timestamp,
-                        style: TextStyle(
-                          fontSize: 9,
-                          color: isAi ? const Color(0xFF71717A) : Colors.black54,
+                        style: GoogleFonts.plusJakartaSans(
+                          fontSize: 10,
+                          color: Colors.white30,
                         ),
                       ),
+                      // If this is the protein or snack size prompt, render selection chips!
+                      if (isAi && msg.text.contains('Was it a big bowl or a small one?'))
+                        Padding(
+                          padding: const EdgeInsets.only(top: 12.0),
+                          child: Row(
+                            children: [
+                              _buildInlineChoiceBtn(
+                                label: 'Small',
+                                color: activePrimary,
+                                onTap: () => _sendMessage('It was a small bowl.'),
+                              ),
+                              const SizedBox(width: 8),
+                              _buildInlineChoiceBtn(
+                                label: 'Medium',
+                                color: activePrimary,
+                                onTap: () => _sendMessage('It was a medium bowl.'),
+                              ),
+                              const SizedBox(width: 8),
+                              _buildInlineChoiceBtn(
+                                label: 'Big',
+                                color: activePrimary,
+                                onTap: () => _sendMessage('It was a big bowl.'),
+                              ),
+                            ],
+                          ),
+                        ),
                     ],
                   ),
                 ),
@@ -104,113 +283,120 @@ class CoachScreen extends ConsumerWidget {
           ),
         ),
 
-        // Animated AURA AI Thinking Indicator
-        if (state.isAiThinking)
-          Padding(
-            padding: const EdgeInsets.only(left: 16, bottom: 12),
-            child: Align(
-              alignment: Alignment.centerLeft,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF141923),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0x4010B981)),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Container(
-                      padding: const EdgeInsets.all(4),
-                      decoration: const BoxDecoration(color: Color(0x2010B981), shape: BoxShape.circle),
-                      child: const Icon(LucideIcons.sparkles, color: Color(0xFF10B981), size: 14),
+        // Action Suggestions Row (Floating above input)
+        if (!isThinking)
+          SizedBox(
+            height: 38,
+            child: ListView.builder(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              itemCount: _actionChips.length,
+              itemBuilder: (ctx, idx) {
+                final prompt = _actionChips[idx];
+                return Padding(
+                  padding: const EdgeInsets.only(right: 8),
+                  child: ActionChip(
+                    backgroundColor: Theme.of(context).cardColor,
+                    side: BorderSide(color: Colors.white.withOpacity(0.08)),
+                    labelStyle: GoogleFonts.plusJakartaSans(
+                      color: activePrimary,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
                     ),
-                    const SizedBox(width: 8),
-                    const Text(
-                      'AURA is thinking...',
-                      style: TextStyle(color: Color(0xFF38BDF8), fontSize: 12, fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(width: 8),
-                    const SizedBox(
-                      width: 12,
-                      height: 12,
-                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF10B981)),
-                    ),
-                  ],
-                ),
-              ),
+                    label: Text(prompt),
+                    onPressed: () => _sendMessage(prompt),
+                  ),
+                );
+              },
             ),
           ),
-
-        // Quick Suggestion Chips
-        SizedBox(
-          height: 38,
-          child: ListView.builder(
-            scrollDirection: Axis.horizontal,
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            itemCount: _quickPrompts.length,
-            itemBuilder: (ctx, idx) {
-              final prompt = _quickPrompts[idx];
-              return Padding(
-                padding: const EdgeInsets.only(right: 8),
-                child: ActionChip(
-                  backgroundColor: const Color(0xFF141923),
-                  side: const BorderSide(color: Color(0xFF1E2638)),
-                  labelStyle: const TextStyle(color: Color(0xFF10B981), fontSize: 11, fontWeight: FontWeight.w600),
-                  label: Text(prompt),
-                  onPressed: () => notifier.addChatMessage(prompt),
-                ),
-              );
-            },
-          ),
-        ),
         const SizedBox(height: 8),
 
-        // Input Field
+        // Bottom Input Field Bar
         Padding(
-          padding: const EdgeInsets.all(12.0),
+          padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
           child: Row(
             children: [
+              // Photo attachment button (Watch screenshot trigger)
+              GestureDetector(
+                onTap: _triggerWatchScan,
+                child: Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: Theme.of(context).cardColor,
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.all(color: Colors.white.withOpacity(0.08)),
+                  ),
+                  child: const Icon(LucideIcons.camera, color: Colors.white70, size: 20),
+                ),
+              ),
+              const SizedBox(width: 10),
+
+              // Input field
               Expanded(
                 child: TextField(
-                  controller: inputController,
-                  style: const TextStyle(color: Colors.white, fontSize: 13),
+                  controller: _inputController,
+                  onSubmitted: _sendMessage,
+                  style: GoogleFonts.plusJakartaSans(color: Colors.white, fontSize: 14),
                   decoration: InputDecoration(
-                    hintText: 'Ask your coach...',
-                    hintStyle: const TextStyle(color: Color(0xFF71717A)),
+                    hintText: 'Ask me anything...',
+                    hintStyle: GoogleFonts.plusJakartaSans(color: Colors.white30),
                     filled: true,
-                    fillColor: const Color(0xFF141923),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    fillColor: Theme.of(context).cardColor,
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
                     border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Color(0xFF1E2638)),
+                      borderRadius: BorderRadius.circular(24),
+                      borderSide: BorderSide(color: Colors.white.withOpacity(0.08)),
                     ),
                     focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: const BorderSide(color: Color(0xFF10B981)),
+                      borderRadius: BorderRadius.circular(24),
+                      borderSide: BorderSide(color: activePrimary),
                     ),
                   ),
                 ),
               ),
-              const SizedBox(width: 8),
-              IconButton(
-                style: IconButton.styleFrom(
-                  backgroundColor: const Color(0xFF10B981),
-                  foregroundColor: Colors.black,
+              const SizedBox(width: 10),
+
+              // Send button
+              GestureDetector(
+                onTap: () => _sendMessage(_inputController.text),
+                child: Container(
                   padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: activePrimary,
+                    shape: BoxShape.circle,
+                  ),
+                  child: const Icon(LucideIcons.arrowUp, color: Colors.black, size: 20),
                 ),
-                icon: const Icon(LucideIcons.send, size: 18),
-                onPressed: () {
-                  if (inputController.text.trim().isNotEmpty) {
-                    notifier.addChatMessage(inputController.text.trim());
-                    inputController.clear();
-                  }
-                },
               ),
             ],
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildInlineChoiceBtn({
+    required String label,
+    required Color color,
+    required VoidCallback onTap,
+  }) {
+    return ElevatedButton(
+      style: ElevatedButton.styleFrom(
+        backgroundColor: color.withOpacity(0.15),
+        foregroundColor: color,
+        elevation: 0,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(16),
+          side: BorderSide(color: color.withOpacity(0.3)),
+        ),
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      ),
+      onPressed: onTap,
+      child: Text(
+        label,
+        style: GoogleFonts.syne(fontWeight: FontWeight.bold, fontSize: 11),
+      ),
     );
   }
 }

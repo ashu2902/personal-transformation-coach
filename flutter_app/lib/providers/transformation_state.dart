@@ -235,6 +235,7 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
         EquipmentType.barbell,
         EquipmentType.cables,
       ],
+      coachSoul: CoachSoul.supporter,
     );
 
     final workout = DailyWorkout(
@@ -481,6 +482,30 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
     );
   }
 
+  Future<void> simulateWatchScreenshotScan() async {
+    state = state.copyWith(isAiThinking: true);
+    await Future.delayed(const Duration(seconds: 3));
+    
+    final scanReply = ChatMessage(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      sender: 'ai',
+      text: "Got it! 340 active calories burned during your workout. I've updated your Energy bar on the home screen.",
+      timestamp: 'Just now',
+    );
+    
+    // Simulate updating today's metrics
+    final updatedWorkout = state.workout.copyWith(
+      status: WorkoutStatus.completed,
+    );
+    
+    state = state.copyWith(
+      chatMessages: List.from(state.chatMessages)..add(scanReply),
+      isAiThinking: false,
+      workout: updatedWorkout,
+    );
+    _repository.saveTodayWorkout(updatedWorkout);
+  }
+
   void updateRecoveryCheckIn({
     required double sleepHours,
     required int sleepQuality,
@@ -621,6 +646,13 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
       adaptationNotice: 'Workout adapted via AURA AI: "${adaptedWorkout.adaptationNote}"',
     );
     await _repository.saveTodayWorkout(adaptedWorkout);
+  }
+
+  void updateWorkoutStatus(WorkoutStatus status) {
+    debugPrint('[AURA STATE] Updating workout status: ${status.name}');
+    final updatedWorkout = state.workout.copyWith(status: status);
+    state = state.copyWith(workout: updatedWorkout);
+    _repository.saveTodayWorkout(updatedWorkout);
   }
 
   void updateProfile(UserProfile updatedProfile) {

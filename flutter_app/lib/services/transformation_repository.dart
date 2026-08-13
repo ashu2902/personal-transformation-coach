@@ -72,6 +72,7 @@ class LocalTransformationRepository implements ITransformationRepository {
         squat1RMKg: (map['squat1RMKg'] as num?)?.toDouble(),
         deadlift1RMKg: (map['deadlift1RMKg'] as num?)?.toDouble(),
         activeInjuries: (map['activeInjuries'] as List? ?? []).map((e) => e.toString()).toList(),
+        coachSoul: CoachSoul.values.firstWhere((c) => c.name == map['coachSoul'], orElse: () => CoachSoul.supporter),
       );
       debugPrint('[AURA REPOSITORY] Loaded profile for: ${profile.name} (${profile.goal.name})');
       return profile;
@@ -101,6 +102,7 @@ class LocalTransformationRepository implements ITransformationRepository {
       'squat1RMKg': profile.squat1RMKg,
       'deadlift1RMKg': profile.deadlift1RMKg,
       'activeInjuries': profile.activeInjuries,
+      'coachSoul': profile.coachSoul.name,
     };
     await prefs.setString(_keyProfile, jsonEncode(map));
     debugPrint('[AURA REPOSITORY] Profile saved to localStorage successfully');

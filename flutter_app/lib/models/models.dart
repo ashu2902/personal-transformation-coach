@@ -257,6 +257,8 @@ class ProgressEntry {
 
 enum ExperienceLevel { beginner, intermediate, advanced }
 
+enum CoachSoul { supporter, pro, teacher }
+
 class UserProfile {
   final String name;
   final int age;
@@ -273,6 +275,7 @@ class UserProfile {
   final double? squat1RMKg;
   final double? deadlift1RMKg;
   final List<String> activeInjuries;
+  final CoachSoul coachSoul;
 
   UserProfile({
     required this.name,
@@ -290,6 +293,7 @@ class UserProfile {
     this.squat1RMKg,
     this.deadlift1RMKg,
     this.activeInjuries = const [],
+    this.coachSoul = CoachSoul.supporter,
   });
 
   UserProfile copyWith({
@@ -308,6 +312,7 @@ class UserProfile {
     double? squat1RMKg,
     double? deadlift1RMKg,
     List<String>? activeInjuries,
+    CoachSoul? coachSoul,
   }) {
     return UserProfile(
       name: name ?? this.name,
@@ -325,6 +330,7 @@ class UserProfile {
       squat1RMKg: squat1RMKg ?? this.squat1RMKg,
       deadlift1RMKg: deadlift1RMKg ?? this.deadlift1RMKg,
       activeInjuries: activeInjuries ?? this.activeInjuries,
+      coachSoul: coachSoul ?? this.coachSoul,
     );
   }
 }

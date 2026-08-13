@@ -4,6 +4,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 
 import 'providers/transformation_state.dart';
+import 'models/models.dart';
 import 'screens/today_screen.dart';
 import 'screens/plan_log_screen.dart';
 import 'screens/progress_screen.dart';
@@ -16,6 +17,56 @@ void main() {
   runApp(const ProviderScope(child: AuraPwaApp()));
 }
 
+ThemeData getAuraTheme(CoachSoul soul) {
+  Color primaryColor;
+  Color secondaryColor;
+  Color scaffoldBackgroundColor;
+  Color cardColor;
+
+  switch (soul) {
+    case CoachSoul.supporter:
+      primaryColor = const Color(0xFF8EA885); // Soft Sage Green
+      secondaryColor = const Color(0xFF9A7EB8); // Soft Lavender-Purple
+      scaffoldBackgroundColor = const Color(0xFF0C0A0D); // Warm Void
+      cardColor = const Color(0xFF141217);
+      break;
+    case CoachSoul.pro:
+      primaryColor = const Color(0xFF00B2FF); // Electric Blue
+      secondaryColor = const Color(0xFFFF007A); // Neon Magenta
+      scaffoldBackgroundColor = const Color(0xFF0B0B0E); // Deep Void
+      cardColor = const Color(0xFF131317);
+      break;
+    case CoachSoul.teacher:
+      primaryColor = const Color(0xFF00BFA5); // Vivid Teal
+      secondaryColor = const Color(0xFFB0BEC5); // Cool Metallic Silver
+      scaffoldBackgroundColor = const Color(0xFF0B0D0F); // Slate Void
+      cardColor = const Color(0xFF131619);
+      break;
+  }
+
+  final baseTheme = ThemeData.dark();
+  return baseTheme.copyWith(
+    scaffoldBackgroundColor: scaffoldBackgroundColor,
+    cardColor: cardColor,
+    colorScheme: ColorScheme.dark(
+      primary: primaryColor,
+      secondary: secondaryColor,
+      surface: cardColor,
+    ),
+    textTheme: GoogleFonts.plusJakartaSansTextTheme(
+      baseTheme.textTheme.copyWith(
+        displayLarge: GoogleFonts.syne(fontWeight: FontWeight.bold, letterSpacing: -0.02),
+        displayMedium: GoogleFonts.syne(fontWeight: FontWeight.bold, letterSpacing: -0.02),
+        displaySmall: GoogleFonts.syne(fontWeight: FontWeight.bold, letterSpacing: -0.02),
+        headlineLarge: GoogleFonts.syne(fontWeight: FontWeight.bold, letterSpacing: -0.02),
+        headlineMedium: GoogleFonts.syne(fontWeight: FontWeight.bold, letterSpacing: -0.02),
+        headlineSmall: GoogleFonts.syne(fontWeight: FontWeight.bold, letterSpacing: -0.02),
+        titleLarge: GoogleFonts.syne(fontWeight: FontWeight.bold, letterSpacing: -0.02),
+      ),
+    ),
+  );
+}
+
 class AuraPwaApp extends ConsumerWidget {
   const AuraPwaApp({super.key});
 
@@ -26,16 +77,7 @@ class AuraPwaApp extends ConsumerWidget {
     return MaterialApp(
       title: 'AURA Transformation Coach',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData.dark().copyWith(
-        scaffoldBackgroundColor: const Color(0xFF0B0F17),
-        cardColor: const Color(0xFF141923),
-        colorScheme: const ColorScheme.dark(
-          primary: Color(0xFF10B981), // Emerald-500
-          secondary: Color(0xFF06B6D4), // Cyan-500
-          surface: Color(0xFF141923),
-        ),
-        textTheme: GoogleFonts.interTextTheme(ThemeData.dark().textTheme),
-      ),
+      theme: getAuraTheme(state.profile.coachSoul),
       home: state.isOnboardingComplete ? const MainShell() : const OnboardingScreen(),
     );
   }
@@ -75,7 +117,7 @@ class _MainShellState extends State<MainShell> {
 
         return Scaffold(
           appBar: AppBar(
-            backgroundColor: const Color(0xFF0B0F17),
+            backgroundColor: Theme.of(context).scaffoldBackgroundColor,
             elevation: 0,
             title: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -85,10 +127,10 @@ class _MainShellState extends State<MainShell> {
                     Container(
                       padding: const EdgeInsets.all(6),
                       decoration: BoxDecoration(
-                        color: const Color(0x2010B981),
+                        color: Theme.of(context).colorScheme.primary.withOpacity(0.15),
                         borderRadius: BorderRadius.circular(8),
                       ),
-                      child: const Icon(LucideIcons.sparkles, color: Color(0xFF10B981), size: 16),
+                      child: Icon(LucideIcons.sparkles, color: Theme.of(context).colorScheme.primary, size: 16),
                     ),
                     const SizedBox(width: 8),
                     const Text(
@@ -106,7 +148,7 @@ class _MainShellState extends State<MainShell> {
                   borderRadius: BorderRadius.circular(20),
                   child: CircleAvatar(
                     radius: 16,
-                    backgroundColor: const Color(0xFF10B981),
+                    backgroundColor: Theme.of(context).colorScheme.primary,
                     child: Text(
                       profile.name.isNotEmpty ? profile.name.substring(0, 2).toUpperCase() : 'AV',
                       style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 11),
@@ -139,8 +181,8 @@ class _MainShellState extends State<MainShell> {
             currentIndex: _selectedIndex,
             onTap: (index) => setState(() => _selectedIndex = index),
             type: BottomNavigationBarType.fixed,
-            backgroundColor: const Color(0xFF141923),
-            selectedItemColor: const Color(0xFF10B981),
+            backgroundColor: Theme.of(context).cardColor,
+            selectedItemColor: Theme.of(context).colorScheme.primary,
             unselectedItemColor: const Color(0xFFA1A1AA),
             selectedFontSize: 11,
             unselectedFontSize: 11,
