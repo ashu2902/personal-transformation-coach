@@ -32,8 +32,24 @@ class GeminiAIProvider implements AIService {
     return envKey.trim();
   }
 
-  Uri get _url => Uri.parse(
-      'https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent?key=$_effectiveApiKey');
+  Uri get _url {
+    final key = _effectiveApiKey;
+    if (key.isNotEmpty) {
+      return Uri.parse(
+          'https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent?key=$key');
+    }
+    return Uri.parse(
+        'https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent');
+  }
+
+  Map<String, String> get _headers {
+    final Map<String, String> headers = {'Content-Type': 'application/json'};
+    final key = _effectiveApiKey;
+    if (key.isNotEmpty) {
+      headers['x-goog-api-key'] = key;
+    }
+    return headers;
+  }
 
   void _logRequest(String method, String prompt) {
     debugPrint('\n===== 🚀 [GEMINI AI REQUEST: $method] =====');
@@ -60,7 +76,7 @@ class GeminiAIProvider implements AIService {
     final timer = Stopwatch()..start();
     final response = await http.post(
       _url,
-      headers: {'Content-Type': 'application/json'},
+      headers: _headers,
       body: jsonEncode({
         'generationConfig': {'responseMimeType': 'application/json'},
         'contents': [{'role': 'user', 'parts': [{'text': prompt}]}],
@@ -87,7 +103,7 @@ class GeminiAIProvider implements AIService {
     }
     final response = await http.post(
       _url,
-      headers: {'Content-Type': 'application/json'},
+      headers: _headers,
       body: jsonEncode(body),
     );
     _logResponse(method, response.statusCode, timer.elapsedMilliseconds, response.body);
