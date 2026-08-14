@@ -200,7 +200,7 @@ class WorkoutScreen extends ConsumerWidget {
                                     fontSize: 15)),
                             const SizedBox(height: 2),
                             Text(
-                              '${ex.targetMuscle} • ${ex.equipmentRequired.name.toUpperCase()}',
+                              '${ex.targetMuscle} • ${ex.equipmentRequired.toUpperCase()}',
                               style: const TextStyle(
                                   color: Color(0xFF10B981),
                                   fontSize: 11,

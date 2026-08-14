@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/models.dart';
 import '../services/transformation_repository.dart';
@@ -36,6 +37,8 @@ class TransformationEngineState {
   final String? adaptationNotice;
   final String apiKey;
   final bool isAiThinking;
+  final WeeklyPlan? weeklyPlan;
+  final MasterContext masterContext;
 
   TransformationEngineState({
     required this.profile,
@@ -48,7 +51,9 @@ class TransformationEngineState {
     this.adaptationNotice,
     this.apiKey = '',
     this.isAiThinking = false,
-  });
+    this.weeklyPlan,
+    MasterContext? masterContext,
+  }) : masterContext = masterContext ?? MasterContext();
 
   TransformationEngineState copyWith({
     UserProfile? profile,
@@ -61,6 +66,8 @@ class TransformationEngineState {
     String? adaptationNotice,
     String? apiKey,
     bool? isAiThinking,
+    WeeklyPlan? weeklyPlan,
+    MasterContext? masterContext,
   }) {
     return TransformationEngineState(
       profile: profile ?? this.profile,
@@ -73,6 +80,8 @@ class TransformationEngineState {
       adaptationNotice: adaptationNotice ?? this.adaptationNotice,
       apiKey: apiKey ?? this.apiKey,
       isAiThinking: isAiThinking ?? this.isAiThinking,
+      weeklyPlan: weeklyPlan ?? this.weeklyPlan,
+      masterContext: masterContext ?? this.masterContext,
     );
   }
 
@@ -140,7 +149,9 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
   final ITransformationRepository _repository;
   final FirebaseFirestoreService _firestore = FirebaseFirestoreService();
   final FirebaseAuthService _auth = FirebaseAuthService();
-  StreamSubscription<DocumentSnapshot>? _dailyLogSubscription;
+  StreamSubscription<DocumentSnapshot>? _workoutSubscription;
+  StreamSubscription<DocumentSnapshot>? _nutritionSubscription;
+  StreamSubscription<DocumentSnapshot>? _recoverySubscription;
   StreamSubscription<QuerySnapshot>? _chatMessagesSubscription;
 
   TransformationEngineNotifier({ITransformationRepository? repository})
@@ -188,38 +199,45 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
     final todayStr = DateTime.now().toIso8601String().split('T')[0];
 
     // Cancel existing subscriptions
-    _dailyLogSubscription?.cancel();
+    _workoutSubscription?.cancel();
+    _nutritionSubscription?.cancel();
+    _recoverySubscription?.cancel();
     _chatMessagesSubscription?.cancel();
 
-    // 1. Subscribe to Today's Daily Log document
-    _dailyLogSubscription = _firestore.getDailyLogStream(uid, todayStr).listen((doc) {
+    // 1. Subscribe to Today's Workout (separate collection)
+    _workoutSubscription = _firestore.getWorkoutStream(uid, todayStr).listen((doc) {
       if (doc.exists && doc.data() != null) {
         final data = doc.data() as Map<String, dynamic>;
-        DailyWorkout? remoteWorkout;
-        DailyNutrition? remoteNutrition;
-        RecoveryCheckIn? remoteRecovery;
-
-        if (data['workout'] != null) {
-          remoteWorkout = _firestore.workoutFromMap(data['workout']);
-        }
-        if (data['nutrition'] != null) {
-          remoteNutrition = _firestore.nutritionFromMap(data['nutrition']);
-        }
-        if (data['recovery'] != null) {
-          remoteRecovery = _firestore.recoveryFromMap(data['recovery']);
-        }
-
-        state = state.copyWith(
-          workout: remoteWorkout ?? state.workout,
-          nutrition: remoteNutrition ?? state.nutrition,
-          recovery: remoteRecovery ?? state.recovery,
-        );
+        final remoteWorkout = _firestore.workoutFromMap(data);
+        state = state.copyWith(workout: remoteWorkout);
       }
     }, onError: (err) {
-      debugPrint('[AURA STATE] Daily Log subscription error: $err');
+      debugPrint('[AURA STATE] Workout subscription error: $err');
     });
 
-    // 2. Subscribe to Chat Messages
+    // 2. Subscribe to Today's Nutrition (separate collection)
+    _nutritionSubscription = _firestore.getNutritionStream(uid, todayStr).listen((doc) {
+      if (doc.exists && doc.data() != null) {
+        final data = doc.data() as Map<String, dynamic>;
+        final remoteNutrition = _firestore.nutritionFromMap(data);
+        state = state.copyWith(nutrition: remoteNutrition);
+      }
+    }, onError: (err) {
+      debugPrint('[AURA STATE] Nutrition subscription error: $err');
+    });
+
+    // 3. Subscribe to Today's Recovery (separate collection)
+    _recoverySubscription = _firestore.getRecoveryStream(uid, todayStr).listen((doc) {
+      if (doc.exists && doc.data() != null) {
+        final data = doc.data() as Map<String, dynamic>;
+        final remoteRecovery = _firestore.recoveryFromMap(data);
+        state = state.copyWith(recovery: remoteRecovery);
+      }
+    }, onError: (err) {
+      debugPrint('[AURA STATE] Recovery subscription error: $err');
+    });
+
+    // 4. Subscribe to Chat Messages (paginated to last 50)
     _chatMessagesSubscription = _firestore.getChatMessagesStream(uid).listen((snapshot) {
       final List<ChatMessage> messages = [];
       for (var doc in snapshot.docs) {
@@ -237,6 +255,56 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
     }, onError: (err) {
       debugPrint('[AURA STATE] Chat Messages subscription error: $err');
     });
+  }
+
+  FirebaseAuthService get authService => _auth;
+  String? get currentAuthEmail => _auth.email;
+  String? get currentAuthDisplayName => _auth.displayName;
+  bool get isAuthenticated => _auth.isAuthenticated;
+
+  Future<UserCredential?> signInWithGoogle() async {
+    debugPrint('[AURA STATE] Initiating Google Sign-In...');
+    try {
+      final cred = await _auth.signInWithGoogle();
+      final user = cred?.user;
+      if (user != null) {
+        final uid = user.uid;
+        debugPrint('[AURA STATE] Google Sign-In completed for UID $uid');
+
+        // Check if existing profile exists in Firestore for this Google UID
+        final existingProfile = await _firestore.getUserProfile(uid);
+        if (existingProfile != null && existingProfile.name.isNotEmpty) {
+          state = state.copyWith(
+            profile: existingProfile,
+            isOnboardingComplete: true,
+          );
+          setupSubscriptions(uid);
+        } else {
+          // If first time, seed with Google display name if available
+          final newName = (user.displayName != null && user.displayName!.trim().isNotEmpty)
+              ? user.displayName!.trim()
+              : state.profile.name;
+          final updatedProfile = state.profile.copyWith(name: newName);
+          state = state.copyWith(profile: updatedProfile);
+        }
+      }
+      return cred;
+    } catch (e) {
+      debugPrint('[AURA STATE] Google Sign-In error: $e');
+      rethrow;
+    }
+  }
+
+  Future<void> signOut() async {
+    debugPrint('[AURA STATE] Signing out user...');
+    _workoutSubscription?.cancel();
+    _nutritionSubscription?.cancel();
+    _recoverySubscription?.cancel();
+    _chatMessagesSubscription?.cancel();
+    await _auth.signOut();
+    state = state.copyWith(
+      isOnboardingComplete: false,
+    );
   }
 
   Future<void> updateApiKey(String apiKey) async {
@@ -259,10 +327,10 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
       goal: GoalType.recomp,
       daysPerWeek: 4,
       targetPhysique: 'Athletic V-Taper',
-      availableEquipment: [
-        EquipmentType.dumbbells,
-        EquipmentType.barbell,
-        EquipmentType.cables,
+      equipmentList: [
+        const EquipmentItem(name: 'Dumbbells', category: 'free_weight'),
+        const EquipmentItem(name: 'Barbell', category: 'free_weight'),
+        const EquipmentItem(name: 'Cables', category: 'cables'),
       ],
       coachSoul: CoachSoul.supporter,
     );
@@ -351,6 +419,13 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
     await _repository.saveProgressEntry(initProgress);
     
     setupSubscriptions(uid);
+
+    // Load master context
+    _loadMasterContext(uid);
+
+    // Load weekly plan for current week
+    _loadCurrentWeeklyPlan(uid);
+
     debugPrint('[AURA STATE] Onboarding completed & baseline saved online!');
   }
 
@@ -391,7 +466,7 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
       return ex.copyWith(
         name: newDefinition.name,
         targetMuscle: newDefinition.targetMuscle,
-        equipmentRequired: newDefinition.equipment,
+        equipmentRequired: newDefinition.equipment.name,
         notes: 'Substituted for ${ex.name}',
       );
     }).toList();
@@ -433,6 +508,7 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
     final newWater = state.nutrition.waterMl + amountMl;
     debugPrint('[AURA STATE] Added +${amountMl}ml water (Total: ${newWater}ml)');
     final updatedNutrition = state.nutrition.copyWith(waterMl: newWater);
+    state = state.copyWith(nutrition: updatedNutrition);
     final uid = _auth.uid ?? 'firebase_user_vance_77';
     _firestore.saveDailyNutrition(uid, state.nutrition.date, updatedNutrition);
   }
@@ -441,8 +517,16 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
     debugPrint('[AURA STATE] Added meal: ${meal.name} (${meal.calories} kcal, ${meal.proteinG}g P)');
     final newMeals = List<MealItem>.from(state.nutrition.meals)..add(meal);
     final updatedNutrition = state.nutrition.copyWith(meals: newMeals);
+    state = state.copyWith(nutrition: updatedNutrition);
     final uid = _auth.uid ?? 'firebase_user_vance_77';
     _firestore.saveDailyNutrition(uid, state.nutrition.date, updatedNutrition);
+  }
+
+  Future<MealItem> logMealWithAI(String mealDescription) async {
+    debugPrint('[AURA STATE] Estimating meal with AI: "$mealDescription"');
+    final meal = await _aiService.estimateAIMealNutrition(mealDescription);
+    addMeal(meal);
+    return meal;
   }
 
   void addProgressEntry(ProgressEntry entry) {
@@ -519,32 +603,30 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
         debugPrint('[AURA STATE] Executing action: ${action.functionName} with args: ${action.arguments}');
         switch (action.functionName) {
           case 'updateEquipment':
+            final rawItems = action.arguments['items'];
             final rawEquip = action.arguments['equipment'];
-            final List<EquipmentType> newEquip = [];
-            if (rawEquip is List) {
-              for (var e in rawEquip) {
-                final s = e.toString().toLowerCase();
-                if (s.contains('dumbbell') || s.contains('bag') || s.contains('weight')) {
-                  if (!newEquip.contains(EquipmentType.dumbbells)) newEquip.add(EquipmentType.dumbbells);
-                }
-                if (s.contains('bodyweight')) {
-                  if (!newEquip.contains(EquipmentType.bodyweight)) newEquip.add(EquipmentType.bodyweight);
-                }
-                if (s.contains('barbell')) {
-                  if (!newEquip.contains(EquipmentType.barbell)) newEquip.add(EquipmentType.barbell);
-                }
-                if (s.contains('cable')) {
-                  if (!newEquip.contains(EquipmentType.cables)) newEquip.add(EquipmentType.cables);
-                }
-                if (s.contains('machine')) {
-                  if (!newEquip.contains(EquipmentType.machines)) newEquip.add(EquipmentType.machines);
+            final rawNote = action.arguments['equipmentNote']?.toString();
+            final rawMax = (action.arguments['maxWeightKg'] as num?)?.toDouble();
+
+            final List<EquipmentItem> newItems = [];
+            if (rawItems is List) {
+              for (var it in rawItems) {
+                if (it is Map) {
+                  newItems.add(EquipmentItem.fromMap(Map<String, dynamic>.from(it)));
+                } else if (it is String) {
+                  newItems.add(EquipmentItem.fromString(it));
                 }
               }
+            } else if (rawEquip is List) {
+              for (var e in rawEquip) {
+                newItems.add(EquipmentItem.fromString(e.toString(), weightKg: rawMax, notes: rawNote));
+              }
             }
-            if (newEquip.isEmpty) {
-              newEquip.add(EquipmentType.bodyweight);
+            if (newItems.isEmpty) {
+              newItems.add(const EquipmentItem(name: 'Bodyweight', category: 'bodyweight'));
             }
-            final updatedProfile = state.profile.copyWith(availableEquipment: newEquip);
+
+            final updatedProfile = state.profile.copyWith(equipmentList: newItems);
             state = state.copyWith(profile: updatedProfile);
             await _firestore.saveUserProfile(uid, updatedProfile);
             break;
@@ -636,6 +718,23 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
             final updatedWorkout = state.workout.copyWith(status: newStatus);
             state = state.copyWith(workout: updatedWorkout);
             await _firestore.saveDailyWorkout(uid, state.workout.date, updatedWorkout);
+            break;
+
+          case 'updateMasterContext':
+            final field = action.arguments['field']?.toString();
+            final actionType = action.arguments['action']?.toString();
+            final value = action.arguments['value'];
+            if (field != null) {
+              await updateMasterContextDeduced(
+                field: field,
+                action: actionType,
+                value: value,
+              );
+            }
+            break;
+
+          case 'regenerateWeeklyPlan':
+            await generateWeeklyPlan();
             break;
         }
       }
@@ -841,9 +940,197 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
 
   @override
   void dispose() {
-    _dailyLogSubscription?.cancel();
+    _workoutSubscription?.cancel();
+    _nutritionSubscription?.cancel();
+    _recoverySubscription?.cancel();
     _chatMessagesSubscription?.cancel();
     super.dispose();
+  }
+
+  // ─── Master Context ───
+
+  Future<void> _loadMasterContext(String uid) async {
+    final ctx = await _firestore.getMasterContext(uid);
+    if (ctx != null) {
+      state = state.copyWith(masterContext: ctx);
+      debugPrint('[AURA STATE] Loaded master context from Firestore');
+    }
+  }
+
+  Future<void> buildAndSaveMasterContext() async {
+    debugPrint('[AURA STATE] Building master context...');
+    final uid = _auth.uid;
+    if (uid == null) return;
+
+    // Layer 3: Build rolling summary from current state
+    final recentWorkouts = <Map<String, dynamic>>[
+      {'date': state.workout.date, 'title': state.workout.title, 'status': state.workout.status.name},
+    ];
+
+    final n = state.nutrition;
+    final totalCal = n.meals.fold(0, (total, m) => total + m.calories);
+    final totalProt = n.meals.fold(0, (total, m) => total + m.proteinG);
+
+    final nutritionAvg = <String, dynamic>{
+      'avgCalories': totalCal,
+      'avgProteinG': totalProt,
+      'proteinHitRate': n.targetProteinG > 0 ? (totalProt / n.targetProteinG).clamp(0.0, 2.0) : 0.0,
+    };
+
+    final recoveryAvg = <String, dynamic>{
+      'avgSleepHours': state.recovery.sleepHours,
+      'avgRecoveryScore': state.recovery.recoveryScore,
+      'avgSoreness': state.recovery.muscleSoreness,
+    };
+
+    final weightTrend = state.progressHistory
+        .where((p) => p.weightKg > 0)
+        .map((p) => <String, dynamic>{'date': p.date, 'kg': p.weightKg})
+        .toList();
+
+    final completedCount = state.workout.status == WorkoutStatus.completed ? 1 : 0;
+    final skippedCount = state.workout.status == WorkoutStatus.skipped ? 1 : 0;
+
+    final rollingSummary = RollingSummary(
+      periodDays: 7,
+      workoutComplianceRate: completedCount > 0 ? 1.0 : 0.0,
+      workoutsCompleted: completedCount,
+      workoutsSkipped: skippedCount,
+      recentWorkouts: recentWorkouts,
+      nutritionAvg: nutritionAvg,
+      recoveryAvg: recoveryAvg,
+      weightTrend: weightTrend,
+      lastUpdated: DateTime.now().toIso8601String(),
+    );
+
+    final updatedCtx = state.masterContext.copyWith(
+      rollingSummary: rollingSummary,
+    );
+
+    state = state.copyWith(masterContext: updatedCtx);
+    await _firestore.saveMasterContext(uid, updatedCtx);
+    debugPrint('[AURA STATE] Master context built and saved.');
+  }
+
+  Future<void> updateMasterContextDeduced({
+    String? field,
+    String? action,
+    dynamic value,
+  }) async {
+    final uid = _auth.uid;
+    if (uid == null) return;
+
+    DeducedKnowledge updated = state.masterContext.deduced;
+
+    switch (field) {
+      case 'activityLevel':
+        updated = updated.copyWith(activityLevel: value?.toString());
+        break;
+      case 'sessionDurationMin':
+        updated = updated.copyWith(sessionDurationMin: (value as num?)?.toInt());
+        break;
+      case 'preferredTrainingStyle':
+        updated = updated.copyWith(preferredTrainingStyle: value?.toString());
+        break;
+      case 'cardioPreference':
+        updated = updated.copyWith(cardioPreference: value?.toString());
+        break;
+      case 'activeInjuries':
+        if (action == 'append' && value is String) {
+          final newList = List<String>.from(updated.activeInjuries)..add(value);
+          updated = updated.copyWith(activeInjuries: newList);
+        } else if (value is List) {
+          updated = updated.copyWith(activeInjuries: value.map((e) => e.toString()).toList());
+        }
+        break;
+      case 'foodAllergies':
+        if (action == 'append' && value is String) {
+          final newList = List<String>.from(updated.foodAllergies)..add(value);
+          updated = updated.copyWith(foodAllergies: newList);
+        } else if (value is List) {
+          updated = updated.copyWith(foodAllergies: value.map((e) => e.toString()).toList());
+        }
+        break;
+      case 'dislikedExercises':
+        if (action == 'append' && value is String) {
+          final newList = List<String>.from(updated.dislikedExercises)..add(value);
+          updated = updated.copyWith(dislikedExercises: newList);
+        } else if (value is List) {
+          updated = updated.copyWith(dislikedExercises: value.map((e) => e.toString()).toList());
+        }
+        break;
+      case 'preferredProteinSources':
+        if (action == 'append' && value is String) {
+          final newList = List<String>.from(updated.preferredProteinSources)..add(value);
+          updated = updated.copyWith(preferredProteinSources: newList);
+        } else if (value is List) {
+          updated = updated.copyWith(preferredProteinSources: value.map((e) => e.toString()).toList());
+        }
+        break;
+      case 'personalNotes':
+        if (action == 'append' && value is String) {
+          final newList = List<String>.from(updated.personalNotes)..add(value);
+          updated = updated.copyWith(personalNotes: newList);
+        }
+        break;
+      case 'preferredTrainingDays':
+        if (value is List) {
+          updated = updated.copyWith(preferredTrainingDays: value.map((e) => e.toString()).toList());
+        }
+        break;
+    }
+
+    updated = updated.copyWith(lastUpdated: DateTime.now().toIso8601String());
+    final updatedCtx = state.masterContext.copyWith(deduced: updated);
+    
+    // Also synchronize canonical profile
+    final updatedProf = state.profile.copyWith(
+      activeInjuries: updated.activeInjuries,
+      dislikedExercises: updated.dislikedExercises,
+      personalNotes: updated.personalNotes,
+    );
+
+    state = state.copyWith(masterContext: updatedCtx, profile: updatedProf);
+    await _firestore.saveMasterContext(uid, updatedCtx);
+    await _firestore.saveUserProfile(uid, updatedProf);
+    debugPrint('[AURA STATE] Master context deduced.$field & UserProfile updated.');
+  }
+
+  // ─── Weekly Plan ───
+
+  String _currentWeekId() {
+    final now = DateTime.now();
+    final monday = now.subtract(Duration(days: now.weekday - 1));
+    final weekNumber = ((monday.difference(DateTime(monday.year, 1, 1)).inDays) / 7).ceil() + 1;
+    return '${monday.year}-W${weekNumber.toString().padLeft(2, '0')}';
+  }
+
+  Future<void> _loadCurrentWeeklyPlan(String uid) async {
+    final weekId = _currentWeekId();
+    final plan = await _firestore.getWeeklyPlan(uid, weekId);
+    if (plan != null) {
+      state = state.copyWith(weeklyPlan: plan);
+      debugPrint('[AURA STATE] Loaded weekly plan for $weekId');
+    }
+  }
+
+  Future<void> generateWeeklyPlan() async {
+    debugPrint('[AURA STATE] Generating AI weekly plan...');
+    state = state.copyWith(isAiThinking: true);
+
+    try {
+      final plan = await _aiService.generateAIWeeklyPlan(state);
+      state = state.copyWith(weeklyPlan: plan, isAiThinking: false);
+
+      final uid = _auth.uid;
+      if (uid != null) {
+        await _firestore.saveWeeklyPlan(uid, plan);
+      }
+      debugPrint('[AURA STATE] Weekly plan generated and saved: ${plan.weekId}');
+    } catch (e) {
+      debugPrint('[AURA STATE] Weekly plan generation failed: $e');
+      state = state.copyWith(isAiThinking: false);
+    }
   }
 }
 

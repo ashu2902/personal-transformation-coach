@@ -8,35 +8,42 @@ import 'transformation_repository.dart';
 class FirebaseAuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
 
-  bool get isAuthenticated => _auth.currentUser != null;
   String? get uid => _auth.currentUser?.uid;
+  String? get email => _auth.currentUser?.email;
+  String? get displayName => _auth.currentUser?.displayName;
+  bool get isAuthenticated => _auth.currentUser != null;
 
-  Future<String?> signInWithGoogle() async {
+  Future<UserCredential?> signInWithGoogle() async {
     try {
-      final userCred = await _auth.signInAnonymously();
-      return userCred.user?.uid;
+      return await _auth.signInWithPopup(GoogleAuthProvider());
     } catch (e) {
-      debugPrint('[FIREBASE AUTH ERROR] signInWithGoogle failed: $e');
-      return 'firebase_user_vance_77'; // Fallback to local test baseline
+      debugPrint('[FIREBASE AUTH] Google Sign-In error: $e');
+      return null;
     }
   }
 
-  Future<String?> signUpWithEmailAndPassword(String email, String password) async {
+
+  Future<UserCredential?> signUpWithEmailAndPassword(String email, String password) async {
     try {
-      final userCred = await _auth.createUserWithEmailAndPassword(
-        email: email.trim(),
-        password: password.trim(),
-      );
-      return userCred.user?.uid;
+      return await _auth.createUserWithEmailAndPassword(email: email, password: password);
     } catch (e) {
-      // Gracefully fall back to anonymous session if creation fails during debug
+      debugPrint('[FIREBASE AUTH] Email sign-up error: $e');
+      // If account exists, try signing in instead
       try {
-        final userCred = await _auth.signInAnonymously();
-        return userCred.user?.uid;
-      } catch (err) {
-        debugPrint('[FIREBASE AUTH ERROR] Anonymous fallback failed: $err');
-        return 'firebase_user_vance_77';
+        return await _auth.signInWithEmailAndPassword(email: email, password: password);
+      } catch (e2) {
+        debugPrint('[FIREBASE AUTH] Email sign-in fallback error: $e2');
+        return null;
       }
+    }
+  }
+
+  Future<UserCredential?> signInAnonymously() async {
+    try {
+      return await _auth.signInAnonymously();
+    } catch (e) {
+      debugPrint('[FIREBASE AUTH] Anonymous sign-in error: $e');
+      return null;
     }
   }
 
@@ -49,6 +56,8 @@ class FirebaseFirestoreService {
   final FirebaseFirestore _db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
   final ITransformationRepository _localRepo = LocalTransformationRepository();
 
+  // ─── User Profile ───
+
   Future<void> saveUserProfile(String uid, UserProfile profile) async {
     final map = {
       'name': profile.name,
@@ -60,21 +69,24 @@ class FirebaseFirestoreService {
       'goal': profile.goal.name,
       'daysPerWeek': profile.daysPerWeek,
       'targetPhysique': profile.targetPhysique,
+      'equipmentList': profile.equipmentList.map((e) => e.toMap()).toList(),
       'availableEquipment': profile.availableEquipment.map((e) => e.name).toList(),
       'experienceLevel': profile.experienceLevel.name,
       'benchPress1RMKg': profile.benchPress1RMKg,
       'squat1RMKg': profile.squat1RMKg,
       'deadlift1RMKg': profile.deadlift1RMKg,
       'activeInjuries': profile.activeInjuries,
+      'dislikedExercises': profile.dislikedExercises,
+      'personalNotes': profile.personalNotes,
       'coachSoul': profile.coachSoul.name,
+      'dietaryPreference': profile.dietaryPreference,
+      'updatedAt': FieldValue.serverTimestamp(),
     };
     try {
-      // Adds a 15-second timeout so the app never hangs if Firestore is offline
-      // or if auth permissions are not configured yet.
       await _db
           .collection('users')
           .doc(uid)
-          .set(map)
+          .set(map, SetOptions(merge: true))
           .timeout(const Duration(seconds: 15));
     } catch (e) {
       debugPrint('[FIRESTORE ERROR] saveUserProfile failed: $e');
@@ -91,6 +103,20 @@ class FirebaseFirestoreService {
           .timeout(const Duration(seconds: 15));
       if (doc.exists && doc.data() != null) {
         final map = doc.data()!;
+        List<EquipmentItem> equipItems = [];
+        if (map['equipmentList'] is List) {
+          equipItems = (map['equipmentList'] as List)
+              .map((e) => EquipmentItem.fromMap(Map<String, dynamic>.from(e as Map)))
+              .toList();
+        } else if (map['availableEquipment'] is List) {
+          equipItems = (map['availableEquipment'] as List)
+              .map((e) => EquipmentItem.fromString(e.toString()))
+              .toList();
+        }
+        if (equipItems.isEmpty) {
+          equipItems = [const EquipmentItem(name: 'Bodyweight', category: 'bodyweight')];
+        }
+
         final profile = UserProfile(
           name: map['name'] ?? '',
           age: map['age'] ?? 25,
@@ -101,15 +127,16 @@ class FirebaseFirestoreService {
           goal: GoalType.values.firstWhere((g) => g.name == map['goal'], orElse: () => GoalType.recomp),
           daysPerWeek: map['daysPerWeek'] ?? 4,
           targetPhysique: map['targetPhysique'] ?? 'Athletic Physique',
-          availableEquipment: (map['availableEquipment'] as List? ?? [])
-              .map((e) => EquipmentType.values.firstWhere((eq) => eq.name == e, orElse: () => EquipmentType.dumbbells))
-              .toList(),
+          equipmentList: equipItems,
           experienceLevel: ExperienceLevel.values.firstWhere((exp) => exp.name == map['experienceLevel'], orElse: () => ExperienceLevel.intermediate),
           benchPress1RMKg: (map['benchPress1RMKg'] as num?)?.toDouble(),
           squat1RMKg: (map['squat1RMKg'] as num?)?.toDouble(),
           deadlift1RMKg: (map['deadlift1RMKg'] as num?)?.toDouble(),
           activeInjuries: (map['activeInjuries'] as List? ?? []).map((e) => e.toString()).toList(),
+          dislikedExercises: (map['dislikedExercises'] as List? ?? []).map((e) => e.toString()).toList(),
+          personalNotes: (map['personalNotes'] as List? ?? []).map((e) => e.toString()).toList(),
           coachSoul: CoachSoul.values.firstWhere((c) => c.name == map['coachSoul'], orElse: () => CoachSoul.supporter),
+          dietaryPreference: map['dietaryPreference'] ?? 'nonVeg',
         );
         return profile;
       }
@@ -119,31 +146,140 @@ class FirebaseFirestoreService {
     return await _localRepo.loadProfile();
   }
 
-  Future<void> saveDailyLog(String uid, String dateStr, Map<String, dynamic> data) async {
+  // ─── Workouts (Split Collection) ───
+
+  Future<void> saveDailyWorkout(String uid, String dateStr, DailyWorkout workout) async {
     try {
       await _db
           .collection('users')
           .doc(uid)
-          .collection('daily_logs')
+          .collection('workouts')
           .doc(dateStr)
-          .set(data, SetOptions(merge: true))
+          .set({
+            ...workoutToMap(workout),
+            'updatedAt': FieldValue.serverTimestamp(),
+          })
           .timeout(const Duration(seconds: 15));
     } catch (e) {
-      debugPrint('[FIRESTORE ERROR] saveDailyLog failed: $e');
+      debugPrint('[FIRESTORE ERROR] saveDailyWorkout failed: $e');
     }
   }
 
-  Future<void> saveDailyWorkout(String uid, String dateStr, DailyWorkout workout) async {
-    await saveDailyLog(uid, dateStr, {'workout': workoutToMap(workout)});
+  Stream<DocumentSnapshot> getWorkoutStream(String uid, String dateStr) {
+    return _db
+        .collection('users')
+        .doc(uid)
+        .collection('workouts')
+        .doc(dateStr)
+        .snapshots();
   }
+
+  // ─── Nutrition (Split Collection) ───
 
   Future<void> saveDailyNutrition(String uid, String dateStr, DailyNutrition nutrition) async {
-    await saveDailyLog(uid, dateStr, {'nutrition': nutritionToMap(nutrition)});
+    try {
+      await _db
+          .collection('users')
+          .doc(uid)
+          .collection('nutrition')
+          .doc(dateStr)
+          .set({
+            ...nutritionToMap(nutrition),
+            'updatedAt': FieldValue.serverTimestamp(),
+          })
+          .timeout(const Duration(seconds: 15));
+    } catch (e) {
+      debugPrint('[FIRESTORE ERROR] saveDailyNutrition failed: $e');
+    }
   }
 
-  Future<void> saveDailyRecovery(String uid, String dateStr, RecoveryCheckIn recovery) async {
-    await saveDailyLog(uid, dateStr, {'recovery': recoveryToMap(recovery)});
+  Stream<DocumentSnapshot> getNutritionStream(String uid, String dateStr) {
+    return _db
+        .collection('users')
+        .doc(uid)
+        .collection('nutrition')
+        .doc(dateStr)
+        .snapshots();
   }
+
+  // ─── Recovery (Split Collection) ───
+
+  Future<void> saveDailyRecovery(String uid, String dateStr, RecoveryCheckIn recovery) async {
+    try {
+      await _db
+          .collection('users')
+          .doc(uid)
+          .collection('recovery')
+          .doc(dateStr)
+          .set({
+            ...recoveryToMap(recovery),
+            'updatedAt': FieldValue.serverTimestamp(),
+          })
+          .timeout(const Duration(seconds: 15));
+    } catch (e) {
+      debugPrint('[FIRESTORE ERROR] saveDailyRecovery failed: $e');
+    }
+  }
+
+  Stream<DocumentSnapshot> getRecoveryStream(String uid, String dateStr) {
+    return _db
+        .collection('users')
+        .doc(uid)
+        .collection('recovery')
+        .doc(dateStr)
+        .snapshots();
+  }
+
+  // ─── Progress (New Collection) ───
+
+  Future<void> saveProgress(String uid, String dateStr, ProgressEntry entry) async {
+    try {
+      await _db
+          .collection('users')
+          .doc(uid)
+          .collection('progress')
+          .doc(dateStr)
+          .set({
+            'date': entry.date,
+            'weightKg': entry.weightKg,
+            'bodyFatPercent': entry.bodyFatPercent,
+            'waistCm': entry.waistCm,
+            'notes': entry.notes,
+            'updatedAt': FieldValue.serverTimestamp(),
+          })
+          .timeout(const Duration(seconds: 15));
+    } catch (e) {
+      debugPrint('[FIRESTORE ERROR] saveProgress failed: $e');
+    }
+  }
+
+  Future<List<ProgressEntry>> getProgressHistory(String uid, {int limit = 30}) async {
+    try {
+      final snapshot = await _db
+          .collection('users')
+          .doc(uid)
+          .collection('progress')
+          .orderBy('date', descending: true)
+          .limit(limit)
+          .get()
+          .timeout(const Duration(seconds: 15));
+      return snapshot.docs.map((doc) {
+        final map = doc.data();
+        return ProgressEntry(
+          date: map['date'] ?? doc.id,
+          weightKg: (map['weightKg'] as num?)?.toDouble() ?? 0.0,
+          bodyFatPercent: (map['bodyFatPercent'] as num?)?.toDouble(),
+          waistCm: (map['waistCm'] as num?)?.toDouble(),
+          notes: map['notes'],
+        );
+      }).toList();
+    } catch (e) {
+      debugPrint('[FIRESTORE ERROR] getProgressHistory failed: $e');
+      return [];
+    }
+  }
+
+  // ─── Chat Messages (Paginated) ───
 
   Future<void> saveChatMessage(String uid, ChatMessage message) async {
     try {
@@ -167,16 +303,7 @@ class FirebaseFirestoreService {
     }
   }
 
-  Stream<DocumentSnapshot> getDailyLogStream(String uid, String dateStr) {
-    return _db
-        .collection('users')
-        .doc(uid)
-        .collection('daily_logs')
-        .doc(dateStr)
-        .snapshots();
-  }
-
-  Stream<QuerySnapshot> getChatMessagesStream(String uid) {
+  Stream<QuerySnapshot> getChatMessagesStream(String uid, {int limit = 50}) {
     return _db
         .collection('users')
         .doc(uid)
@@ -184,8 +311,103 @@ class FirebaseFirestoreService {
         .doc('default_chat')
         .collection('messages')
         .orderBy('serverTimestamp', descending: false)
+        .limitToLast(limit)
         .snapshots();
   }
+
+  // ─── Weekly Plan ───
+
+  Future<void> saveWeeklyPlan(String uid, WeeklyPlan plan) async {
+    try {
+      await _db
+          .collection('users')
+          .doc(uid)
+          .collection('weekly_plans')
+          .doc(plan.weekId)
+          .set({
+            ...weeklyPlanToMap(plan),
+            'updatedAt': FieldValue.serverTimestamp(),
+          })
+          .timeout(const Duration(seconds: 15));
+    } catch (e) {
+      debugPrint('[FIRESTORE ERROR] saveWeeklyPlan failed: $e');
+    }
+  }
+
+  Future<WeeklyPlan?> getWeeklyPlan(String uid, String weekId) async {
+    try {
+      final doc = await _db
+          .collection('users')
+          .doc(uid)
+          .collection('weekly_plans')
+          .doc(weekId)
+          .get()
+          .timeout(const Duration(seconds: 15));
+      if (doc.exists && doc.data() != null) {
+        return weeklyPlanFromMap(doc.data()!);
+      }
+    } catch (e) {
+      debugPrint('[FIRESTORE ERROR] getWeeklyPlan failed: $e');
+    }
+    return null;
+  }
+
+  Stream<DocumentSnapshot> getWeeklyPlanStream(String uid, String weekId) {
+    return _db
+        .collection('users')
+        .doc(uid)
+        .collection('weekly_plans')
+        .doc(weekId)
+        .snapshots();
+  }
+
+  // ─── Master Context ───
+
+  Future<void> saveMasterContext(String uid, MasterContext ctx) async {
+    try {
+      await _db
+          .collection('users')
+          .doc(uid)
+          .collection('master_context')
+          .doc('current')
+          .set({
+            ...masterContextToMap(ctx),
+            'updatedAt': FieldValue.serverTimestamp(),
+          })
+          .timeout(const Duration(seconds: 15));
+    } catch (e) {
+      debugPrint('[FIRESTORE ERROR] saveMasterContext failed: $e');
+    }
+  }
+
+  Future<MasterContext?> getMasterContext(String uid) async {
+    try {
+      final doc = await _db
+          .collection('users')
+          .doc(uid)
+          .collection('master_context')
+          .doc('current')
+          .get()
+          .timeout(const Duration(seconds: 15));
+      if (doc.exists && doc.data() != null) {
+        return masterContextFromMap(doc.data()!);
+      }
+    } catch (e) {
+      debugPrint('[FIRESTORE ERROR] getMasterContext failed: $e');
+    }
+    return null;
+  }
+
+  Stream<DocumentSnapshot> getMasterContextStream(String uid) {
+    return _db
+        .collection('users')
+        .doc(uid)
+        .collection('master_context')
+        .doc('current')
+        .snapshots();
+  }
+
+  // ─── Serializers: Workout ───
 
   Map<String, dynamic> workoutToMap(DailyWorkout workout) {
     return {
@@ -200,7 +422,7 @@ class FirebaseFirestoreService {
         'id': e.id,
         'name': e.name,
         'targetMuscle': e.targetMuscle,
-        'equipmentRequired': e.equipmentRequired.name,
+        'equipmentRequired': e.equipmentRequired,
         'notes': e.notes,
         'sets': e.sets.map((s) => {
           'setNumber': s.setNumber,
@@ -228,7 +450,7 @@ class FirebaseFirestoreService {
           id: e['id'] ?? '',
           name: e['name'] ?? '',
           targetMuscle: e['targetMuscle'] ?? '',
-          equipmentRequired: EquipmentType.values.firstWhere((eq) => eq.name == e['equipmentRequired'], orElse: () => EquipmentType.dumbbells),
+          equipmentRequired: e['equipmentRequired']?.toString() ?? 'bodyweight',
           notes: e['notes'],
           sets: (e['sets'] as List? ?? []).map((s) {
             return ExerciseSet(
@@ -244,6 +466,8 @@ class FirebaseFirestoreService {
       }).toList(),
     );
   }
+
+  // ─── Serializers: Nutrition ───
 
   Map<String, dynamic> nutritionToMap(DailyNutrition nutrition) {
     return {
@@ -285,6 +509,8 @@ class FirebaseFirestoreService {
     );
   }
 
+  // ─── Serializers: Recovery ───
+
   Map<String, dynamic> recoveryToMap(RecoveryCheckIn recovery) {
     return {
       'date': recovery.date,
@@ -308,6 +534,119 @@ class FirebaseFirestoreService {
       stressLevel: map['stressLevel'] ?? 3,
       recoveryScore: map['recoveryScore'] ?? 80,
       status: map['status'] ?? 'Optimal Adaptation',
+    );
+  }
+
+  // ─── Serializers: Weekly Plan ───
+
+  Map<String, dynamic> weeklyPlanToMap(WeeklyPlan plan) {
+    return {
+      'weekId': plan.weekId,
+      'startDate': plan.startDate,
+      'endDate': plan.endDate,
+      'overview': plan.overview,
+      'coachNote': plan.coachNote,
+      'createdAt': plan.createdAt,
+      'days': plan.days.map((d) => {
+        'dayName': d.dayName,
+        'date': d.date,
+        'title': d.title,
+        'focusArea': d.focusArea,
+        'isRestDay': d.isRestDay,
+        'exerciseNames': d.exerciseNames,
+        'nutritionFocus': d.nutritionFocus,
+      }).toList(),
+    };
+  }
+
+  WeeklyPlan weeklyPlanFromMap(Map<String, dynamic> map) {
+    return WeeklyPlan(
+      weekId: map['weekId'] ?? '',
+      startDate: map['startDate'] ?? '',
+      endDate: map['endDate'] ?? '',
+      overview: map['overview'] ?? '',
+      coachNote: map['coachNote'],
+      createdAt: map['createdAt'] ?? '',
+      days: (map['days'] as List? ?? []).map((d) {
+        return WeeklyDayPlan(
+          dayName: d['dayName'] ?? '',
+          date: d['date'] ?? '',
+          title: d['title'] ?? '',
+          focusArea: d['focusArea'] ?? '',
+          isRestDay: d['isRestDay'] ?? false,
+          exerciseNames: (d['exerciseNames'] as List? ?? []).map((e) => e.toString()).toList(),
+          nutritionFocus: d['nutritionFocus'],
+        );
+      }).toList(),
+    );
+  }
+
+  // ─── Serializers: Master Context ───
+
+  Map<String, dynamic> masterContextToMap(MasterContext ctx) {
+    return {
+      'deduced': {
+        'activityLevel': ctx.deduced.activityLevel,
+        'sessionDurationMin': ctx.deduced.sessionDurationMin,
+        'preferredTrainingDays': ctx.deduced.preferredTrainingDays,
+        'preferredTrainingStyle': ctx.deduced.preferredTrainingStyle,
+        'cardioPreference': ctx.deduced.cardioPreference,
+        'activeInjuries': ctx.deduced.activeInjuries,
+        'foodAllergies': ctx.deduced.foodAllergies,
+        'dislikedExercises': ctx.deduced.dislikedExercises,
+        'preferredProteinSources': ctx.deduced.preferredProteinSources,
+        'sleepPatternAvg': ctx.deduced.sleepPatternAvg,
+        'stressBaseline': ctx.deduced.stressBaseline,
+        'personalNotes': ctx.deduced.personalNotes,
+        'lastUpdated': ctx.deduced.lastUpdated ?? DateTime.now().toIso8601String(),
+      },
+      'rollingSummary': {
+        'periodDays': ctx.rollingSummary.periodDays,
+        'workoutComplianceRate': ctx.rollingSummary.workoutComplianceRate,
+        'workoutsCompleted': ctx.rollingSummary.workoutsCompleted,
+        'workoutsSkipped': ctx.rollingSummary.workoutsSkipped,
+        'avgSessionDurationMin': ctx.rollingSummary.avgSessionDurationMin,
+        'recentWorkouts': ctx.rollingSummary.recentWorkouts,
+        'nutritionAvg': ctx.rollingSummary.nutritionAvg,
+        'recoveryAvg': ctx.rollingSummary.recoveryAvg,
+        'weightTrend': ctx.rollingSummary.weightTrend,
+        'lastUpdated': ctx.rollingSummary.lastUpdated ?? DateTime.now().toIso8601String(),
+      },
+    };
+  }
+
+  MasterContext masterContextFromMap(Map<String, dynamic> map) {
+    final deducedMap = map['deduced'] as Map<String, dynamic>? ?? {};
+    final summaryMap = map['rollingSummary'] as Map<String, dynamic>? ?? {};
+
+    return MasterContext(
+      deduced: DeducedKnowledge(
+        activityLevel: deducedMap['activityLevel'],
+        sessionDurationMin: deducedMap['sessionDurationMin'],
+        preferredTrainingDays: (deducedMap['preferredTrainingDays'] as List? ?? []).map((e) => e.toString()).toList(),
+        preferredTrainingStyle: deducedMap['preferredTrainingStyle'],
+        cardioPreference: deducedMap['cardioPreference'],
+        activeInjuries: (deducedMap['activeInjuries'] as List? ?? []).map((e) => e.toString()).toList(),
+        foodAllergies: (deducedMap['foodAllergies'] as List? ?? []).map((e) => e.toString()).toList(),
+        dislikedExercises: (deducedMap['dislikedExercises'] as List? ?? []).map((e) => e.toString()).toList(),
+        preferredProteinSources: (deducedMap['preferredProteinSources'] as List? ?? []).map((e) => e.toString()).toList(),
+        sleepPatternAvg: (deducedMap['sleepPatternAvg'] as num?)?.toDouble(),
+        stressBaseline: deducedMap['stressBaseline'],
+        personalNotes: (deducedMap['personalNotes'] as List? ?? []).map((e) => e.toString()).toList(),
+        lastUpdated: deducedMap['lastUpdated'],
+      ),
+      rollingSummary: RollingSummary(
+        periodDays: summaryMap['periodDays'] ?? 7,
+        workoutComplianceRate: (summaryMap['workoutComplianceRate'] as num?)?.toDouble() ?? 0.0,
+        workoutsCompleted: summaryMap['workoutsCompleted'] ?? 0,
+        workoutsSkipped: summaryMap['workoutsSkipped'] ?? 0,
+        avgSessionDurationMin: (summaryMap['avgSessionDurationMin'] as num?)?.toDouble(),
+        recentWorkouts: (summaryMap['recentWorkouts'] as List? ?? []).map((e) => Map<String, dynamic>.from(e)).toList(),
+        nutritionAvg: Map<String, dynamic>.from(summaryMap['nutritionAvg'] ?? {}),
+        recoveryAvg: Map<String, dynamic>.from(summaryMap['recoveryAvg'] ?? {}),
+        weightTrend: (summaryMap['weightTrend'] as List? ?? []).map((e) => Map<String, dynamic>.from(e)).toList(),
+        lastUpdated: summaryMap['lastUpdated'],
+      ),
     );
   }
 }

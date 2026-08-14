@@ -14,6 +14,7 @@ import 'screens/progress_screen.dart';
 import 'screens/coach_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/onboarding_screen.dart';
+import 'screens/weekly_plan_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -135,9 +136,9 @@ class _MainShellState extends State<MainShell> {
         ),
       );
     } else if (tabIndex == 3) {
-      // Toggle to Coach screen index (now index 1)
+      // Toggle to Coach screen index (now index 2)
       setState(() {
-        _selectedIndex = 1;
+        _selectedIndex = 2;
       });
     } else {
       setState(() {
@@ -155,6 +156,7 @@ class _MainShellState extends State<MainShell> {
 
         final List<Widget> screens = [
           TodayScreen(onNavigateToTab: _navigateToTab),
+          const WeeklyPlanScreen(),
           const CoachScreen(),
         ];
 
@@ -231,6 +233,7 @@ class _MainShellState extends State<MainShell> {
             unselectedFontSize: 11,
             items: const [
               BottomNavigationBarItem(icon: Icon(LucideIcons.home, size: 20), label: 'Today'),
+              BottomNavigationBarItem(icon: Icon(LucideIcons.calendarDays, size: 20), label: 'Plan'),
               BottomNavigationBarItem(icon: Icon(LucideIcons.bot, size: 20), label: 'Coach'),
             ],
           ),

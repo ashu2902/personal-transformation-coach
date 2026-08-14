@@ -17,6 +17,69 @@ extension GoalTypeExtension on GoalType {
 
 enum EquipmentType { bodyweight, dumbbells, barbell, cables, machines }
 
+class EquipmentItem {
+  final String name;
+  final String category; // 'free_weight', 'bodyweight', 'bands', 'machine', 'cables', 'other'
+  final double? weightKg;
+  final String? notes;
+
+  const EquipmentItem({
+    required this.name,
+    this.category = 'free_weight',
+    this.weightKg,
+    this.notes,
+  });
+
+  Map<String, dynamic> toMap() => {
+    'name': name,
+    'category': category,
+    if (weightKg != null) 'weightKg': weightKg,
+    if (notes != null) 'notes': notes,
+  };
+
+  factory EquipmentItem.fromMap(Map<String, dynamic> map) => EquipmentItem(
+    name: map['name']?.toString() ?? 'Equipment',
+    category: map['category']?.toString() ?? 'free_weight',
+    weightKg: (map['weightKg'] as num?)?.toDouble(),
+    notes: map['notes']?.toString(),
+  );
+
+  factory EquipmentItem.fromString(String name, {double? weightKg, String? notes}) {
+    final lower = name.toLowerCase();
+    String cat = 'free_weight';
+    if (lower.contains('bodyweight') || lower.contains('calisthenic') || lower.contains('pull-up') || lower.contains('push-up')) {
+      cat = 'bodyweight';
+    } else if (lower.contains('band')) {
+      cat = 'bands';
+    } else if (lower.contains('cable')) {
+      cat = 'cables';
+    } else if (lower.contains('machine')) {
+      cat = 'machine';
+    }
+    return EquipmentItem(name: name, category: cat, weightKg: weightKg, notes: notes);
+  }
+
+  EquipmentItem copyWith({
+    String? name,
+    String? category,
+    double? weightKg,
+    String? notes,
+  }) {
+    return EquipmentItem(
+      name: name ?? this.name,
+      category: category ?? this.category,
+      weightKg: weightKg ?? this.weightKg,
+      notes: notes ?? this.notes,
+    );
+  }
+
+  @override
+  String toString() {
+    final wStr = weightKg != null ? ' (${weightKg!.toStringAsFixed(weightKg! % 1 == 0 ? 0 : 1)}kg)' : '';
+    return '$name$wStr';
+  }
+}
+
 class ExerciseSet {
   final int setNumber;
   final int targetReps;
@@ -57,7 +120,7 @@ class Exercise {
   final String id;
   final String name;
   final String targetMuscle;
-  final EquipmentType equipmentRequired;
+  final String equipmentRequired;
   final List<ExerciseSet> sets;
   final String? notes;
 
@@ -74,7 +137,7 @@ class Exercise {
     String? id,
     String? name,
     String? targetMuscle,
-    EquipmentType? equipmentRequired,
+    String? equipmentRequired,
     List<ExerciseSet>? sets,
     String? notes,
   }) {
@@ -269,13 +332,16 @@ class UserProfile {
   final GoalType goal;
   final int daysPerWeek;
   final String targetPhysique;
-  final List<EquipmentType> availableEquipment;
+  final List<EquipmentItem> equipmentList;
   final ExperienceLevel experienceLevel;
   final double? benchPress1RMKg;
   final double? squat1RMKg;
   final double? deadlift1RMKg;
   final List<String> activeInjuries;
+  final List<String> dislikedExercises;
+  final List<String> personalNotes;
   final CoachSoul coachSoul;
+  final String dietaryPreference; // 'nonVeg', 'vegetarian', 'vegan', 'pescatarian', 'eggetarian'
 
   UserProfile({
     required this.name,
@@ -287,14 +353,45 @@ class UserProfile {
     required this.goal,
     required this.daysPerWeek,
     required this.targetPhysique,
-    required this.availableEquipment,
+    List<EquipmentItem>? equipmentList,
+    List<EquipmentType>? availableEquipment,
     this.experienceLevel = ExperienceLevel.intermediate,
     this.benchPress1RMKg,
     this.squat1RMKg,
     this.deadlift1RMKg,
     this.activeInjuries = const [],
+    this.dislikedExercises = const [],
+    this.personalNotes = const [],
     this.coachSoul = CoachSoul.supporter,
-  });
+    this.dietaryPreference = 'nonVeg',
+  }) : equipmentList = equipmentList ??
+            (availableEquipment != null
+                ? availableEquipment.map((e) => EquipmentItem.fromString(e.name)).toList()
+                : [const EquipmentItem(name: 'Bodyweight', category: 'bodyweight')]);
+
+  List<EquipmentType> get availableEquipment {
+    final List<EquipmentType> result = [];
+    for (var item in equipmentList) {
+      final s = item.name.toLowerCase();
+      if (s.contains('dumbbell') || s.contains('bag') || s.contains('weight') || item.category == 'free_weight') {
+        if (!result.contains(EquipmentType.dumbbells)) result.add(EquipmentType.dumbbells);
+      }
+      if (s.contains('bodyweight') || item.category == 'bodyweight') {
+        if (!result.contains(EquipmentType.bodyweight)) result.add(EquipmentType.bodyweight);
+      }
+      if (s.contains('barbell')) {
+        if (!result.contains(EquipmentType.barbell)) result.add(EquipmentType.barbell);
+      }
+      if (s.contains('cable') || item.category == 'cables') {
+        if (!result.contains(EquipmentType.cables)) result.add(EquipmentType.cables);
+      }
+      if (s.contains('machine') || item.category == 'machine') {
+        if (!result.contains(EquipmentType.machines)) result.add(EquipmentType.machines);
+      }
+    }
+    if (result.isEmpty) result.add(EquipmentType.bodyweight);
+    return result;
+  }
 
   UserProfile copyWith({
     String? name,
@@ -306,13 +403,17 @@ class UserProfile {
     GoalType? goal,
     int? daysPerWeek,
     String? targetPhysique,
+    List<EquipmentItem>? equipmentList,
     List<EquipmentType>? availableEquipment,
     ExperienceLevel? experienceLevel,
     double? benchPress1RMKg,
     double? squat1RMKg,
     double? deadlift1RMKg,
     List<String>? activeInjuries,
+    List<String>? dislikedExercises,
+    List<String>? personalNotes,
     CoachSoul? coachSoul,
+    String? dietaryPreference,
   }) {
     return UserProfile(
       name: name ?? this.name,
@@ -324,13 +425,16 @@ class UserProfile {
       goal: goal ?? this.goal,
       daysPerWeek: daysPerWeek ?? this.daysPerWeek,
       targetPhysique: targetPhysique ?? this.targetPhysique,
-      availableEquipment: availableEquipment ?? this.availableEquipment,
+      equipmentList: equipmentList ?? (availableEquipment != null ? availableEquipment.map((e) => EquipmentItem.fromString(e.name)).toList() : this.equipmentList),
       experienceLevel: experienceLevel ?? this.experienceLevel,
       benchPress1RMKg: benchPress1RMKg ?? this.benchPress1RMKg,
       squat1RMKg: squat1RMKg ?? this.squat1RMKg,
       deadlift1RMKg: deadlift1RMKg ?? this.deadlift1RMKg,
       activeInjuries: activeInjuries ?? this.activeInjuries,
+      dislikedExercises: dislikedExercises ?? this.dislikedExercises,
+      personalNotes: personalNotes ?? this.personalNotes,
       coachSoul: coachSoul ?? this.coachSoul,
+      dietaryPreference: dietaryPreference ?? this.dietaryPreference,
     );
   }
 }
@@ -389,5 +493,226 @@ class AIOrchestratorResult {
     this.actions = const [],
     required this.coachResponse,
   });
+}
+
+// ─── Weekly Plan Models ───
+
+class WeeklyDayPlan {
+  final String dayName;
+  final String date;
+  final String title;
+  final String focusArea;
+  final bool isRestDay;
+  final List<String> exerciseNames;
+  final String? nutritionFocus;
+
+  WeeklyDayPlan({
+    required this.dayName,
+    required this.date,
+    required this.title,
+    required this.focusArea,
+    this.isRestDay = false,
+    this.exerciseNames = const [],
+    this.nutritionFocus,
+  });
+
+  WeeklyDayPlan copyWith({
+    String? dayName,
+    String? date,
+    String? title,
+    String? focusArea,
+    bool? isRestDay,
+    List<String>? exerciseNames,
+    String? nutritionFocus,
+  }) {
+    return WeeklyDayPlan(
+      dayName: dayName ?? this.dayName,
+      date: date ?? this.date,
+      title: title ?? this.title,
+      focusArea: focusArea ?? this.focusArea,
+      isRestDay: isRestDay ?? this.isRestDay,
+      exerciseNames: exerciseNames ?? this.exerciseNames,
+      nutritionFocus: nutritionFocus ?? this.nutritionFocus,
+    );
+  }
+}
+
+class WeeklyPlan {
+  final String weekId;
+  final String startDate;
+  final String endDate;
+  final String overview;
+  final String? coachNote;
+  final List<WeeklyDayPlan> days;
+  final String createdAt;
+
+  WeeklyPlan({
+    required this.weekId,
+    required this.startDate,
+    required this.endDate,
+    required this.overview,
+    this.coachNote,
+    required this.days,
+    required this.createdAt,
+  });
+
+  WeeklyPlan copyWith({
+    String? weekId,
+    String? startDate,
+    String? endDate,
+    String? overview,
+    String? coachNote,
+    List<WeeklyDayPlan>? days,
+    String? createdAt,
+  }) {
+    return WeeklyPlan(
+      weekId: weekId ?? this.weekId,
+      startDate: startDate ?? this.startDate,
+      endDate: endDate ?? this.endDate,
+      overview: overview ?? this.overview,
+      coachNote: coachNote ?? this.coachNote,
+      days: days ?? this.days,
+      createdAt: createdAt ?? this.createdAt,
+    );
+  }
+}
+
+// ─── Master Context Models ───
+
+class DeducedKnowledge {
+  final String? activityLevel;
+  final int? sessionDurationMin;
+  final List<String> preferredTrainingDays;
+  final String? preferredTrainingStyle;
+  final String? cardioPreference;
+  final List<String> activeInjuries;
+  final List<String> foodAllergies;
+  final List<String> dislikedExercises;
+  final List<String> preferredProteinSources;
+  final double? sleepPatternAvg;
+  final int? stressBaseline;
+  final List<String> personalNotes;
+  final String? lastUpdated;
+
+  DeducedKnowledge({
+    this.activityLevel,
+    this.sessionDurationMin,
+    this.preferredTrainingDays = const [],
+    this.preferredTrainingStyle,
+    this.cardioPreference,
+    this.activeInjuries = const [],
+    this.foodAllergies = const [],
+    this.dislikedExercises = const [],
+    this.preferredProteinSources = const [],
+    this.sleepPatternAvg,
+    this.stressBaseline,
+    this.personalNotes = const [],
+    this.lastUpdated,
+  });
+
+  DeducedKnowledge copyWith({
+    String? activityLevel,
+    int? sessionDurationMin,
+    List<String>? preferredTrainingDays,
+    String? preferredTrainingStyle,
+    String? cardioPreference,
+    List<String>? activeInjuries,
+    List<String>? foodAllergies,
+    List<String>? dislikedExercises,
+    List<String>? preferredProteinSources,
+    double? sleepPatternAvg,
+    int? stressBaseline,
+    List<String>? personalNotes,
+    String? lastUpdated,
+  }) {
+    return DeducedKnowledge(
+      activityLevel: activityLevel ?? this.activityLevel,
+      sessionDurationMin: sessionDurationMin ?? this.sessionDurationMin,
+      preferredTrainingDays: preferredTrainingDays ?? this.preferredTrainingDays,
+      preferredTrainingStyle: preferredTrainingStyle ?? this.preferredTrainingStyle,
+      cardioPreference: cardioPreference ?? this.cardioPreference,
+      activeInjuries: activeInjuries ?? this.activeInjuries,
+      foodAllergies: foodAllergies ?? this.foodAllergies,
+      dislikedExercises: dislikedExercises ?? this.dislikedExercises,
+      preferredProteinSources: preferredProteinSources ?? this.preferredProteinSources,
+      sleepPatternAvg: sleepPatternAvg ?? this.sleepPatternAvg,
+      stressBaseline: stressBaseline ?? this.stressBaseline,
+      personalNotes: personalNotes ?? this.personalNotes,
+      lastUpdated: lastUpdated ?? this.lastUpdated,
+    );
+  }
+}
+
+class RollingSummary {
+  final int periodDays;
+  final double workoutComplianceRate;
+  final int workoutsCompleted;
+  final int workoutsSkipped;
+  final double? avgSessionDurationMin;
+  final List<Map<String, dynamic>> recentWorkouts;
+  final Map<String, dynamic> nutritionAvg;
+  final Map<String, dynamic> recoveryAvg;
+  final List<Map<String, dynamic>> weightTrend;
+  final String? lastUpdated;
+
+  RollingSummary({
+    this.periodDays = 7,
+    this.workoutComplianceRate = 0.0,
+    this.workoutsCompleted = 0,
+    this.workoutsSkipped = 0,
+    this.avgSessionDurationMin,
+    this.recentWorkouts = const [],
+    this.nutritionAvg = const {},
+    this.recoveryAvg = const {},
+    this.weightTrend = const [],
+    this.lastUpdated,
+  });
+
+  RollingSummary copyWith({
+    int? periodDays,
+    double? workoutComplianceRate,
+    int? workoutsCompleted,
+    int? workoutsSkipped,
+    double? avgSessionDurationMin,
+    List<Map<String, dynamic>>? recentWorkouts,
+    Map<String, dynamic>? nutritionAvg,
+    Map<String, dynamic>? recoveryAvg,
+    List<Map<String, dynamic>>? weightTrend,
+    String? lastUpdated,
+  }) {
+    return RollingSummary(
+      periodDays: periodDays ?? this.periodDays,
+      workoutComplianceRate: workoutComplianceRate ?? this.workoutComplianceRate,
+      workoutsCompleted: workoutsCompleted ?? this.workoutsCompleted,
+      workoutsSkipped: workoutsSkipped ?? this.workoutsSkipped,
+      avgSessionDurationMin: avgSessionDurationMin ?? this.avgSessionDurationMin,
+      recentWorkouts: recentWorkouts ?? this.recentWorkouts,
+      nutritionAvg: nutritionAvg ?? this.nutritionAvg,
+      recoveryAvg: recoveryAvg ?? this.recoveryAvg,
+      weightTrend: weightTrend ?? this.weightTrend,
+      lastUpdated: lastUpdated ?? this.lastUpdated,
+    );
+  }
+}
+
+class MasterContext {
+  final DeducedKnowledge deduced;
+  final RollingSummary rollingSummary;
+
+  MasterContext({
+    DeducedKnowledge? deduced,
+    RollingSummary? rollingSummary,
+  })  : deduced = deduced ?? DeducedKnowledge(),
+        rollingSummary = rollingSummary ?? RollingSummary();
+
+  MasterContext copyWith({
+    DeducedKnowledge? deduced,
+    RollingSummary? rollingSummary,
+  }) {
+    return MasterContext(
+      deduced: deduced ?? this.deduced,
+      rollingSummary: rollingSummary ?? this.rollingSummary,
+    );
+  }
 }
 

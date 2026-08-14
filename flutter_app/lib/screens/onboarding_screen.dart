@@ -1,6 +1,6 @@
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../models/models.dart';
@@ -16,62 +16,150 @@ class OnboardingScreen extends ConsumerStatefulWidget {
 }
 
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
-  int _currentStep = 0; // 0: Spark, 1: Assessment, 2: Choose Soul, 3: Sunk-Cost Reveal, 4: Calibration
+  int _currentStep = 0;
+  // 0: Spark (Welcome)
+  // 1: Identity & Body (Name, Age, Gender, Height, Weight)
+  // 2: Goals & Frequency (Goal, Days/Week, Diet)
+  // 3: Equipment (Bodyweight, Dumbbells, Full Gym, Custom)
+  // 4: Coach Soul Selection (Supporter, Pro, Teacher)
+  // 5: Plan Summary & Calibration Launch
+  // 6: Calibration Loading
 
-  // Assessment Data
+  // User Parameters
+  String _name = 'Athlete';
+  int _age = 26;
+  String _gender = 'male'; // 'male', 'female', 'other'
   double _heightCm = 175;
   double _weightKg = 75;
-  GoalType _selectedGoal = GoalType.recomp;
 
-  // Coach Soul selection
+  GoalType _selectedGoal = GoalType.recomp;
+  int _daysPerWeek = 4;
+  String _dietaryPreference = 'nonVeg'; // 'nonVeg', 'vegetarian', 'vegan', 'eggetarian'
+
+  // Equipment setup
+  String _equipmentPreset = 'dumbbells'; // 'bodyweight', 'dumbbells', 'full_gym', 'custom'
+  String _customEquipmentNote = '';
+
+  // Coach Soul
   CoachSoul _selectedSoul = CoachSoul.supporter;
 
   // Calibration State
   int _calibrationProgressStep = 1;
   String? _calibrationError;
 
+  // Form Controllers
+  late TextEditingController _nameController;
+  late TextEditingController _ageController;
   late TextEditingController _heightController;
   late TextEditingController _weightController;
-  late TextEditingController _emailController;
-  late TextEditingController _passwordController;
+  late TextEditingController _customEquipmentController;
 
   @override
   void initState() {
     super.initState();
+    _nameController = TextEditingController(text: '');
+    _ageController = TextEditingController(text: _age.toString());
     _heightController = TextEditingController(text: _heightCm.round().toString());
     _weightController = TextEditingController(text: _weightKg.round().toString());
-    _emailController = TextEditingController();
-    _passwordController = TextEditingController();
+    _customEquipmentController = TextEditingController();
   }
 
   @override
   void dispose() {
+    _nameController.dispose();
+    _ageController.dispose();
     _heightController.dispose();
     _weightController.dispose();
-    _emailController.dispose();
-    _passwordController.dispose();
+    _customEquipmentController.dispose();
     super.dispose();
   }
 
-  void _runCalibrationAndComplete({String? email, String? password}) async {
+  List<EquipmentItem> _buildFinalEquipmentList() {
+    switch (_equipmentPreset) {
+      case 'bodyweight':
+        return [
+          const EquipmentItem(name: 'Bodyweight', category: 'bodyweight'),
+        ];
+      case 'dumbbells':
+        return [
+          const EquipmentItem(name: 'Bodyweight', category: 'bodyweight'),
+          const EquipmentItem(name: 'Dumbbells', category: 'free_weight'),
+          const EquipmentItem(name: 'Resistance Bands', category: 'bands'),
+        ];
+      case 'full_gym':
+        return [
+          const EquipmentItem(name: 'Bodyweight', category: 'bodyweight'),
+          const EquipmentItem(name: 'Dumbbells', category: 'free_weight'),
+          const EquipmentItem(name: 'Barbell', category: 'free_weight'),
+          const EquipmentItem(name: 'Cables', category: 'cables'),
+          const EquipmentItem(name: 'Machines', category: 'machine'),
+        ];
+      case 'custom':
+        final note = _customEquipmentNote.trim();
+        if (note.isNotEmpty) {
+          return [
+            const EquipmentItem(name: 'Bodyweight', category: 'bodyweight'),
+            EquipmentItem.fromString(note),
+          ];
+        }
+        return [
+          const EquipmentItem(name: 'Bodyweight', category: 'bodyweight'),
+          const EquipmentItem(name: 'Dumbbells', category: 'free_weight'),
+        ];
+      default:
+        return [
+          const EquipmentItem(name: 'Bodyweight', category: 'bodyweight'),
+          const EquipmentItem(name: 'Dumbbells', category: 'free_weight'),
+        ];
+    }
+  }
+
+  String _getTargetPhysique() {
+    switch (_selectedGoal) {
+      case GoalType.fatLoss:
+        return 'Lean & Toned';
+      case GoalType.muscleGain:
+        return 'Muscular V-Taper';
+      case GoalType.recomp:
+        return 'Athletic & Strong';
+    }
+  }
+
+  double _getTargetWeight() {
+    switch (_selectedGoal) {
+      case GoalType.fatLoss:
+        return (_weightKg - 5).clamp(30.0, 300.0);
+      case GoalType.muscleGain:
+        return (_weightKg + 4).clamp(30.0, 300.0);
+      case GoalType.recomp:
+        return _weightKg;
+    }
+  }
+
+  void _runCalibrationAndComplete({bool useGoogleAuth = false, String? email, String? password}) async {
     setState(() {
-      _currentStep = 4;
+      _currentStep = 6; // Calibration step
       _calibrationProgressStep = 1;
+      _calibrationError = null;
     });
 
+    final userName = _name.trim().isNotEmpty ? _name.trim() : 'Athlete';
+    final equipList = _buildFinalEquipmentList();
+
     final profile = UserProfile(
-      name: 'Vance',
-      age: 26,
-      gender: 'other',
+      name: userName,
+      age: _age,
+      gender: _gender,
       heightCm: _heightCm,
       weightKg: _weightKg,
-      targetWeightKg: _selectedGoal == GoalType.fatLoss ? _weightKg - 5 : _weightKg + 5,
+      targetWeightKg: _getTargetWeight(),
       goal: _selectedGoal,
-      daysPerWeek: 3,
-      targetPhysique: _selectedGoal == GoalType.fatLoss ? 'Lean & Toned' : 'Strong & Active',
-      availableEquipment: [EquipmentType.bodyweight, EquipmentType.dumbbells],
+      daysPerWeek: _daysPerWeek,
+      targetPhysique: _getTargetPhysique(),
+      equipmentList: equipList,
       experienceLevel: ExperienceLevel.beginner,
       coachSoul: _selectedSoul,
+      dietaryPreference: _dietaryPreference,
     );
 
     try {
@@ -81,32 +169,117 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       // Step 1: Firebase Auth & Firestore write
       final auth = FirebaseAuthService();
       final firestore = FirebaseFirestoreService();
-      
-      String? uid;
-      if (email != null && email.isNotEmpty && password != null && password.isNotEmpty) {
-        uid = await auth.signUpWithEmailAndPassword(email, password);
+
+      UserCredential? cred;
+      if (useGoogleAuth) {
+        cred = await auth.signInWithGoogle();
+      } else if (email != null && email.isNotEmpty && password != null && password.isNotEmpty) {
+        cred = await auth.signUpWithEmailAndPassword(email, password);
       } else {
-        uid = await auth.signInWithGoogle(); // calls anonymous sign-in fallback
+        cred = await auth.signInAnonymously();
       }
 
-      if (uid != null) {
-        await firestore.saveUserProfile(uid, profile);
+      final uid = cred?.user?.uid ?? auth.uid ?? 'firebase_user_${DateTime.now().millisecondsSinceEpoch}';
+      final effectiveName = (cred?.user?.displayName != null && cred!.user!.displayName!.trim().isNotEmpty)
+          ? cred.user!.displayName!.trim()
+          : userName;
+
+      final finalProfile = profile.copyWith(name: effectiveName);
+
+      if (uid.isNotEmpty) {
+        await firestore.saveUserProfile(uid, finalProfile);
       }
 
       // Step 2: Metabolic Plan
       if (mounted) setState(() => _calibrationProgressStep = 2);
-      final nutrition = await aiService.generateAIMetabolicPlan(profile);
+      DailyNutrition nutrition;
+      try {
+        nutrition = await aiService.generateAIMetabolicPlan(finalProfile);
+      } catch (e) {
+        debugPrint('[AURA ONBOARDING] AI nutrition fallback triggered: $e');
+        final todayStr = DateTime.now().toIso8601String().split('T')[0];
+        nutrition = DailyNutrition(
+          date: todayStr,
+          targetCalories: finalProfile.goal == GoalType.fatLoss ? 1900 : 2300,
+          targetProteinG: (finalProfile.weightKg * 1.8).round(),
+          targetCarbsG: 220,
+          targetFatG: 65,
+          targetWaterMl: 3000,
+          waterMl: 0,
+          meals: [],
+        );
+      }
 
       // Step 3: Workout Plan
       if (mounted) setState(() => _calibrationProgressStep = 3);
-      final workout = await aiService.generateAIInitialWorkout(profile);
+      DailyWorkout workout;
+      try {
+        workout = await aiService.generateAIInitialWorkout(finalProfile);
+      } catch (e) {
+        debugPrint('[AURA ONBOARDING] AI workout fallback triggered: $e');
+        final todayStr = DateTime.now().toIso8601String().split('T')[0];
+        workout = DailyWorkout(
+          id: 'workout_$todayStr',
+          date: todayStr,
+          title: 'Full Body Calibration',
+          focusArea: 'Full Body',
+          estimatedDurationMin: 45,
+          status: WorkoutStatus.scheduled,
+          adaptationNote: 'Calibrated for ${finalProfile.name}',
+          exercises: [
+            Exercise(
+              id: 'init_1',
+              name: 'Push-Ups',
+              targetMuscle: 'Chest & Triceps',
+              equipmentRequired: 'Bodyweight',
+              sets: [
+                ExerciseSet(setNumber: 1, targetReps: 12, targetWeightKg: 0),
+                ExerciseSet(setNumber: 2, targetReps: 12, targetWeightKg: 0),
+                ExerciseSet(setNumber: 3, targetReps: 10, targetWeightKg: 0),
+              ],
+            ),
+            Exercise(
+              id: 'init_2',
+              name: 'Goblet Squats',
+              targetMuscle: 'Quadriceps & Glutes',
+              equipmentRequired: finalProfile.equipmentList.first.name,
+              sets: [
+                ExerciseSet(setNumber: 1, targetReps: 12, targetWeightKg: 10),
+                ExerciseSet(setNumber: 2, targetReps: 12, targetWeightKg: 10),
+                ExerciseSet(setNumber: 3, targetReps: 12, targetWeightKg: 10),
+              ],
+            ),
+            Exercise(
+              id: 'init_3',
+              name: 'Dumbbell Bent-Over Row',
+              targetMuscle: 'Upper Back & Lats',
+              equipmentRequired: finalProfile.equipmentList.first.name,
+              sets: [
+                ExerciseSet(setNumber: 1, targetReps: 12, targetWeightKg: 10),
+                ExerciseSet(setNumber: 2, targetReps: 12, targetWeightKg: 10),
+                ExerciseSet(setNumber: 3, targetReps: 12, targetWeightKg: 10),
+              ],
+            ),
+            Exercise(
+              id: 'init_4',
+              name: 'Plank Hold',
+              targetMuscle: 'Core',
+              equipmentRequired: 'Bodyweight',
+              sets: [
+                ExerciseSet(setNumber: 1, targetReps: 45, targetWeightKg: 0),
+                ExerciseSet(setNumber: 2, targetReps: 45, targetWeightKg: 0),
+              ],
+            ),
+          ],
+        );
+      }
 
       // Step 4: Launch
       if (mounted) setState(() => _calibrationProgressStep = 4);
       await Future.delayed(const Duration(milliseconds: 600));
 
       if (mounted) {
-        notifier.completeOnboardingWithPlan(profile, nutrition, workout);
+        notifier.completeOnboardingWithPlan(finalProfile, nutrition, workout);
       }
     } catch (e) {
       debugPrint('[AURA ONBOARDING] Calibration failed: $e');
@@ -125,17 +298,17 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       body: SafeArea(
         child: Center(
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 450),
+            constraints: const BoxConstraints(maxWidth: 480),
             child: Padding(
               padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
               child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 400),
+                duration: const Duration(milliseconds: 350),
                 transitionBuilder: (child, animation) {
                   return FadeTransition(
                     opacity: animation,
                     child: SlideTransition(
                       position: Tween<Offset>(
-                        begin: const Offset(0.0, 0.03),
+                        begin: const Offset(0.0, 0.02),
                         end: Offset.zero,
                       ).animate(CurvedAnimation(parent: animation, curve: Curves.easeInOut)),
                       child: child,
@@ -159,42 +332,47 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       case 0:
         return _buildSparkScreen();
       case 1:
-        return _buildAssessmentScreen();
+        return _buildIdentityScreen();
       case 2:
-        return _buildSoulScreen();
+        return _buildGoalsAndLifestyleScreen();
       case 3:
-        return _buildSunkCostScreen();
+        return _buildEquipmentScreen();
       case 4:
+        return _buildSoulScreen();
+      case 5:
+        return _buildPlanSummaryScreen();
+      case 6:
         return _buildCalibrationLoadingScreen();
       default:
         return const SizedBox();
     }
   }
 
-  // SCREEN 1: THE SPARK
+  // ─── SCREEN 0: THE SPARK ───
   Widget _buildSparkScreen() {
     return Column(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         const Spacer(),
-        AuraOrb(soul: CoachSoul.supporter, state: OrbState.pulsing, size: 220),
-        const SizedBox(height: 48),
+        AuraOrb(soul: CoachSoul.supporter, state: OrbState.pulsing, size: 200),
+        const SizedBox(height: 40),
         Text(
           'Hi, I’m AURA.',
-          style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                color: Colors.white,
-                fontWeight: FontWeight.bold,
-              ),
+          style: GoogleFonts.syne(
+            color: Colors.white,
+            fontSize: 32,
+            fontWeight: FontWeight.bold,
+          ),
           textAlign: TextAlign.center,
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 14),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16.0),
           child: Text(
-            'I’m here to help you get moving, eating well, and feeling better. No math, no complex plans. Just one step at a time.',
+            'Your adaptive AI transformation coach. I build your training, balance your nutrition, and evolve with you every day.',
             style: GoogleFonts.plusJakartaSans(
               color: const Color(0xFFA1A1AA),
-              fontSize: 16,
+              fontSize: 15,
               height: 1.5,
             ),
             textAlign: TextAlign.center,
@@ -203,188 +381,472 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         const Spacer(),
         SizedBox(
           width: double.infinity,
-          height: 56,
+          height: 54,
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.white,
               foregroundColor: Colors.black,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-              elevation: 4,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(27)),
+              elevation: 3,
             ),
             onPressed: () => setState(() => _currentStep = 1),
             child: Text(
-              "Let's start",
+              "Let's Begin",
               style: GoogleFonts.syne(fontWeight: FontWeight.bold, fontSize: 16),
             ),
           ),
         ),
-        const SizedBox(height: 24),
-      ],
-    );
-  }
-
-  // SCREEN 2: THE ASSESSMENT (CONVERSATIONAL)
-  Widget _buildAssessmentScreen() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        const SizedBox(height: 20),
-        Center(
-          child: AuraOrb(soul: CoachSoul.supporter, state: OrbState.pulsing, size: 90),
-        ),
-        const SizedBox(height: 32),
-        Text(
-          'Your Starting Point',
-          style: GoogleFonts.syne(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-        ),
-        const SizedBox(height: 16),
-        _buildTextFieldCard(
-          label: 'Height',
-          controller: _heightController,
-          unit: 'cm',
-          onChanged: (val) {
-            final double? v = double.tryParse(val);
-            if (v != null) {
-              setState(() => _heightCm = v);
-            }
-          },
-        ),
-        const SizedBox(height: 16),
-        _buildTextFieldCard(
-          label: 'Weight',
-          controller: _weightController,
-          unit: 'kg',
-          onChanged: (val) {
-            final double? v = double.tryParse(val);
-            if (v != null) {
-              setState(() => _weightKg = v);
-            }
-          },
-        ),
-        const Spacer(),
-        Row(
-          children: [
-            Expanded(
-              child: OutlinedButton(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: Colors.white,
-                  side: BorderSide(color: Colors.white.withOpacity(0.1)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-                onPressed: () => setState(() => _currentStep = 0),
-                child: const Text('Back'),
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00FFA3), // Neon Cyan-Green
-                  foregroundColor: Colors.black,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                ),
-                onPressed: () => setState(() => _currentStep = 2),
-                child: Text('Continue', style: GoogleFonts.syne(fontWeight: FontWeight.bold)),
-              ),
-            ),
-          ],
-        ),
         const SizedBox(height: 16),
       ],
     );
   }
 
-  Widget _buildTextFieldCard({
-    required String label,
-    required TextEditingController controller,
-    required String unit,
-    required ValueChanged<String> onChanged,
-  }) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
-      decoration: BoxDecoration(
-        color: const Color(0xFF141217),
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
-      ),
-      child: Row(
+  // ─── SCREEN 1: IDENTITY & BODY ───
+  Widget _buildIdentityScreen() {
+    final isNameValid = _nameController.text.trim().isNotEmpty;
+    final isAgeValid = _age >= 14 && _age <= 99;
+    final isHeightValid = _heightCm >= 100 && _heightCm <= 240;
+    final isWeightValid = _weightKg >= 30 && _weightKg <= 280;
+    final canProceed = isNameValid && isAgeValid && isHeightValid && isWeightValid;
+
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Expanded(
+          const SizedBox(height: 12),
+          Center(
+            child: AuraOrb(soul: _selectedSoul, state: OrbState.pulsing, size: 70),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Tell me about yourself',
+            style: GoogleFonts.syne(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'AURA uses your exact metrics to calculate precise metabolic math.',
+            style: GoogleFonts.plusJakartaSans(color: const Color(0xFFA1A1AA), fontSize: 13),
+          ),
+          const SizedBox(height: 24),
+
+          // Name Input
+          _buildInputContainer(
+            label: 'What should I call you?',
             child: TextField(
-              controller: controller,
-              keyboardType: const TextInputType.numberWithOptions(decimal: true),
-              style: GoogleFonts.plusJakartaSans(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
-              onChanged: onChanged,
+              controller: _nameController,
+              style: GoogleFonts.plusJakartaSans(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
               decoration: InputDecoration(
-                labelText: label,
-                labelStyle: GoogleFonts.plusJakartaSans(color: const Color(0xFFA1A1AA), fontSize: 14),
+                hintText: 'Enter your name or nickname',
+                hintStyle: GoogleFonts.plusJakartaSans(color: Colors.white30, fontSize: 14),
                 border: InputBorder.none,
-                focusedBorder: InputBorder.none,
-                enabledBorder: InputBorder.none,
                 contentPadding: EdgeInsets.zero,
               ),
+              onChanged: (val) => setState(() => _name = val),
             ),
           ),
-          const SizedBox(width: 8),
-          Text(
-            unit,
-            style: GoogleFonts.syne(color: const Color(0xFFA1A1AA), fontSize: 14, fontWeight: FontWeight.bold),
+          const SizedBox(height: 14),
+
+          // Gender Selection
+          _buildInputContainer(
+            label: 'Biological Sex (for metabolic BMR formula)',
+            child: Row(
+              children: [
+                _buildRadioChip('Male', _gender == 'male', () => setState(() => _gender = 'male')),
+                const SizedBox(width: 8),
+                _buildRadioChip('Female', _gender == 'female', () => setState(() => _gender = 'female')),
+                const SizedBox(width: 8),
+                _buildRadioChip('Other', _gender == 'other', () => setState(() => _gender = 'other')),
+              ],
+            ),
           ),
+          const SizedBox(height: 14),
+
+          // Age & Height & Weight Row
+          Row(
+            children: [
+              Expanded(
+                child: _buildInputContainer(
+                  label: 'Age',
+                  child: TextField(
+                    controller: _ageController,
+                    keyboardType: TextInputType.number,
+                    style: GoogleFonts.plusJakartaSans(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+                    decoration: const InputDecoration(border: InputBorder.none, contentPadding: EdgeInsets.zero, suffixText: 'yrs', suffixStyle: TextStyle(color: Colors.white38)),
+                    onChanged: (val) {
+                      final parsed = int.tryParse(val);
+                      if (parsed != null) setState(() => _age = parsed);
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildInputContainer(
+                  label: 'Height',
+                  child: TextField(
+                    controller: _heightController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    style: GoogleFonts.plusJakartaSans(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+                    decoration: const InputDecoration(border: InputBorder.none, contentPadding: EdgeInsets.zero, suffixText: 'cm', suffixStyle: TextStyle(color: Colors.white38)),
+                    onChanged: (val) {
+                      final parsed = double.tryParse(val);
+                      if (parsed != null) setState(() => _heightCm = parsed);
+                    },
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: _buildInputContainer(
+                  label: 'Weight',
+                  child: TextField(
+                    controller: _weightController,
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    style: GoogleFonts.plusJakartaSans(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w600),
+                    decoration: const InputDecoration(border: InputBorder.none, contentPadding: EdgeInsets.zero, suffixText: 'kg', suffixStyle: TextStyle(color: Colors.white38)),
+                    onChanged: (val) {
+                      final parsed = double.tryParse(val);
+                      if (parsed != null) setState(() => _weightKg = parsed);
+                    },
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 32),
+
+          // Navigation Buttons
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: BorderSide(color: Colors.white.withOpacity(0.12)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                  ),
+                  onPressed: () => setState(() => _currentStep = 0),
+                  child: const Text('Back'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: canProceed ? const Color(0xFF00FFA3) : const Color(0xFF1E293B),
+                    foregroundColor: canProceed ? Colors.black : Colors.white38,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                  ),
+                  onPressed: canProceed ? () => setState(() => _currentStep = 2) : null,
+                  child: Text('Continue', style: GoogleFonts.syne(fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
         ],
       ),
     );
   }
 
-  // SCREEN 3: CHOOSE YOUR COACH'S SOUL
+  // ─── SCREEN 2: GOALS & LIFESTYLE ───
+  Widget _buildGoalsAndLifestyleScreen() {
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 12),
+          Center(
+            child: AuraOrb(soul: _selectedSoul, state: OrbState.pulsing, size: 70),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'Your Transformation Goal',
+            style: GoogleFonts.syne(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'Select your target physique outcome and training schedule.',
+            style: GoogleFonts.plusJakartaSans(color: const Color(0xFFA1A1AA), fontSize: 13),
+          ),
+          const SizedBox(height: 20),
+
+          // Goal Selector Cards
+          _buildGoalCard(
+            goal: GoalType.fatLoss,
+            title: 'Burn Fat & Get Lean',
+            subtitle: 'Calorie deficit targeting maximum fat burn while retaining muscle.',
+            icon: LucideIcons.flame,
+          ),
+          const SizedBox(height: 10),
+          _buildGoalCard(
+            goal: GoalType.recomp,
+            title: 'Lose Fat & Build Muscle (Recomp)',
+            subtitle: 'High-protein balance for simultaneous fat loss and hypertrophy.',
+            icon: LucideIcons.refreshCw,
+          ),
+          const SizedBox(height: 10),
+          _buildGoalCard(
+            goal: GoalType.muscleGain,
+            title: 'Build Muscle & Strength',
+            subtitle: 'Slight calorie surplus focusing on progressive overload and size.',
+            icon: LucideIcons.dumbbell,
+          ),
+          const SizedBox(height: 20),
+
+          // Training Days Frequency
+          Text(
+            'Weekly Workout Frequency',
+            style: GoogleFonts.syne(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Row(
+            children: [3, 4, 5, 6].map((days) {
+              final isSelected = _daysPerWeek == days;
+              return Expanded(
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 3.0),
+                  child: GestureDetector(
+                    onTap: () => setState(() => _daysPerWeek = days),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      decoration: BoxDecoration(
+                        color: isSelected ? const Color(0xFF00FFA3).withOpacity(0.15) : const Color(0xFF141217),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: isSelected ? const Color(0xFF00FFA3) : Colors.white.withOpacity(0.08)),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        '$days Days',
+                        style: GoogleFonts.syne(
+                          color: isSelected ? Colors.white : const Color(0xFFA1A1AA),
+                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                          fontSize: 13,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              );
+            }).toList(),
+          ),
+          const SizedBox(height: 20),
+
+          // Dietary Preference
+          Text(
+            'Dietary Preference',
+            style: GoogleFonts.syne(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _buildDietChip('Non-Veg', 'nonVeg'),
+              _buildDietChip('Vegetarian', 'vegetarian'),
+              _buildDietChip('Eggetarian', 'eggetarian'),
+              _buildDietChip('Vegan', 'vegan'),
+            ],
+          ),
+          const SizedBox(height: 32),
+
+          // Navigation
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: BorderSide(color: Colors.white.withOpacity(0.12)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                  ),
+                  onPressed: () => setState(() => _currentStep = 1),
+                  child: const Text('Back'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00FFA3),
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                  ),
+                  onPressed: () => setState(() => _currentStep = 3),
+                  child: Text('Continue', style: GoogleFonts.syne(fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+        ],
+      ),
+    );
+  }
+
+  // ─── SCREEN 3: EQUIPMENT SETUP ───
+  Widget _buildEquipmentScreen() {
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 12),
+          Center(
+            child: AuraOrb(soul: _selectedSoul, state: OrbState.pulsing, size: 70),
+          ),
+          const SizedBox(height: 24),
+          Text(
+            'What equipment do you have?',
+            style: GoogleFonts.syne(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 6),
+          Text(
+            'AURA will strictly tailor all prescribed exercises to what you have access to.',
+            style: GoogleFonts.plusJakartaSans(color: const Color(0xFFA1A1AA), fontSize: 13),
+          ),
+          const SizedBox(height: 20),
+
+          _buildEquipmentOptionCard(
+            presetKey: 'bodyweight',
+            title: 'Bodyweight Only (No Gear)',
+            description: 'Calisthenics, functional core, and bodyweight movements at home or traveling.',
+            icon: LucideIcons.user,
+          ),
+          const SizedBox(height: 10),
+          _buildEquipmentOptionCard(
+            presetKey: 'dumbbells',
+            title: 'Dumbbells & Resistance Bands',
+            description: 'Home setup with adjustable or fixed dumbbells and band accessories.',
+            icon: LucideIcons.dumbbell,
+          ),
+          const SizedBox(height: 10),
+          _buildEquipmentOptionCard(
+            presetKey: 'full_gym',
+            title: 'Full Commercial Gym Access',
+            description: 'Full access to barbells, cable stations, leg presses, and specialty machines.',
+            icon: LucideIcons.building,
+          ),
+          const SizedBox(height: 10),
+          _buildEquipmentOptionCard(
+            presetKey: 'custom',
+            title: 'Custom Gear / Specific Equipment',
+            description: 'Specify unique gear (e.g. "10kg weight bag", "doorway pull-up bar", "kettlebell").',
+            icon: LucideIcons.sliders,
+          ),
+
+          if (_equipmentPreset == 'custom') ...[
+            const SizedBox(height: 12),
+            _buildInputContainer(
+              label: 'Your Custom Equipment Details',
+              child: TextField(
+                controller: _customEquipmentController,
+                style: GoogleFonts.plusJakartaSans(color: Colors.white, fontSize: 14),
+                decoration: const InputDecoration(
+                  hintText: 'e.g. 10kg Workout Bag, Resistance Bands',
+                  hintStyle: TextStyle(color: Colors.white30, fontSize: 13),
+                  border: InputBorder.none,
+                ),
+                onChanged: (val) => setState(() => _customEquipmentNote = val),
+              ),
+            ),
+          ],
+
+          const SizedBox(height: 32),
+
+          // Navigation
+          Row(
+            children: [
+              Expanded(
+                child: OutlinedButton(
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: Colors.white,
+                    side: BorderSide(color: Colors.white.withOpacity(0.12)),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                  ),
+                  onPressed: () => setState(() => _currentStep = 2),
+                  child: const Text('Back'),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00FFA3),
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+                    padding: const EdgeInsets.symmetric(vertical: 15),
+                  ),
+                  onPressed: () => setState(() => _currentStep = 4),
+                  child: Text('Continue', style: GoogleFonts.syne(fontWeight: FontWeight.bold)),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+        ],
+      ),
+    );
+  }
+
+  // ─── SCREEN 4: CHOOSE COACH SOUL ───
   Widget _buildSoulScreen() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const SizedBox(height: 20),
+        const SizedBox(height: 12),
+        Center(
+          child: AuraOrb(soul: _selectedSoul, state: OrbState.pulsing, size: 70),
+        ),
+        const SizedBox(height: 24),
         Text(
           "Choose Your Coach's Soul",
-          style: GoogleFonts.syne(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+          style: GoogleFonts.syne(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
         ),
-        const SizedBox(height: 8),
+        const SizedBox(height: 6),
         Text(
-          'How do you want me to talk to you?',
+          'How do you want AURA to communicate and keep you accountable?',
           style: GoogleFonts.plusJakartaSans(color: const Color(0xFFA1A1AA), fontSize: 13),
         ),
-        const SizedBox(height: 32),
+        const SizedBox(height: 24),
+
         _buildSoulCard(
           soul: CoachSoul.supporter,
           title: 'The Supporter',
-          description: 'Gentle, encouraging, and celebrates small wins.',
+          description: 'Gentle, empathetic, and celebrates consistency and small wins.',
           colorsLabel: 'Sage / Lavender Orb',
         ),
         const SizedBox(height: 12),
         _buildSoulCard(
           soul: CoachSoul.pro,
           title: 'The Pro',
-          description: 'Direct, keep-on-track, and highly metrics-focused.',
+          description: 'Direct, metrics-driven, and maintains high discipline standards.',
           colorsLabel: 'Electric Blue / Neon Magenta Orb',
         ),
         const SizedBox(height: 12),
         _buildSoulCard(
           soul: CoachSoul.teacher,
           title: 'The Teacher',
-          description: 'Educational, analytical, and explains how your body works.',
+          description: 'Educational, analytical, and explains the physiological why behind each plan.',
           colorsLabel: 'Teal / Silver Orb',
         ),
         const Spacer(),
+
         Row(
           children: [
             Expanded(
               child: OutlinedButton(
                 style: OutlinedButton.styleFrom(
                   foregroundColor: Colors.white,
-                  side: BorderSide(color: Colors.white.withOpacity(0.1)),
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  side: BorderSide(color: Colors.white.withOpacity(0.12)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+                  padding: const EdgeInsets.symmetric(vertical: 15),
                 ),
-                onPressed: () => setState(() => _currentStep = 1),
+                onPressed: () => setState(() => _currentStep = 3),
                 child: const Text('Back'),
               ),
             ),
@@ -394,17 +856,364 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 style: ElevatedButton.styleFrom(
                   backgroundColor: const Color(0xFF00FFA3),
                   foregroundColor: Colors.black,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(28)),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+                  padding: const EdgeInsets.symmetric(vertical: 15),
                 ),
-                onPressed: () => setState(() => _currentStep = 3),
-                child: Text('Continue', style: GoogleFonts.syne(fontWeight: FontWeight.bold)),
+                onPressed: () => setState(() => _currentStep = 5),
+                child: Text('Review Plan', style: GoogleFonts.syne(fontWeight: FontWeight.bold)),
               ),
             ),
           ],
         ),
         const SizedBox(height: 16),
       ],
+    );
+  }
+
+  // ─── SCREEN 5: PLAN SUMMARY & AUTH ───
+  Widget _buildPlanSummaryScreen() {
+    final equipSummary = _buildFinalEquipmentList().map((e) => e.toString()).join(', ');
+
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const SizedBox(height: 10),
+          Center(
+            child: AuraOrb(soul: _selectedSoul, state: OrbState.pulsing, size: 75),
+          ),
+          const SizedBox(height: 18),
+          Text(
+            "Calibration Ready for ${_name.trim().isNotEmpty ? _name.trim() : 'You'}",
+            style: GoogleFonts.syne(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            "Review your parameters before AURA generates your live program:",
+            style: GoogleFonts.plusJakartaSans(color: const Color(0xFFA1A1AA), fontSize: 13),
+          ),
+          const SizedBox(height: 16),
+
+          // Parameter Summary Card
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: const Color(0xFF141217),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white.withOpacity(0.08)),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      'AI CALIBRATION PROFILE',
+                      style: GoogleFonts.syne(
+                        color: const Color(0xFF00FFA3),
+                        fontSize: 11,
+                        fontWeight: FontWeight.bold,
+                        letterSpacing: 1.2,
+                      ),
+                    ),
+                    const Icon(LucideIcons.sparkles, color: Color(0xFF00FFA3), size: 14),
+                  ],
+                ),
+                const SizedBox(height: 14),
+                _buildSummaryRow(LucideIcons.user, 'Athlete', '${_name.trim().isNotEmpty ? _name.trim() : "Athlete"} (${_age}y, ${_gender.toUpperCase()})'),
+                _buildSummaryRow(LucideIcons.scale, 'Metrics', '${_heightCm.round()} cm / ${_weightKg.round()} kg → Target: ${_getTargetWeight().round()} kg'),
+                _buildSummaryRow(LucideIcons.target, 'Focus', '${_selectedGoal.displayName} (${_getTargetPhysique()})'),
+                _buildSummaryRow(LucideIcons.calendar, 'Schedule', '$_daysPerWeek Days/Week'),
+                _buildSummaryRow(LucideIcons.utensils, 'Nutrition', _dietaryPreference.toUpperCase()),
+                _buildSummaryRow(LucideIcons.dumbbell, 'Equipment', equipSummary),
+                _buildSummaryRow(LucideIcons.bot, 'Coach Tone', _selectedSoul.name.toUpperCase()),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // Continue with Google
+          SizedBox(
+            width: double.infinity,
+            height: 50,
+            child: ElevatedButton.icon(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.white,
+                foregroundColor: Colors.black87,
+                elevation: 2,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(25)),
+              ),
+              onPressed: () => _runCalibrationAndComplete(useGoogleAuth: true),
+              icon: Container(
+                width: 22,
+                height: 22,
+                alignment: Alignment.center,
+                child: const Text('G', style: TextStyle(color: Color(0xFF4285F4), fontWeight: FontWeight.w900, fontSize: 16)),
+              ),
+              label: Text("Continue with Google", style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 15)),
+            ),
+          ),
+          const SizedBox(height: 10),
+
+          // Activate as Guest
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF00FFA3),
+                side: const BorderSide(color: Color(0x6000FFA3)),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+              ),
+              onPressed: () => _runCalibrationAndComplete(useGoogleAuth: false),
+              child: Text("Activate as Guest", style: GoogleFonts.syne(fontWeight: FontWeight.bold, fontSize: 14)),
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          Center(
+            child: TextButton(
+              onPressed: () => setState(() => _currentStep = 4),
+              child: Text('Edit soul selection', style: GoogleFonts.plusJakartaSans(color: const Color(0xFFA1A1AA), fontSize: 12)),
+            ),
+          ),
+          const SizedBox(height: 16),
+        ],
+      ),
+    );
+  }
+
+  // ─── SCREEN 6: CALIBRATION LOADING ───
+  Widget _buildCalibrationLoadingScreen() {
+    String stepText = '';
+    switch (_calibrationProgressStep) {
+      case 1:
+        stepText = 'Initializing secure state link for ${_name.trim().isNotEmpty ? _name.trim() : "you"}...';
+        break;
+      case 2:
+        stepText = 'Calculating dynamic Mifflin-St Jeor metabolic baseline...';
+        break;
+      case 3:
+        stepText = 'Designing personalized workout prescription...';
+        break;
+      case 4:
+        stepText = 'Launching AURA Transformation Engine...';
+        break;
+    }
+
+    if (_calibrationError != null) {
+      return Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          const Icon(LucideIcons.alertTriangle, color: Colors.redAccent, size: 48),
+          const SizedBox(height: 16),
+          Text(
+            'Calibration Error',
+            style: GoogleFonts.syne(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            _calibrationError!,
+            style: const TextStyle(color: Colors.redAccent, fontSize: 13),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 28),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00FFA3), foregroundColor: Colors.black),
+            onPressed: () => _runCalibrationAndComplete(),
+            child: const Text('Retry Calibration'),
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      mainAxisAlignment: MainAxisAlignment.center,
+      children: [
+        AuraOrb(soul: _selectedSoul, state: OrbState.pulsing, size: 140),
+        const SizedBox(height: 36),
+        Text(
+          'Calibrating AURA',
+          style: GoogleFonts.syne(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 12),
+        Text(
+          stepText,
+          style: GoogleFonts.plusJakartaSans(color: const Color(0xFFA1A1AA), fontSize: 14),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 32),
+        SizedBox(
+          width: 180,
+          child: LinearProgressIndicator(
+            value: _calibrationProgressStep / 4.0,
+            backgroundColor: Colors.white12,
+            valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF00FFA3)),
+            borderRadius: BorderRadius.circular(4),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ─── REUSABLE UI HELPERS ───
+
+  Widget _buildInputContainer({required String label, required Widget child}) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      decoration: BoxDecoration(
+        color: const Color(0xFF141217),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: Colors.white.withOpacity(0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: GoogleFonts.plusJakartaSans(color: const Color(0xFFA1A1AA), fontSize: 12, fontWeight: FontWeight.w500),
+          ),
+          const SizedBox(height: 4),
+          child,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildRadioChip(String label, bool isSelected, VoidCallback onTap) {
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? const Color(0xFF00FFA3).withOpacity(0.12) : Colors.transparent,
+            borderRadius: BorderRadius.circular(8),
+            border: Border.all(color: isSelected ? const Color(0xFF00FFA3) : Colors.white12),
+          ),
+          alignment: Alignment.center,
+          child: Text(
+            label,
+            style: GoogleFonts.plusJakartaSans(
+              color: isSelected ? Colors.white : Colors.white60,
+              fontSize: 13,
+              fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildGoalCard({
+    required GoalType goal,
+    required String title,
+    required String subtitle,
+    required IconData icon,
+  }) {
+    final isSelected = _selectedGoal == goal;
+    return GestureDetector(
+      onTap: () => setState(() => _selectedGoal = goal),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF00FFA3).withOpacity(0.10) : const Color(0xFF141217),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: isSelected ? const Color(0xFF00FFA3) : Colors.white.withOpacity(0.08), width: isSelected ? 1.5 : 1.0),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: isSelected ? const Color(0xFF00FFA3).withOpacity(0.2) : Colors.white.withOpacity(0.04),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: isSelected ? const Color(0xFF00FFA3) : Colors.white60, size: 20),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: GoogleFonts.syne(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                  const SizedBox(height: 3),
+                  Text(subtitle, style: GoogleFonts.plusJakartaSans(color: const Color(0xFFA1A1AA), fontSize: 11)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDietChip(String label, String value) {
+    final isSelected = _dietaryPreference == value;
+    return GestureDetector(
+      onTap: () => setState(() => _dietaryPreference = value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF00FFA3).withOpacity(0.15) : const Color(0xFF141217),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: isSelected ? const Color(0xFF00FFA3) : Colors.white.withOpacity(0.08)),
+        ),
+        child: Text(
+          label,
+          style: GoogleFonts.plusJakartaSans(
+            color: isSelected ? Colors.white : const Color(0xFFA1A1AA),
+            fontSize: 12,
+            fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildEquipmentOptionCard({
+    required String presetKey,
+    required String title,
+    required String description,
+    required IconData icon,
+  }) {
+    final isSelected = _equipmentPreset == presetKey;
+    return GestureDetector(
+      onTap: () => setState(() => _equipmentPreset = presetKey),
+      child: Container(
+        padding: const EdgeInsets.all(14),
+        decoration: BoxDecoration(
+          color: isSelected ? const Color(0xFF00FFA3).withOpacity(0.10) : const Color(0xFF141217),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: isSelected ? const Color(0xFF00FFA3) : Colors.white.withOpacity(0.08), width: isSelected ? 1.5 : 1.0),
+        ),
+        child: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: isSelected ? const Color(0xFF00FFA3).withOpacity(0.2) : Colors.white.withOpacity(0.04),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: isSelected ? const Color(0xFF00FFA3) : Colors.white60, size: 20),
+            ),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(title, style: GoogleFonts.syne(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
+                  const SizedBox(height: 3),
+                  Text(description, style: GoogleFonts.plusJakartaSans(color: const Color(0xFFA1A1AA), fontSize: 11)),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -438,34 +1247,30 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     return GestureDetector(
       onTap: () => setState(() => _selectedSoul = soul),
       child: Container(
-        padding: const EdgeInsets.all(16),
+        padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: isSelected ? highlightColor : const Color(0xFF141217),
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: borderColor),
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: borderColor, width: isSelected ? 1.5 : 1.0),
         ),
         child: Row(
           children: [
-            AuraOrb(soul: soul, state: OrbState.pulsing, size: 60),
-            const SizedBox(width: 16),
+            AuraOrb(soul: soul, state: OrbState.pulsing, size: 52),
+            const SizedBox(width: 14),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
                     title,
-                    style: GoogleFonts.syne(
-                      color: Colors.white,
-                      fontWeight: FontWeight.bold,
-                      fontSize: 15,
-                    ),
+                    style: GoogleFonts.syne(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
                   ),
-                  const SizedBox(height: 4),
+                  const SizedBox(height: 3),
                   Text(
                     description,
                     style: GoogleFonts.plusJakartaSans(color: const Color(0xFFA1A1AA), fontSize: 12),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 4),
                   Text(
                     colorsLabel,
                     style: GoogleFonts.plusJakartaSans(
@@ -483,219 +1288,23 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     );
   }
 
-  // SCREEN 4: THE SUNK-COST REVEAL
-  Widget _buildSunkCostScreen() {
-    String goalText = _selectedGoal == GoalType.fatLoss ? 'Fat Loss' : 'Body Recomposition';
-
-    return SingleChildScrollView(
-      child: Column(
+  Widget _buildSummaryRow(IconData icon, String label, String value) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8.0),
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 10),
-          Center(
-            child: AuraOrb(soul: _selectedSoul, state: OrbState.pulsing, size: 80),
-          ),
-          const SizedBox(height: 20),
-          Text(
-            "I've built your first 7 days.",
-            style: GoogleFonts.syne(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 4),
-          Text(
-            "It focuses on $goalText. Here is your baseline plan:",
-            style: GoogleFonts.plusJakartaSans(color: const Color(0xFFA1A1AA), fontSize: 13),
-          ),
-          const SizedBox(height: 16),
-          // Unblurred Plan Card
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: const Color(0xFF141217),
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white.withOpacity(0.08)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      'AURA CALIBRATION PLAN',
-                      style: GoogleFonts.syne(
-                        color: const Color(0xFF00FFA3),
-                        fontSize: 11,
-                        fontWeight: FontWeight.bold,
-                        letterSpacing: 1.2,
-                      ),
-                    ),
-                    const Icon(LucideIcons.sparkles, color: Color(0xFF00FFA3), size: 14),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                Row(
-                  children: [
-                    const Icon(LucideIcons.activity, color: Colors.white70, size: 16),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Focus: $goalText',
-                      style: GoogleFonts.plusJakartaSans(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Icon(LucideIcons.user, color: Colors.white70, size: 16),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Baselines: ${_heightCm.round()} cm / ${_weightKg.round()} kg',
-                      style: GoogleFonts.plusJakartaSans(color: Colors.white70, fontSize: 13),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Row(
-                  children: [
-                    const Icon(LucideIcons.compass, color: Colors.white70, size: 16),
-                    const SizedBox(width: 8),
-                    Text(
-                      'Coach Soul: ${_selectedSoul.name.toUpperCase()}',
-                      style: GoogleFonts.plusJakartaSans(color: Colors.white70, fontSize: 13),
-                    ),
-                  ],
-                ),
-              ],
+          Icon(icon, color: Colors.white60, size: 15),
+          const SizedBox(width: 8),
+          Text('$label: ', style: GoogleFonts.plusJakartaSans(color: Colors.white54, fontSize: 12, fontWeight: FontWeight.w600)),
+          Expanded(
+            child: Text(
+              value,
+              style: GoogleFonts.plusJakartaSans(color: Colors.white, fontSize: 12, fontWeight: FontWeight.w600),
             ),
           ),
-          const SizedBox(height: 32),
-          // Single Primary Action Button: "Activate My Plan"
-          SizedBox(
-            width: double.infinity,
-            height: 52,
-            child: ElevatedButton(
-              style: ElevatedButton.styleFrom(
-                backgroundColor: const Color(0xFF00FFA3),
-                foregroundColor: Colors.black,
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
-              ),
-              onPressed: () => _runCalibrationAndComplete(),
-              child: Text(
-                "Activate My Plan",
-                style: GoogleFonts.syne(
-                  fontWeight: FontWeight.bold,
-                  fontSize: 16,
-                  letterSpacing: 0.5,
-                ),
-              ),
-            ),
-          ),
-          const SizedBox(height: 16),
-          Center(
-            child: TextButton(
-              onPressed: () => setState(() => _currentStep = 2),
-              child: Text(
-                'Back to soul selection',
-                style: GoogleFonts.plusJakartaSans(color: const Color(0xFFA1A1AA), fontSize: 12),
-              ),
-            ),
-          ),
-          const SizedBox(height: 20),
         ],
       ),
-    );
-  }
-
-  // SCREEN 5: CALIBRATION LOADING SCREEN
-  Widget _buildCalibrationLoadingScreen() {
-    String stepText = '';
-    switch (_calibrationProgressStep) {
-      case 1:
-        stepText = 'Initializing secure coach link...';
-        break;
-      case 2:
-        stepText = 'Generating custom vegetarian metabolic profile...';
-        break;
-      case 3:
-        stepText = 'Designing time-based active daily routine...';
-        break;
-      case 4:
-        stepText = 'Completing calibration...';
-        break;
-    }
-
-    if (_calibrationError != null) {
-      return Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Icon(LucideIcons.alertTriangle, color: Colors.redAccent, size: 48),
-          const SizedBox(height: 16),
-          Text(
-            'Calibration Failed',
-            style: GoogleFonts.syne(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            _calibrationError!,
-            style: const TextStyle(color: Colors.redAccent, fontSize: 13),
-            textAlign: TextAlign.center,
-          ),
-          const SizedBox(height: 32),
-          ElevatedButton(
-            onPressed: () {
-              setState(() {
-                _calibrationError = null;
-              });
-              _runCalibrationAndComplete();
-            },
-            child: const Text('Try Again'),
-          ),
-        ],
-      );
-    }
-
-    return Column(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        const SizedBox(height: 40),
-        AuraOrb(soul: _selectedSoul, state: OrbState.swirling, size: 200),
-        const SizedBox(height: 48),
-        Text(
-          'CALIBRATING AURA',
-          style: GoogleFonts.syne(
-            color: Colors.white,
-            fontSize: 16,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1.5,
-          ),
-        ),
-        const SizedBox(height: 16),
-        Text(
-          stepText,
-          style: GoogleFonts.plusJakartaSans(color: const Color(0xFFA1A1AA), fontSize: 13),
-          textAlign: TextAlign.center,
-        ),
-        const SizedBox(height: 24),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(4),
-          child: SizedBox(
-            width: 140,
-            height: 4,
-            child: LinearProgressIndicator(
-              value: _calibrationProgressStep / 4.0,
-              backgroundColor: Colors.white10,
-              valueColor: AlwaysStoppedAnimation<Color>(
-                _selectedSoul == CoachSoul.supporter
-                    ? const Color(0xFF9A7EB8)
-                    : _selectedSoul == CoachSoul.pro
-                        ? const Color(0xFFFF007A)
-                        : const Color(0xFF00BFA5),
-              ),
-            ),
-          ),
-        ),
-      ],
     );
   }
 }

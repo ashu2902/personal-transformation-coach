@@ -4,10 +4,24 @@ service cloud.firestore {
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
       
-      match /daily_logs/{dateStr} {
+      match /workouts/{dateStr} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }
-      
+      match /nutrition/{dateStr} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      match /recovery/{dateStr} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      match /progress/{dateStr} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      match /weekly_plans/{weekId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
+      match /master_context/{docId} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
       match /chats/{chatId}/{document=**} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }

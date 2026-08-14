@@ -55,10 +55,16 @@ To prevent beginner burnout, AURA monitors user activity metrics:
 
 ---
 
-## 3. Data Architecture (Firebase Sync)
+## 3. Data Architecture (Firebase Sync & Semantic State)
 
-AURA uses Cloud Firestore to maintain real-time state:
+AURA uses Cloud Firestore to maintain real-time distributed state:
 
-* **`users/{userId}/profile`**: Structured parameters (Age, height, weight, current goal, active injuries, initial/effective coaching style).
-* **`users/{userId}/daily_logs/{YYYY-MM-DD}`**: The day's active prescription (workout structures, logged activities, macro totals, water intake, sleep quality, muscle soreness score).
-* **`users/{userId}/chats/{chatId}/messages`**: History of conversational messages and parsed context summaries.
+* **`users/{userId}`**: Consolidated Canonical User State document containing:
+  - Demographic baselines (age, height, weight, goal, coaching soul, target physique).
+  - `equipmentList`: Semantic `EquipmentItem` entities (`name`, `category`, `weightKg`, `notes`) accommodating open-world equipment (e.g. 10kg sandbag, resistance bands).
+  - Deduced master context (active injuries, disliked movements, preferred protein, personal notes).
+* **`users/{userId}/workouts/{YYYY-MM-DD}`**: Active workout prescription and status.
+* **`users/{userId}/nutrition/{YYYY-MM-DD}`**: Daily macro targets, logged meals, and hydration.
+* **`users/{userId}/recovery/{YYYY-MM-DD}`**: Sleep hours, quality ratings, soreness scores, and energy levels.
+* **`users/{userId}/weekly_plans/{YYYY-Www}`**: 7-day adaptive workout and nutrition schedule.
+* **`users/{userId}/chats/{chatId}/messages`**: Full conversational thread.

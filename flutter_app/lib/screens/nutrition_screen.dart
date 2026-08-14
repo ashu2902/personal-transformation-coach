@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../providers/transformation_state.dart';
 import '../models/models.dart';
-import '../engine/food_database.dart';
 
 class NutritionScreen extends StatelessWidget {
   const NutritionScreen({super.key});
@@ -16,15 +16,18 @@ class NutritionScreen extends StatelessWidget {
         final notifier = ref.read(transformationEngineProvider.notifier);
         final nutrition = state.nutrition;
 
-        final totalCal = nutrition.meals.fold(0, (sum, m) => sum + m.calories);
-        final totalProt = nutrition.meals.fold(0, (sum, m) => sum + m.proteinG);
-        final totalCarbs = nutrition.meals.fold(0, (sum, m) => sum + m.carbsG);
-        final totalFat = nutrition.meals.fold(0, (sum, m) => sum + m.fatG);
+        final totalCal = nutrition.meals.fold(0, (total, m) => total + m.calories);
+        final totalProt = nutrition.meals.fold(0, (total, m) => total + m.proteinG);
+        final totalCarbs = nutrition.meals.fold(0, (total, m) => total + m.carbsG);
+        final totalFat = nutrition.meals.fold(0, (total, m) => total + m.fatG);
 
-        final calPercent =
-            (totalCal / nutrition.targetCalories).clamp(0.0, 1.0);
-        final protPercent =
-            (totalProt / nutrition.targetProteinG).clamp(0.0, 1.0);
+        final targetCal = nutrition.targetCalories > 0 ? nutrition.targetCalories : 2000;
+        final targetProt = nutrition.targetProteinG > 0 ? nutrition.targetProteinG : 150;
+        final targetCarbs = nutrition.targetCarbsG > 0 ? nutrition.targetCarbsG : 200;
+        final targetFat = nutrition.targetFatG > 0 ? nutrition.targetFatG : 60;
+
+        final calPercent = (totalCal / targetCal).clamp(0.0, 1.0);
+        final protPercent = (totalProt / targetProt).clamp(0.0, 1.0);
 
         return SingleChildScrollView(
           padding: const EdgeInsets.all(16.0),
@@ -35,9 +38,9 @@ class NutritionScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(18),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF141923),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFF1E2638)),
+                  color: const Color(0xFF141217),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: Colors.white.withOpacity(0.08)),
                 ),
                 child: Column(
                   children: [
@@ -47,35 +50,47 @@ class NutritionScreen extends StatelessWidget {
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('ENERGY INTAKE',
-                                style: TextStyle(
-                                    color: Color(0xFFA1A1AA),
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 1.0)),
-                            const SizedBox(height: 2),
-                            Text('$totalCal / ${nutrition.targetCalories} kcal',
-                                style: const TextStyle(
-                                    color: Colors.white,
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold)),
+                            Text(
+                              'ENERGY INTAKE',
+                              style: GoogleFonts.syne(
+                                color: const Color(0xFFA1A1AA),
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.0,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '$totalCal / $targetCal kcal',
+                              style: GoogleFonts.syne(
+                                color: Colors.white,
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ],
                         ),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.end,
                           children: [
-                            const Text('PROTEIN TARGET',
-                                style: TextStyle(
-                                    color: Color(0xFF10B981),
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 1.0)),
-                            const SizedBox(height: 2),
-                            Text('$totalProt / ${nutrition.targetProteinG} g',
-                                style: const TextStyle(
-                                    color: Color(0xFF10B981),
-                                    fontSize: 18,
-                                    fontWeight: FontWeight.bold)),
+                            Text(
+                              'PROTEIN TARGET',
+                              style: GoogleFonts.syne(
+                                color: const Color(0xFF00FFA3),
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.0,
+                              ),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(
+                              '$totalProt / ${targetProt}g',
+                              style: GoogleFonts.syne(
+                                color: const Color(0xFF00FFA3),
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
                           ],
                         ),
                       ],
@@ -86,9 +101,8 @@ class NutritionScreen extends StatelessWidget {
                       child: LinearProgressIndicator(
                         value: calPercent,
                         minHeight: 10,
-                        backgroundColor: const Color(0xFF1E2638),
-                        valueColor:
-                            const AlwaysStoppedAnimation(Color(0xFF10B981)),
+                        backgroundColor: Colors.white.withOpacity(0.06),
+                        valueColor: const AlwaysStoppedAnimation(Color(0xFF00FFA3)),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -96,21 +110,23 @@ class NutritionScreen extends StatelessWidget {
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
                       children: [
                         _buildMacroPill(
-                            'Protein',
-                            '${totalProt}g / ${nutrition.targetProteinG}g',
-                            protPercent,
-                            const Color(0xFF10B981)),
+                          'Protein',
+                          '${totalProt}g / ${targetProt}g',
+                          protPercent,
+                          const Color(0xFF00FFA3),
+                        ),
                         _buildMacroPill(
-                            'Carbs',
-                            '${totalCarbs}g / ${nutrition.targetCarbsG}g',
-                            (totalCarbs / nutrition.targetCarbsG)
-                                .clamp(0.0, 1.0),
-                            const Color(0xFF3B82F6)),
+                          'Carbs',
+                          '${totalCarbs}g / ${targetCarbs}g',
+                          (totalCarbs / targetCarbs).clamp(0.0, 1.0),
+                          const Color(0xFF38BDF8),
+                        ),
                         _buildMacroPill(
-                            'Fats',
-                            '${totalFat}g / ${nutrition.targetFatG}g',
-                            (totalFat / nutrition.targetFatG).clamp(0.0, 1.0),
-                            const Color(0xFFF59E0B)),
+                          'Fats',
+                          '${totalFat}g / ${targetFat}g',
+                          (totalFat / targetFat).clamp(0.0, 1.0),
+                          const Color(0xFFFBBF24),
+                        ),
                       ],
                     ),
                   ],
@@ -122,9 +138,9 @@ class NutritionScreen extends StatelessWidget {
               Container(
                 padding: const EdgeInsets.all(16),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF141923),
+                  color: const Color(0xFF141217),
                   borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: const Color(0xFF1E2638)),
+                  border: Border.all(color: Colors.white.withOpacity(0.08)),
                 ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -134,29 +150,33 @@ class NutritionScreen extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: const Color(0x2006B6D4),
-                            borderRadius: BorderRadius.circular(10),
+                            color: const Color(0xFF38BDF8).withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(12),
                           ),
-                          child: const Icon(LucideIcons.droplets,
-                              color: Color(0xFF06B6D4), size: 20),
+                          child: const Icon(LucideIcons.droplets, color: Color(0xFF38BDF8), size: 20),
                         ),
                         const SizedBox(width: 12),
                         Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            const Text('HYDRATION',
-                                style: TextStyle(
-                                    color: Color(0xFFA1A1AA),
-                                    fontSize: 10,
-                                    fontWeight: FontWeight.bold,
-                                    letterSpacing: 1.0)),
+                            Text(
+                              'HYDRATION',
+                              style: GoogleFonts.syne(
+                                color: const Color(0xFFA1A1AA),
+                                fontSize: 10,
+                                fontWeight: FontWeight.bold,
+                                letterSpacing: 1.0,
+                              ),
+                            ),
                             const SizedBox(height: 2),
                             Text(
-                                '${nutrition.waterMl} / ${nutrition.targetWaterMl} ml',
-                                style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 14)),
+                              '${nutrition.waterMl} / ${nutrition.targetWaterMl > 0 ? nutrition.targetWaterMl : 3000} ml',
+                              style: GoogleFonts.syne(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                              ),
+                            ),
                           ],
                         ),
                       ],
@@ -165,111 +185,145 @@ class NutritionScreen extends StatelessWidget {
                       children: [
                         OutlinedButton(
                           style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF06B6D4),
-                            side: const BorderSide(color: Color(0x6006B6D4)),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10)),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 8),
+                            foregroundColor: const Color(0xFF38BDF8),
+                            side: BorderSide(color: const Color(0xFF38BDF8).withOpacity(0.4)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                           ),
                           onPressed: () => notifier.addWater(250),
-                          child: const Text('+250 ml',
-                              style: TextStyle(
-                                  fontSize: 11, fontWeight: FontWeight.bold)),
+                          child: const Text('+250 ml', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                         ),
                         const SizedBox(width: 6),
                         OutlinedButton(
                           style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF06B6D4),
-                            side: const BorderSide(color: Color(0x6006B6D4)),
-                            shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(10)),
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 10, vertical: 8),
+                            foregroundColor: const Color(0xFF38BDF8),
+                            side: BorderSide(color: const Color(0xFF38BDF8).withOpacity(0.4)),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
                           ),
                           onPressed: () => notifier.addWater(500),
-                          child: const Text('+500 ml',
-                              style: TextStyle(
-                                  fontSize: 11, fontWeight: FontWeight.bold)),
+                          child: const Text('+500 ml', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                         ),
                       ],
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
+              const SizedBox(height: 18),
 
               // Meal History & Quick Log Header
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  const Text('LOGGED MEALS',
-                      style: TextStyle(
-                          color: Color(0xFF10B981),
-                          fontSize: 10,
-                          fontWeight: FontWeight.bold,
-                          letterSpacing: 1.2)),
-                  TextButton.icon(
-                    onPressed: () => _showAddMealDialog(context, notifier),
-                    icon: const Icon(LucideIcons.plusCircle,
-                        size: 14, color: Color(0xFF10B981)),
-                    label: const Text('Add Meal',
-                        style: TextStyle(
-                            color: Color(0xFF10B981),
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold)),
+                  Text(
+                    'LOGGED MEALS',
+                    style: GoogleFonts.syne(
+                      color: const Color(0xFF00FFA3),
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                  ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF00FFA3),
+                      foregroundColor: Colors.black,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    ),
+                    onPressed: () => _showAddAIMealDialog(context, notifier),
+                    icon: const Icon(LucideIcons.sparkles, size: 14, color: Colors.black),
+                    label: Text(
+                      'Log Meal with AI',
+                      style: GoogleFonts.syne(fontSize: 12, fontWeight: FontWeight.bold),
+                    ),
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
+              const SizedBox(height: 12),
 
-              ...nutrition.meals.map((meal) {
-                return Container(
-                  margin: const EdgeInsets.only(bottom: 10),
-                  padding: const EdgeInsets.all(14),
+              if (nutrition.meals.isEmpty)
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(28),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF141923),
+                    color: const Color(0xFF141217),
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFF1E2638)),
+                    border: Border.all(color: Colors.white.withOpacity(0.06)),
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  child: Column(
                     children: [
-                      Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(meal.name,
-                              style: const TextStyle(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14)),
-                          const SizedBox(height: 4),
-                          Text(
-                            'P: ${meal.proteinG}g  •  C: ${meal.carbsG}g  •  F: ${meal.fatG}g',
-                            style: const TextStyle(
-                                color: Color(0xFFA1A1AA), fontSize: 11),
-                          ),
-                        ],
+                      Icon(LucideIcons.utensils, color: Colors.white.withOpacity(0.2), size: 32),
+                      const SizedBox(height: 12),
+                      Text(
+                        'No meals logged today yet',
+                        style: GoogleFonts.syne(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
                       ),
-                      Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 10, vertical: 6),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFF1E2638),
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                        child: Text(
-                          '${meal.calories} kcal',
-                          style: const TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12),
-                        ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Tap "+ Log Meal with AI" to describe what you ate in natural language.',
+                        style: GoogleFonts.plusJakartaSans(color: const Color(0xFFA1A1AA), fontSize: 12),
+                        textAlign: TextAlign.center,
                       ),
                     ],
                   ),
-                );
-              }),
+                )
+              else
+                ...nutrition.meals.map((meal) {
+                  return Container(
+                    margin: const EdgeInsets.only(bottom: 10),
+                    padding: const EdgeInsets.all(14),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF141217),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: Colors.white.withOpacity(0.08)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                meal.name,
+                                style: GoogleFonts.syne(
+                                  color: Colors.white,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 14,
+                                ),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'Protein: ${meal.proteinG}g  •  Carbs: ${meal.carbsG}g  •  Fat: ${meal.fatG}g',
+                                style: GoogleFonts.plusJakartaSans(
+                                  color: const Color(0xFFA1A1AA),
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF00FFA3).withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFF00FFA3).withOpacity(0.2)),
+                          ),
+                          child: Text(
+                            '${meal.calories} kcal',
+                            style: GoogleFonts.syne(
+                              color: const Color(0xFF00FFA3),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  );
+                }),
             ],
           ),
         );
@@ -277,53 +331,95 @@ class NutritionScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildMacroPill(
-      String label, String value, double percent, Color color) {
+  Widget _buildMacroPill(String label, String value, double percent, Color color) {
     return Column(
       children: [
-        Text(label,
-            style: TextStyle(
-                color: color, fontSize: 11, fontWeight: FontWeight.bold)),
+        Text(label, style: GoogleFonts.syne(color: color, fontSize: 11, fontWeight: FontWeight.bold)),
         const SizedBox(height: 2),
-        Text(value, style: const TextStyle(color: Colors.white, fontSize: 10)),
+        Text(value, style: GoogleFonts.plusJakartaSans(color: Colors.white, fontSize: 11)),
       ],
     );
   }
 
-  void _showAddMealDialog(
-      BuildContext context, TransformationEngineNotifier notifier) {
+  void _showAddAIMealDialog(BuildContext context, TransformationEngineNotifier notifier) {
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF141923),
+      backgroundColor: const Color(0xFF0E0E12),
       shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
-      builder: (ctx) => const FoodSearchLoggerModal(),
-    ).then((selectedMeal) {
-      if (selectedMeal != null && selectedMeal is MealItem) {
-        notifier.addMeal(selectedMeal);
-      }
-    });
+      builder: (ctx) => AIMealLoggerModal(notifier: notifier),
+    );
   }
 }
 
-class FoodSearchLoggerModal extends StatefulWidget {
-  const FoodSearchLoggerModal({super.key});
+class AIMealLoggerModal extends StatefulWidget {
+  final TransformationEngineNotifier notifier;
+
+  const AIMealLoggerModal({super.key, required this.notifier});
 
   @override
-  State<FoodSearchLoggerModal> createState() => _FoodSearchLoggerModalState();
+  State<AIMealLoggerModal> createState() => _AIMealLoggerModalState();
 }
 
-class _FoodSearchLoggerModalState extends State<FoodSearchLoggerModal> {
-  final _searchCtrl = TextEditingController();
-  final _portionCtrl = TextEditingController();
-  FoodItemDefinition? _selectedFood;
+class _AIMealLoggerModalState extends State<AIMealLoggerModal> {
+  final _inputCtrl = TextEditingController();
+  bool _isEstimating = false;
+  MealItem? _estimatedMeal;
+  String? _errorMessage;
+
+  final List<String> _quickSuggestions = [
+    '3 Scrambled Eggs & Sourdough Toast',
+    'Grilled Chicken Breast & Rice Bowl',
+    'Double Scoop Whey Protein Shake & Oats',
+    'Greek Yogurt with Berries & Almonds',
+    'Paneer Tikka with 2 Roti & Salad',
+    'Salmon with Quinoa and Avocado',
+  ];
+
+  @override
+  void dispose() {
+    _inputCtrl.dispose();
+    super.dispose();
+  }
+
+  void _runAIEstimate(String text) async {
+    final clean = text.trim();
+    if (clean.isEmpty) return;
+
+    setState(() {
+      _isEstimating = true;
+      _errorMessage = null;
+    });
+
+    try {
+      final meal = await widget.notifier.aiService.estimateAIMealNutrition(clean);
+      if (mounted) {
+        setState(() {
+          _estimatedMeal = meal;
+          _isEstimating = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Could not calculate nutrition: $e';
+          _isEstimating = false;
+        });
+      }
+    }
+  }
+
+  void _commitMeal() {
+    if (_estimatedMeal != null) {
+      widget.notifier.addMeal(_estimatedMeal!);
+      Navigator.pop(context);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
-    final searchResults = FoodDatabase.search(_searchCtrl.text);
-
     return Padding(
       padding: EdgeInsets.only(
         left: 20,
@@ -332,213 +428,197 @@ class _FoodSearchLoggerModalState extends State<FoodSearchLoggerModal> {
         bottom: MediaQuery.of(context).viewInsets.bottom + 20,
       ),
       child: Container(
-        constraints: BoxConstraints(
-            maxHeight: MediaQuery.of(context).size.height * 0.75),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text('Food Library & Search',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontWeight: FontWeight.bold,
-                        fontSize: 16)),
-                IconButton(
-                  icon: const Icon(LucideIcons.x,
-                      color: Color(0xFFA1A1AA), size: 18),
-                  onPressed: () => Navigator.pop(context),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-
-            // Search Bar
-            TextField(
-              controller: _searchCtrl,
-              onChanged: (_) => setState(() {}),
-              style: const TextStyle(color: Colors.white, fontSize: 13),
-              decoration: InputDecoration(
-                hintText: 'Search chicken, oats, rice, eggs, salmon...',
-                hintStyle:
-                    const TextStyle(color: Color(0xFF71717A), fontSize: 12),
-                prefixIcon: const Icon(LucideIcons.search,
-                    color: Color(0xFF10B981), size: 16),
-                filled: true,
-                fillColor: const Color(0xFF0B0F17),
-                contentPadding:
-                    const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-                border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(12),
-                    borderSide: const BorderSide(color: Color(0xFF1E2638))),
+        constraints: BoxConstraints(maxHeight: MediaQuery.of(context).size.height * 0.85),
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Row(
+                    children: [
+                      const Icon(LucideIcons.sparkles, color: Color(0xFF00FFA3), size: 18),
+                      const SizedBox(width: 8),
+                      Text(
+                        'AI Natural Meal Logger',
+                        style: GoogleFonts.syne(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                      ),
+                    ],
+                  ),
+                  IconButton(
+                    icon: const Icon(LucideIcons.x, color: Color(0xFFA1A1AA), size: 18),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
               ),
-            ),
-            const SizedBox(height: 14),
+              const SizedBox(height: 6),
+              Text(
+                'Describe what you ate or drank in plain language. AURA will calculate macros automatically.',
+                style: GoogleFonts.plusJakartaSans(color: const Color(0xFFA1A1AA), fontSize: 12),
+              ),
+              const SizedBox(height: 14),
 
-            Expanded(
-              child: _selectedFood != null
-                  ? SingleChildScrollView(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+              // Meal Input Box
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF141217),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: Colors.white.withOpacity(0.1)),
+                ),
+                child: TextField(
+                  controller: _inputCtrl,
+                  maxLines: 2,
+                  style: GoogleFonts.plusJakartaSans(color: Colors.white, fontSize: 14),
+                  decoration: const InputDecoration(
+                    hintText: 'e.g. 2 fried eggs, 2 slices buttered toast, large coffee with milk',
+                    hintStyle: TextStyle(color: Colors.white30, fontSize: 13),
+                    border: InputBorder.none,
+                  ),
+                ),
+              ),
+              const SizedBox(height: 10),
+
+              // Action button to estimate
+              SizedBox(
+                width: double.infinity,
+                height: 46,
+                child: ElevatedButton.icon(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: const Color(0xFF00FFA3),
+                    foregroundColor: Colors.black,
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  onPressed: _isEstimating ? null : () => _runAIEstimate(_inputCtrl.text),
+                  icon: _isEstimating
+                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
+                      : const Icon(LucideIcons.calculator, size: 16),
+                  label: Text(
+                    _isEstimating ? 'Analyzing with AI...' : 'Calculate with AI',
+                    style: GoogleFonts.syne(fontWeight: FontWeight.bold, fontSize: 13),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 14),
+
+              // Quick suggestion chips
+              Text(
+                'QUICK EXAMPLES',
+                style: GoogleFonts.syne(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.0),
+              ),
+              const SizedBox(height: 6),
+              Wrap(
+                spacing: 6,
+                runSpacing: 6,
+                children: _quickSuggestions.map((suggestion) {
+                  return GestureDetector(
+                    onTap: () {
+                      _inputCtrl.text = suggestion;
+                      _runAIEstimate(suggestion);
+                    },
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF141217),
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.white.withOpacity(0.06)),
+                      ),
+                      child: Text(
+                        suggestion,
+                        style: GoogleFonts.plusJakartaSans(color: const Color(0xFFA1A1AA), fontSize: 11),
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+
+              if (_errorMessage != null) ...[
+                const SizedBox(height: 12),
+                Text(_errorMessage!, style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
+              ],
+
+              // Estimated Card Preview
+              if (_estimatedMeal != null) ...[
+                const SizedBox(height: 18),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF141217),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFF00FFA3).withOpacity(0.4)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
-                          // Portion Scaler Panel
-                          Container(
-                            padding: const EdgeInsets.all(14),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF0B0F17),
-                              borderRadius: BorderRadius.circular(14),
-                              border:
-                                  Border.all(color: const Color(0xFF10B981)),
-                            ),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Row(
-                                  mainAxisAlignment:
-                                      MainAxisAlignment.spaceBetween,
-                                  children: [
-                                    Text(_selectedFood!.name,
-                                        style: const TextStyle(
-                                            color: Colors.white,
-                                            fontWeight: FontWeight.bold,
-                                            fontSize: 14)),
-                                    IconButton(
-                                      icon: const Icon(LucideIcons.rotateCcw,
-                                          size: 14, color: Color(0xFFA1A1AA)),
-                                      onPressed: () =>
-                                          setState(() => _selectedFood = null),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 8),
-                                TextField(
-                                  controller: _portionCtrl,
-                                  keyboardType: TextInputType.number,
-                                  onChanged: (_) => setState(() {}),
-                                  style: const TextStyle(
-                                      color: Colors.white,
-                                      fontSize: 13,
-                                      fontWeight: FontWeight.bold),
-                                  decoration: const InputDecoration(
-                                    labelText: 'Portion Weight (grams)',
-                                    labelStyle: TextStyle(
-                                        color: Color(0xFFA1A1AA), fontSize: 11),
-                                    suffixText: 'g',
-                                  ),
-                                ),
-                                const SizedBox(height: 12),
-                                Builder(
-                                  builder: (_) {
-                                    final grams =
-                                        int.tryParse(_portionCtrl.text) ?? 100;
-                                    final macros = _selectedFood!
-                                        .calculateMacrosForWeight(grams);
-                                    return Row(
-                                      mainAxisAlignment:
-                                          MainAxisAlignment.spaceAround,
-                                      children: [
-                                        Text('${macros['calories']} kcal',
-                                            style: const TextStyle(
-                                                color: Colors.white,
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 13)),
-                                        Text('P: ${macros['proteinG']}g',
-                                            style: const TextStyle(
-                                                color: Color(0xFF10B981),
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 12)),
-                                        Text('C: ${macros['carbsG']}g',
-                                            style: const TextStyle(
-                                                color: Color(0xFF3B82F6),
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 12)),
-                                        Text('F: ${macros['fatG']}g',
-                                            style: const TextStyle(
-                                                color: Color(0xFFF59E0B),
-                                                fontWeight: FontWeight.bold,
-                                                fontSize: 12)),
-                                      ],
-                                    );
-                                  },
-                                ),
-                              ],
+                          Expanded(
+                            child: Text(
+                              _estimatedMeal!.name,
+                              style: GoogleFonts.syne(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
                             ),
                           ),
-                          const SizedBox(height: 14),
-                          SizedBox(
-                            width: double.infinity,
-                            child: ElevatedButton(
-                              style: ElevatedButton.styleFrom(
-                                backgroundColor: const Color(0xFF10B981),
-                                foregroundColor: Colors.black,
-                                padding:
-                                    const EdgeInsets.symmetric(vertical: 14),
-                                shape: RoundedRectangleBorder(
-                                    borderRadius: BorderRadius.circular(10)),
-                              ),
-                              onPressed: () {
-                                final grams =
-                                    int.tryParse(_portionCtrl.text) ?? 100;
-                                final macros = _selectedFood!
-                                    .calculateMacrosForWeight(grams);
-                                final meal = MealItem(
-                                  name: '${_selectedFood!.name} (${grams}g)',
-                                  calories: macros['calories']!,
-                                  proteinG: macros['proteinG']!,
-                                  carbsG: macros['carbsG']!,
-                                  fatG: macros['fatG']!,
-                                );
-                                Navigator.pop(context, meal);
-                              },
-                              child: const Text('Log Meal to Fuel Targets',
-                                  style:
-                                      TextStyle(fontWeight: FontWeight.bold)),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF00FFA3).withOpacity(0.15),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              '${_estimatedMeal!.calories} kcal',
+                              style: GoogleFonts.syne(color: const Color(0xFF00FFA3), fontWeight: FontWeight.bold, fontSize: 13),
                             ),
                           ),
                         ],
                       ),
-                    )
-                  : ListView.builder(
-                      shrinkWrap: true,
-                      itemCount: searchResults.length,
-                      itemBuilder: (ctx, idx) {
-                        final food = searchResults[idx];
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 8),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF0B0F17),
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: const Color(0xFF1E2638)),
+                      const SizedBox(height: 12),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceAround,
+                        children: [
+                          _buildMiniNutrient('Protein', '${_estimatedMeal!.proteinG}g', const Color(0xFF00FFA3)),
+                          _buildMiniNutrient('Carbs', '${_estimatedMeal!.carbsG}g', const Color(0xFF38BDF8)),
+                          _buildMiniNutrient('Fats', '${_estimatedMeal!.fatG}g', const Color(0xFFFBBF24)),
+                        ],
+                      ),
+                      const SizedBox(height: 16),
+                      SizedBox(
+                        width: double.infinity,
+                        height: 44,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF00FFA3),
+                            foregroundColor: Colors.black,
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
                           ),
-                          child: ListTile(
-                            title: Text(food.name,
-                                style: const TextStyle(
-                                    color: Colors.white,
-                                    fontWeight: FontWeight.bold,
-                                    fontSize: 13)),
-                            subtitle: Text(
-                                '${food.category} • ${food.caloriesPer100g} kcal / 100g (${food.proteinPer100g}g protein)',
-                                style: const TextStyle(
-                                    color: Color(0xFFA1A1AA), fontSize: 11)),
-                            trailing: const Icon(LucideIcons.chevronRight,
-                                size: 16, color: Color(0xFF10B981)),
-                            onTap: () {
-                              setState(() {
-                                _selectedFood = food;
-                                _portionCtrl.text =
-                                    food.defaultServingG.toString();
-                              });
-                            },
+                          onPressed: _commitMeal,
+                          child: Text(
+                            'Log to Today\'s Nutrition',
+                            style: GoogleFonts.syne(fontWeight: FontWeight.bold, fontSize: 13),
                           ),
-                        );
-                      },
-                    ),
-            ),
-          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 10),
+            ],
+          ),
         ),
       ),
+    );
+  }
+
+  Widget _buildMiniNutrient(String label, String value, Color color) {
+    return Column(
+      children: [
+        Text(label, style: GoogleFonts.syne(color: color, fontSize: 11, fontWeight: FontWeight.bold)),
+        const SizedBox(height: 2),
+        Text(value, style: GoogleFonts.plusJakartaSans(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+      ],
     );
   }
 }

@@ -54,6 +54,20 @@ class LocalTransformationRepository implements ITransformationRepository {
     }
     try {
       final map = jsonDecode(jsonStr);
+      List<EquipmentItem> equipItems = [];
+      if (map['equipmentList'] is List) {
+        equipItems = (map['equipmentList'] as List)
+            .map((e) => EquipmentItem.fromMap(Map<String, dynamic>.from(e as Map)))
+            .toList();
+      } else if (map['availableEquipment'] is List) {
+        equipItems = (map['availableEquipment'] as List)
+            .map((e) => EquipmentItem.fromString(e.toString()))
+            .toList();
+      }
+      if (equipItems.isEmpty) {
+        equipItems = [const EquipmentItem(name: 'Bodyweight', category: 'bodyweight')];
+      }
+
       final profile = UserProfile(
         name: map['name'] ?? '',
         age: map['age'] ?? 25,
@@ -64,15 +78,16 @@ class LocalTransformationRepository implements ITransformationRepository {
         goal: GoalType.values.firstWhere((g) => g.name == map['goal'], orElse: () => GoalType.recomp),
         daysPerWeek: map['daysPerWeek'] ?? 4,
         targetPhysique: map['targetPhysique'] ?? 'Athletic Physique',
-        availableEquipment: (map['availableEquipment'] as List? ?? [])
-            .map((e) => EquipmentType.values.firstWhere((eq) => eq.name == e, orElse: () => EquipmentType.dumbbells))
-            .toList(),
+        equipmentList: equipItems,
         experienceLevel: ExperienceLevel.values.firstWhere((exp) => exp.name == map['experienceLevel'], orElse: () => ExperienceLevel.intermediate),
         benchPress1RMKg: (map['benchPress1RMKg'] as num?)?.toDouble(),
         squat1RMKg: (map['squat1RMKg'] as num?)?.toDouble(),
         deadlift1RMKg: (map['deadlift1RMKg'] as num?)?.toDouble(),
         activeInjuries: (map['activeInjuries'] as List? ?? []).map((e) => e.toString()).toList(),
+        dislikedExercises: (map['dislikedExercises'] as List? ?? []).map((e) => e.toString()).toList(),
+        personalNotes: (map['personalNotes'] as List? ?? []).map((e) => e.toString()).toList(),
         coachSoul: CoachSoul.values.firstWhere((c) => c.name == map['coachSoul'], orElse: () => CoachSoul.supporter),
+        dietaryPreference: map['dietaryPreference'] ?? 'nonVeg',
       );
       debugPrint('[AURA REPOSITORY] Loaded profile for: ${profile.name} (${profile.goal.name})');
       return profile;
@@ -96,13 +111,17 @@ class LocalTransformationRepository implements ITransformationRepository {
       'goal': profile.goal.name,
       'daysPerWeek': profile.daysPerWeek,
       'targetPhysique': profile.targetPhysique,
+      'equipmentList': profile.equipmentList.map((e) => e.toMap()).toList(),
       'availableEquipment': profile.availableEquipment.map((e) => e.name).toList(),
       'experienceLevel': profile.experienceLevel.name,
       'benchPress1RMKg': profile.benchPress1RMKg,
       'squat1RMKg': profile.squat1RMKg,
       'deadlift1RMKg': profile.deadlift1RMKg,
       'activeInjuries': profile.activeInjuries,
+      'dislikedExercises': profile.dislikedExercises,
+      'personalNotes': profile.personalNotes,
       'coachSoul': profile.coachSoul.name,
+      'dietaryPreference': profile.dietaryPreference,
     };
     await prefs.setString(_keyProfile, jsonEncode(map));
     debugPrint('[AURA REPOSITORY] Profile saved to localStorage successfully');
@@ -131,7 +150,7 @@ class LocalTransformationRepository implements ITransformationRepository {
             id: e['id'],
             name: e['name'],
             targetMuscle: e['targetMuscle'],
-            equipmentRequired: EquipmentType.values.firstWhere((eq) => eq.name == e['equipmentRequired'], orElse: () => EquipmentType.dumbbells),
+            equipmentRequired: e['equipmentRequired']?.toString() ?? 'bodyweight',
             sets: (e['sets'] as List? ?? []).map((s) {
               return ExerciseSet(
                 setNumber: s['setNumber'],
@@ -166,7 +185,7 @@ class LocalTransformationRepository implements ITransformationRepository {
         'id': e.id,
         'name': e.name,
         'targetMuscle': e.targetMuscle,
-        'equipmentRequired': e.equipmentRequired.name,
+        'equipmentRequired': e.equipmentRequired,
         'sets': e.sets.map((s) => {
           'setNumber': s.setNumber,
           'targetReps': s.targetReps,

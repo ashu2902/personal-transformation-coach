@@ -23,6 +23,9 @@ abstract class AIService {
       TransformationEngineState contextState, String reason);
   Future<DailyWorkout> generateAIAdaptedWorkout(
       TransformationEngineState contextState, String reason);
+  Future<WeeklyPlan> generateAIWeeklyPlan(
+      TransformationEngineState contextState);
+  Future<MealItem> estimateAIMealNutrition(String mealDescription);
 }
 
 class GeminiAIProvider implements AIService {
@@ -36,10 +39,12 @@ class GeminiAIProvider implements AIService {
 
   String get _effectiveApiKey {
     const envKey = String.fromEnvironment('GEMINI_API_KEY');
-    if (envKey.trim().isNotEmpty && !envKey.contains('REDACTED'))
+    if (envKey.trim().isNotEmpty && !envKey.contains('REDACTED')) {
       return envKey.trim();
-    if (apiKey.trim().isNotEmpty && !apiKey.contains('REDACTED'))
+    }
+    if (apiKey.trim().isNotEmpty && !apiKey.contains('REDACTED')) {
       return apiKey.trim();
+    }
     return envKey.trim();
   }
 
@@ -117,8 +122,9 @@ class GeminiAIProvider implements AIService {
     }
     final data = jsonDecode(response.body);
     final jsonText = data['candidates']?[0]?['content']?['parts']?[0]?['text'];
-    if (jsonText == null)
+    if (jsonText == null) {
       throw Exception('Gemini returned empty JSON for $method');
+    }
     return jsonDecode(jsonText.toString()) as Map<String, dynamic>;
   }
 
@@ -176,11 +182,9 @@ INCOMING USER MESSAGE:
 "$userPrompt"
 
 AVAILABLE FUNCTIONS / ACTIONS:
-1. "updateEquipment": Call when the user mentions having new, limited, or specific workout equipment (e.g. "I only have a 10kg weight bag", "no gym today, only dumbbells", "I have dumbbells and bodyweight").
+1. "updateEquipment": Call when the user mentions having new, limited, or specific workout equipment (e.g. "I only have a 10kg weight bag", "no gym today, only dumbbells", "I have dumbbells and bodyweight", "resistance bands and a pull up bar").
    Parameters:
-   - "equipment": Array of strings from ["bodyweight", "dumbbells", "barbell", "cables", "machines"]. If they have a weight bag, map to ["dumbbells", "bodyweight"].
-   - "maxWeightKg": Optional number for equipment weight limits (e.g. 10.0 for 10kg bag).
-   - "equipmentNote": Optional string note (e.g. "10kg weight bag only").
+   - "items": Array of objects [{"name": string (e.g. "10kg Workout Bag", "Dumbbells", "Bodyweight", "Resistance Bands"), "category": "free_weight" | "bodyweight" | "bands" | "cables" | "machine" | "other", "weightKg": number or null, "notes": string or null}]
 
 2. "adaptWorkout": Call when the user wants to adapt/update/modify their workout, requests exercise substitutions, reports aches/pains/injuries, or has equipment constraints that require recalculating the workout exercises and weights.
    Parameters:
@@ -209,8 +213,18 @@ AVAILABLE FUNCTIONS / ACTIONS:
    Parameters:
    - "status": "completed" | "skipped"
 
+7. "updateMasterContext": Call when the user reveals a personal preference, habit, limitation, or fact about themselves that should be remembered for future planning. Examples: "I hate burpees", "I'm lactose intolerant", "I work night shifts", "I prefer morning workouts".
+   Parameters:
+   - "field": One of ["activityLevel", "preferredTrainingStyle", "cardioPreference", "activeInjuries", "foodAllergies", "dislikedExercises", "preferredProteinSources", "personalNotes", "preferredTrainingDays"]
+   - "action": "set" | "append"
+   - "value": string or array of strings
+
+8. "regenerateWeeklyPlan": Call when structural profile parameters are changed (e.g., equipment is updated, injuries are logged/updated, or long-term training goals/preferences are modified) indicating that the user's 7-day schedule/weekly plan should be recalculated and rebuilt.
+   Parameters: none.
+
 SEQUENCING RULE:
 If the user specifies equipment changes and asks to adapt the workout, return ["updateEquipment", "adaptWorkout"] in that order!
+If structural changes (equipment, goals, injuries) are made, you should include "regenerateWeeklyPlan" in the actions.
 If the user's message is pure conversation, general Q&A, or encouragement without data to log or workouts to change, return "actions": [].
 
 Return JSON:
@@ -368,10 +382,15 @@ Extract structured data. Return JSON:
     try {
       final parsed = await _callGeminiJson('parseQuickLog', prompt, systemInstruction: coachInstruction);
       WorkoutStatus? status;
-      if (parsed['workoutStatus'] == 'completed')
+      if (parsed['workoutStatus'] == 'completed') {
         status = WorkoutStatus.completed;
-      if (parsed['workoutStatus'] == 'skipped') status = WorkoutStatus.skipped;
-      if (parsed['workoutStatus'] == 'adapted') status = WorkoutStatus.adapted;
+      }
+      if (parsed['workoutStatus'] == 'skipped') {
+        status = WorkoutStatus.skipped;
+      }
+      if (parsed['workoutStatus'] == 'adapted') {
+        status = WorkoutStatus.adapted;
+      }
       List<MealItem> meals = [];
       if (parsed['mealsToAdd'] is List) {
         for (var m in parsed['mealsToAdd']) {
@@ -410,7 +429,6 @@ Extract structured data. Return JSON:
       String adaptationRequest, TransformationEngineState contextState,
       {List<EquipmentType>? explicitEquipment, double? maxWeightKg}) async {
     final effectiveEquipment = explicitEquipment ?? contextState.profile.availableEquipment;
-    final equipStr = effectiveEquipment.map((e) => e.name).join(', ');
     final weightConstraint = maxWeightKg != null
         ? 'STRICT CONSTRAINT: The user has a maximum equipment weight limit of ${maxWeightKg}kg (e.g. 10kg weight bag). All prescribed dumbbell/weighted exercises must use <= ${maxWeightKg}kg.'
         : '';
@@ -419,7 +437,7 @@ Extract structured data. Return JSON:
 User Request: "$adaptationRequest"
 Current Workout: "${contextState.workout.title}" — ${contextState.workout.focusArea}
 Current Exercises: ${contextState.workout.exercises.map((e) => e.name).join(', ')}
-Available Equipment: $equipStr
+Available Equipment: ${contextState.profile.equipmentList.map((e) => e.toString()).join(', ')}
 Active Safeguards: ${contextState.profile.activeInjuries.isEmpty ? 'None' : contextState.profile.activeInjuries.join(', ')}
 $weightConstraint
 
@@ -428,7 +446,7 @@ Return JSON:
 {
   "title": string,
   "adaptationNote": string,
-  "exercises": [{"name": string, "targetMuscle": string, "targetSets": number, "targetReps": number, "targetWeightKg": number, "notes": string}]
+  "exercises": [{"name": string, "targetMuscle": string, "equipmentRequired": string (e.g. "10kg Workout Bag", "Bodyweight", "Dumbbells"), "targetSets": number, "targetReps": number, "targetWeightKg": number, "notes": string}]
 }
 ''';
     try {
@@ -479,7 +497,7 @@ Prescribe 4-5 targeted exercises customized to their baseline, gender, and joint
   "focusArea": string,
   "estimatedDurationMin": number,
   "adaptationNote": string,
-  "exercises": [{"name": string, "targetMuscle": string, "targetSets": number, "targetReps": number, "targetWeightKg": number, "notes": string}]
+  "exercises": [{"name": string, "targetMuscle": string, "equipmentRequired": "bodyweight" | "dumbbells" | "barbell" | "cables" | "machines", "targetSets": number, "targetReps": number, "targetWeightKg": number, "notes": string}]
 }
 ''';
     try {
@@ -611,6 +629,53 @@ Adjust targets intelligently. Return JSON:
   }
 
   @override
+  Future<MealItem> estimateAIMealNutrition(String mealDescription) async {
+    final prompt = '''
+Analyze the following food/meal description, identify all ingredients and portion sizes, and calculate accurate macronutrients:
+Meal: "$mealDescription"
+
+Return strictly valid JSON:
+{
+  "name": string (concise clean meal title, e.g. "Chicken Burrito Bowl"),
+  "calories": number (total kcal),
+  "proteinG": number (grams of protein),
+  "carbsG": number (grams of carbs),
+  "fatG": number (grams of fat),
+  "reasoning": string (1-sentence breakdown of portions)
+}
+''';
+    try {
+      final parsed = await _callGeminiJson('estimateAIMealNutrition', prompt);
+      final cleanName = (parsed['name'] as String?)?.trim().isNotEmpty == true
+          ? parsed['name'] as String
+          : mealDescription;
+      final cal = (parsed['calories'] as num?)?.toInt() ?? 300;
+      final prot = (parsed['proteinG'] as num?)?.toInt() ?? 15;
+      final carbs = (parsed['carbsG'] as num?)?.toInt() ?? 30;
+      final fat = (parsed['fatG'] as num?)?.toInt() ?? 10;
+
+      debugPrint('[GEMINI MEAL ESTIMATION] $cleanName -> ${cal}kcal, P:${prot}g, C:${carbs}g, F:${fat}g');
+
+      return MealItem(
+        name: cleanName,
+        calories: cal,
+        proteinG: prot,
+        carbsG: carbs,
+        fatG: fat,
+      );
+    } catch (e) {
+      _logError('estimateAIMealNutrition', e);
+      return MealItem(
+        name: mealDescription,
+        calories: 320,
+        proteinG: 18,
+        carbsG: 35,
+        fatG: 10,
+      );
+    }
+  }
+
+  @override
   Future<DailyWorkout> generateAIAdaptedWorkout(
       TransformationEngineState contextState, String reason) async {
     final prompt = '''
@@ -646,8 +711,9 @@ Return JSON:
     final equipList = overrideEquipment ?? profile.availableEquipment;
     final exercises = _parseExerciseList(parsed['exercises'], current.focusArea,
         equipList, 'ai_adapt');
-    if (exercises.isEmpty)
+    if (exercises.isEmpty) {
       throw Exception('Gemini returned empty exercise list');
+    }
     return current.copyWith(
       title: title,
       status: WorkoutStatus.adapted,
@@ -666,19 +732,32 @@ Return JSON:
       final muscle = ex['targetMuscle']?.toString() ?? fallbackMuscle;
       final setNum = (ex['targetSets'] as num?)?.toInt() ?? 3;
       final repNum = (ex['targetReps'] as num?)?.toInt() ?? 10;
-      final weight = (ex['targetWeightKg'] as num?)?.toDouble() ?? 20.0;
+      final weight = (ex['targetWeightKg'] as num?)?.toDouble() ?? 0.0;
       final notes = ex['notes']?.toString() ?? 'AI Prescribed';
       final sets = List.generate(
         setNum,
         (i) => ExerciseSet(
             setNumber: i + 1, targetReps: repNum, targetWeightKg: weight),
       );
+
+      final equipStr = ex['equipmentRequired']?.toString();
+      String reqEquip;
+      if (equipStr != null && equipStr.trim().isNotEmpty) {
+        reqEquip = equipStr.trim();
+      } else {
+        final lowerName = name.toLowerCase();
+        if (weight == 0.0 || lowerName.contains('push-up') || lowerName.contains('plank') || lowerName.contains('bodyweight') || lowerName.contains('stretch') || lowerName.contains('bridge')) {
+          reqEquip = 'Bodyweight';
+        } else {
+          reqEquip = equipment.isNotEmpty ? equipment.first.name : 'Dumbbells';
+        }
+      }
+
       exercises.add(Exercise(
         id: '${idPrefix}_$idCounter',
         name: name,
         targetMuscle: muscle,
-        equipmentRequired:
-            equipment.isNotEmpty ? equipment.first : EquipmentType.dumbbells,
+        equipmentRequired: reqEquip,
         sets: sets,
         notes: notes,
       ));
@@ -692,6 +771,7 @@ Return JSON:
     final w = state.workout;
     final n = state.nutrition;
     final r = state.recovery;
+    final ctx = state.masterContext;
     final totalCal = n.meals.fold(0, (sum, m) => sum + m.calories);
     final totalProt = n.meals.fold(0, (sum, m) => sum + m.proteinG);
 
@@ -701,18 +781,52 @@ Return JSON:
             final firstSet = e.sets.isNotEmpty ? e.sets.first : null;
             final repsStr = firstSet != null ? '${firstSet.targetReps} reps' : 'N/A';
             final weightStr = firstSet != null ? '${firstSet.targetWeightKg}kg' : 'N/A';
-            return '- ${e.name} (${e.targetMuscle}): ${e.sets.length} sets x $repsStr @ $weightStr. Notes: ${e.notes ?? "none"}';
+            return '- ${e.name} (${e.targetMuscle} • ${e.equipmentRequired}): ${e.sets.length} sets x $repsStr @ $weightStr. Notes: ${e.notes ?? "none"}';
           }).join('\n');
 
     final mealsStr = n.meals.isEmpty
         ? 'No meals logged yet today.'
         : n.meals.map((m) => '- ${m.name}: ${m.calories} kcal (P: ${m.proteinG}g, C: ${m.carbsG}g, F: ${m.fatG}g)').join('\n');
 
+    final equipDescriptions = p.equipmentList.isEmpty
+        ? '• Bodyweight'
+        : p.equipmentList.map((e) {
+            final w = e.weightKg != null ? ' (${e.weightKg}kg)' : '';
+            final notes = e.notes != null ? ' - ${e.notes}' : '';
+            return '• ${e.name}$w$notes';
+          }).join('\n');
+
+    final injuryList = p.activeInjuries.isNotEmpty
+        ? p.activeInjuries
+        : ctx.deduced.activeInjuries;
+    final injuryStr = injuryList.isEmpty
+        ? 'None reported.'
+        : injuryList.map((i) => '• $i').join('\n');
+
+    final allNotes = [
+      ...p.dislikedExercises.map((d) => 'Dislikes: $d'),
+      ...ctx.deduced.dislikedExercises.map((d) => 'Dislikes: $d'),
+      ...p.personalNotes,
+      ...ctx.deduced.personalNotes,
+    ].toSet().toList();
+    final notesStr = allNotes.isEmpty ? 'No additional notes recorded yet.' : allNotes.map((n) => '• $n').join('\n');
+
     return '''
+[CANONICAL USER PROFILE & STATE]
 Name: ${p.name} | Gender: ${p.gender} | Age: ${p.age} | Weight: ${p.weightKg}kg → ${p.targetWeightKg}kg
 Goal: ${p.goal.name} (${p.targetPhysique})
 Experience Level: ${p.experienceLevel.name}
+Dietary Preference: ${p.dietaryPreference}
 Coach Personality/Soul: ${p.coachSoul.name}
+
+[CANONICAL AVAILABLE EQUIPMENT & GEAR]
+$equipDescriptions
+
+[KNOWN INJURIES & MOBILITY LIMITS]
+$injuryStr
+
+[PERSONAL PREFERENCES & NOTES]
+$notesStr
 
 [CURRENT WORKOUT PLAN FOR TODAY]
 Title: ${w.title}
@@ -739,5 +853,104 @@ Stress Level: ${r.stressLevel}/10
 [AURA SYSTEM NOTICES]
 Recent AI Adaptation Notice: ${state.adaptationNotice ?? 'None'}
 ''';
+  }
+
+  @override
+  Future<WeeklyPlan> generateAIWeeklyPlan(
+      TransformationEngineState contextState) async {
+    final p = contextState.profile;
+    final now = DateTime.now();
+    final monday = now.subtract(Duration(days: now.weekday - 1));
+    final weekNumber = ((monday.difference(DateTime(monday.year, 1, 1)).inDays) / 7).ceil() + 1;
+    final weekId = '${monday.year}-W${weekNumber.toString().padLeft(2, '0')}';
+
+    final dayNames = ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'];
+    final dates = List.generate(7, (i) {
+      final d = monday.add(Duration(days: i));
+      return d.toIso8601String().split('T')[0];
+    });
+
+    final ctx = contextState.masterContext;
+    final allNotes = [
+      ...p.dislikedExercises.map((d) => 'AVOID: $d'),
+      ...ctx.deduced.dislikedExercises.map((d) => 'AVOID: $d'),
+      ...p.personalNotes,
+      ...ctx.deduced.personalNotes,
+    ].toSet().toList();
+    final deducedNotes = allNotes.isNotEmpty
+        ? 'User preferences & constraints: ${allNotes.join("; ")}'
+        : 'No additional notes.';
+    final injuryList = p.activeInjuries.isNotEmpty ? p.activeInjuries : ctx.deduced.activeInjuries;
+    final injuryStr = injuryList.isNotEmpty
+        ? 'INJURIES to work around: ${injuryList.join(", ")}'
+        : '';
+
+    final prompt = '''
+Generate a 7-day workout and nutrition plan for this user:
+
+Name: ${p.name} | Age: ${p.age} | Gender: ${p.gender}
+Weight: ${p.weightKg}kg → ${p.targetWeightKg}kg | Height: ${p.heightCm}cm
+Goal: ${p.goal.name} | Target Physique: ${p.targetPhysique}
+Training Days/Week: ${p.daysPerWeek}
+Equipment: ${p.equipmentList.map((e) => e.toString()).join(', ')}
+Experience: ${p.experienceLevel.name}
+Dietary Preference: ${p.dietaryPreference}
+$deducedNotes
+$injuryStr
+
+Week: $weekId (${dates.first} to ${dates.last})
+Days: ${dayNames.join(', ')}
+Dates: ${dates.join(', ')}
+
+Rules:
+- Exactly ${p.daysPerWeek} training days and ${7 - p.daysPerWeek} rest/active recovery days
+- Rest days should be strategically placed (not all bunched together)
+- Each training day should have a clear focus (e.g., Upper Push, Lower Pull, Full Body)
+- List 4-6 exercise names per training day
+- Include a nutritionFocus per day (e.g., "High protein, moderate carbs" or "Calorie surplus, extra carbs post-workout")
+- The overview should be 1-2 sentences summarizing the week's strategy
+
+Return JSON:
+{
+  "overview": "string",
+  "coachNote": "string or null",
+  "days": [
+    {
+      "dayName": "Monday",
+      "date": "${dates[0]}",
+      "title": "string",
+      "focusArea": "string",
+      "isRestDay": false,
+      "exerciseNames": ["Exercise 1", "Exercise 2", ...],
+      "nutritionFocus": "string"
+    },
+    ... (7 total)
+  ]
+}
+''';
+
+    final parsed = await _callGeminiJson('generateAIWeeklyPlan', prompt);
+
+    final days = (parsed['days'] as List? ?? []).map((d) {
+      return WeeklyDayPlan(
+        dayName: d['dayName']?.toString() ?? '',
+        date: d['date']?.toString() ?? '',
+        title: d['title']?.toString() ?? 'Training Day',
+        focusArea: d['focusArea']?.toString() ?? '',
+        isRestDay: d['isRestDay'] == true,
+        exerciseNames: (d['exerciseNames'] as List? ?? []).map((e) => e.toString()).toList(),
+        nutritionFocus: d['nutritionFocus']?.toString(),
+      );
+    }).toList();
+
+    return WeeklyPlan(
+      weekId: weekId,
+      startDate: dates.first,
+      endDate: dates.last,
+      overview: parsed['overview']?.toString() ?? 'Your personalized weekly plan.',
+      coachNote: parsed['coachNote']?.toString(),
+      days: days,
+      createdAt: DateTime.now().toIso8601String(),
+    );
   }
 }

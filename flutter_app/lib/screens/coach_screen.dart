@@ -16,7 +16,6 @@ class CoachScreen extends ConsumerStatefulWidget {
 class _CoachScreenState extends ConsumerState<CoachScreen> {
   final TextEditingController _inputController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
-  bool _isScanningWatch = false;
 
   static const List<String> _actionChips = [
     "I'm feeling sore.",
@@ -41,24 +40,6 @@ class _CoachScreenState extends ConsumerState<CoachScreen> {
     _inputController.clear();
     final notifier = ref.read(transformationEngineProvider.notifier);
     await notifier.addChatMessage(text);
-    _scrollToBottom();
-  }
-
-  void _triggerWatchScan() async {
-    setState(() {
-      _isScanningWatch = true;
-    });
-
-    final notifier = ref.read(transformationEngineProvider.notifier);
-    
-    notifier.appendUserMessage('📎 Sent a screenshot of my Apple Watch activity summary.');
-    _scrollToBottom();
-    
-    await notifier.simulateWatchScreenshotScan();
-    
-    setState(() {
-      _isScanningWatch = false;
-    });
     _scrollToBottom();
   }
 
@@ -89,10 +70,7 @@ class _CoachScreenState extends ConsumerState<CoachScreen> {
     }
 
     // Determine Orb state
-    OrbState orbState = OrbState.pulsing;
-    if (_isScanningWatch || isThinking) {
-      orbState = OrbState.swirling;
-    }
+    OrbState orbState = isThinking ? OrbState.swirling : OrbState.pulsing;
 
     return Column(
       children: [
@@ -156,7 +134,6 @@ class _CoachScreenState extends ConsumerState<CoachScreen> {
             itemBuilder: (context, index) {
               final msg = state.chatMessages[index];
               final isAi = msg.sender == 'ai';
-              final isScanPlaceholder = _isScanningWatch && index == state.chatMessages.length - 1 && !isAi;
 
               return Align(
                 alignment: isAi ? Alignment.centerLeft : Alignment.centerRight,
@@ -179,58 +156,15 @@ class _CoachScreenState extends ConsumerState<CoachScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      if (isScanPlaceholder)
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Row(
-                              children: [
-                                Icon(LucideIcons.camera, color: Colors.white70, size: 14),
-                                SizedBox(width: 8),
-                                Text('Activity screenshot attached', style: TextStyle(color: Colors.white70, fontSize: 12)),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            // Scanning Laser Animation simulation
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(4),
-                              child: Stack(
-                                children: [
-                                  Container(
-                                    height: 80,
-                                    width: double.infinity,
-                                    color: Colors.white10,
-                                    child: const Center(
-                                      child: Icon(LucideIcons.image, color: Colors.white30, size: 30),
-                                    ),
-                                  ),
-                                  const Positioned(
-                                    left: 0,
-                                    right: 0,
-                                    top: 30,
-                                    child: Divider(
-                                      color: Color(0xFF00FFA3),
-                                      thickness: 2,
-                                      height: 2,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 8),
-                            const Text('Scanning screenshot metrics...', style: TextStyle(color: Colors.white38, fontSize: 11)),
-                          ],
-                        )
-                      else
-                        Text(
-                          msg.text,
-                          style: GoogleFonts.plusJakartaSans(
-                            color: Colors.white,
-                            fontSize: 14,
-                            height: 1.45,
-                            fontWeight: isAi ? FontWeight.normal : FontWeight.w600,
-                          ),
+                      Text(
+                        msg.text,
+                        style: GoogleFonts.plusJakartaSans(
+                          color: Colors.white,
+                          fontSize: 14,
+                          height: 1.45,
+                          fontWeight: isAi ? FontWeight.normal : FontWeight.w600,
                         ),
+                      ),
                       const SizedBox(height: 6),
                       Text(
                         msg.timestamp,
@@ -307,21 +241,6 @@ class _CoachScreenState extends ConsumerState<CoachScreen> {
           padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
           child: Row(
             children: [
-              // Photo attachment button (Watch screenshot trigger)
-              GestureDetector(
-                onTap: _triggerWatchScan,
-                child: Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: Theme.of(context).cardColor,
-                    borderRadius: BorderRadius.circular(12),
-                    border: Border.all(color: Colors.white.withOpacity(0.08)),
-                  ),
-                  child: const Icon(LucideIcons.camera, color: Colors.white70, size: 20),
-                ),
-              ),
-              const SizedBox(width: 10),
-
               // Input field
               Expanded(
                 child: TextField(

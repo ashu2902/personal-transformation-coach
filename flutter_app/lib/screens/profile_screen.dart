@@ -11,6 +11,7 @@ class ProfileScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final state = ref.watch(transformationEngineProvider);
+    final notifier = ref.read(transformationEngineProvider.notifier);
     final profile = state.profile;
     final primaryColor = Theme.of(context).colorScheme.primary;
 
@@ -120,7 +121,134 @@ class ProfileScreen extends ConsumerWidget {
               context: context,
               icon: LucideIcons.dumbbell,
               title: 'Available Equipment',
-              subtitle: profile.availableEquipment.map((e) => e.name.toUpperCase()).join(', '),
+              subtitle: profile.equipmentList.map((e) => e.toString()).join(', '),
+            ),
+
+            const SizedBox(height: 24),
+            Text(
+              'ACCOUNT & AUTHENTICATION',
+              style: GoogleFonts.syne(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2),
+            ),
+            const SizedBox(height: 12),
+
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Theme.of(context).cardColor,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.white.withOpacity(0.08)),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Container(
+                        width: 32,
+                        height: 32,
+                        decoration: BoxDecoration(
+                          color: notifier.isAuthenticated ? const Color(0x2010B981) : const Color(0x20F59E0B),
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                        child: Icon(
+                          notifier.isAuthenticated ? LucideIcons.shieldCheck : LucideIcons.userX,
+                          color: notifier.isAuthenticated ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+                          size: 18,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              notifier.currentAuthEmail ?? 'Guest Athlete',
+                              style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                            ),
+                            Text(
+                              notifier.isAuthenticated ? 'Signed in with Google' : 'Local Guest Account',
+                              style: GoogleFonts.plusJakartaSans(color: const Color(0xFFA1A1AA), fontSize: 11),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  if (!notifier.isAuthenticated)
+                    SizedBox(
+                      width: double.infinity,
+                      height: 44,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: Colors.black87,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () async {
+                          try {
+                            await notifier.signInWithGoogle();
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(
+                                  content: Text('Successfully signed in with Google!'),
+                                  backgroundColor: Color(0xFF10B981),
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Google Sign-In error: $e'),
+                                  backgroundColor: Colors.redAccent,
+                                ),
+                              );
+                            }
+                          }
+                        },
+                        icon: Container(
+                          width: 20,
+                          height: 20,
+                          alignment: Alignment.center,
+                          child: const Text(
+                            'G',
+                            style: TextStyle(color: Color(0xFF4285F4), fontWeight: FontWeight.w900, fontSize: 14),
+                          ),
+                        ),
+                        label: Text(
+                          'Sign In with Google',
+                          style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13),
+                        ),
+                      ),
+                    )
+                  else
+                    SizedBox(
+                      width: double.infinity,
+                      height: 40,
+                      child: OutlinedButton.icon(
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: Colors.redAccent,
+                          side: const BorderSide(color: Color(0x40EF4444)),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        onPressed: () async {
+                          await notifier.signOut();
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              const SnackBar(content: Text('Signed out successfully.')),
+                            );
+                          }
+                        },
+                        icon: const Icon(LucideIcons.logOut, size: 14),
+                        label: Text(
+                          'Sign Out',
+                          style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600, fontSize: 12),
+                        ),
+                      ),
+                    ),
+                ],
+              ),
             ),
 
             const SizedBox(height: 32),
