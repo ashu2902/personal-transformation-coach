@@ -1,7 +1,7 @@
 {
   "functions": [
     {
-      "source": "../functions",
+      "source": "functions",
       "codebase": "default",
       "ignore": [
         "node_modules",
@@ -13,10 +13,10 @@
     }
   ],
   "firestore": {
-    "rules": "firestore.rules"
+    "rules": "flutter_app/firestore.rules"
   },
   "hosting": {
-    "public": "build/web",
+    "public": "flutter_app/build/web",
     "ignore": [
       "firebase.json",
       "**/.*",

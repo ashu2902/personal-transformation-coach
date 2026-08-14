@@ -43,9 +43,14 @@ macos/.symlinks/
 .env
 *.env
 **/*.env
+.env.local
 **/secrets.dart
 **/api_keys.dart
 
-# Firebase
+# Firebase & Functions
 google-services.json
 GoogleService-Info.plist
+functions/node_modules/
+functions/lib/
+*.local
+

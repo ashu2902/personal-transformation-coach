@@ -33,9 +33,17 @@ class GeminiAIProvider implements AIService {
   final String modelName;
 
   GeminiAIProvider({
-    required this.apiKey,
-    this.modelName = 'gemini-3.5-flash-lite',
+    this.apiKey = '',
+    this.modelName = 'gemini-3.7-flash',
   });
+
+  String get _proxyUrl {
+    const customProxy = String.fromEnvironment('AI_PROXY_URL');
+    if (customProxy.trim().isNotEmpty) {
+      return customProxy.trim();
+    }
+    return 'https://us-central1-aura-coach-ashu-7.cloudfunctions.net/callGeminiProxy';
+  }
 
   String get _effectiveApiKey {
     const envKey = String.fromEnvironment('GEMINI_API_KEY');
@@ -45,44 +53,25 @@ class GeminiAIProvider implements AIService {
     if (apiKey.trim().isNotEmpty && !apiKey.contains('REDACTED')) {
       return apiKey.trim();
     }
-    return envKey.trim();
-  }
-
-  Uri get _url {
-    final key = _effectiveApiKey;
-    if (key.isNotEmpty) {
-      return Uri.parse(
-          'https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent?key=$key');
-    }
-    return Uri.parse(
-        'https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent');
-  }
-
-  Map<String, String> get _headers {
-    final Map<String, String> headers = {'Content-Type': 'application/json'};
-    final key = _effectiveApiKey;
-    if (key.isNotEmpty) {
-      headers['x-goog-api-key'] = key;
-    }
-    return headers;
+    return '';
   }
 
   void _logRequest(String method, String prompt) {
-    debugPrint('\n===== 🚀 [GEMINI AI REQUEST: $method] =====');
+    debugPrint('\n===== 🚀 [AURA AI REQUEST: $method] =====');
     debugPrint('Model: $modelName | Time: ${DateTime.now().toIso8601String()}');
     debugPrint('Prompt:\n$prompt');
     debugPrint('===========================================\n');
   }
 
   void _logResponse(String method, int statusCode, int ms, String body) {
-    debugPrint('\n===== ✅ [GEMINI AI RESPONSE: $method] =====');
+    debugPrint('\n===== ✅ [AURA AI RESPONSE: $method] =====');
     debugPrint('Status: $statusCode | Latency: ${ms}ms');
     debugPrint('Body:\n$body');
     debugPrint('============================================\n');
   }
 
   void _logError(String method, dynamic error) {
-    debugPrint('\n===== ❌ [GEMINI AI ERROR: $method] =====');
+    debugPrint('\n===== ❌ [AURA AI ERROR: $method] =====');
     debugPrint('Error: $error');
     debugPrint('=========================================\n');
   }
@@ -91,81 +80,139 @@ class GeminiAIProvider implements AIService {
       String method, String prompt, {String? systemInstruction}) async {
     _logRequest(method, prompt);
     final timer = Stopwatch()..start();
-    final body = <String, dynamic>{
-      'generationConfig': {'responseMimeType': 'application/json'},
-      'contents': [
-        {
-          'role': 'user',
-          'parts': [
-            {'text': prompt}
-          ]
+
+    final fullPrompt = systemInstruction != null
+        ? 'SYSTEM INSTRUCTION:\n$systemInstruction\n\nUSER REQUEST:\n$prompt'
+        : prompt;
+
+    // 1. Primary: Attempt Cloud Function Proxy (zero client secrets)
+    try {
+      final proxyResponse = await http.post(
+        Uri.parse(_proxyUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'prompt': fullPrompt,
+          'model': modelName,
+          'isJson': true,
+        }),
+      );
+
+      if (proxyResponse.statusCode == 200) {
+        final data = jsonDecode(proxyResponse.body);
+        final rawText = data['text'] as String?;
+        if (rawText != null && rawText.trim().isNotEmpty) {
+          _logResponse(method, 200, timer.elapsedMilliseconds, rawText);
+          final cleanJson = rawText.replaceAll('```json', '').replaceAll('```', '').trim();
+          return jsonDecode(cleanJson) as Map<String, dynamic>;
         }
-      ],
-    };
-    if (systemInstruction != null) {
-      body['system_instruction'] = {
-        'parts': [
-          {'text': systemInstruction}
-        ]
+      } else {
+        debugPrint('[AURA PROXY] Proxy returned status ${proxyResponse.statusCode}, checking fallback');
+      }
+    } catch (proxyError) {
+      debugPrint('[AURA PROXY] Proxy call exception: $proxyError');
+    }
+
+    // 2. Fallback: Direct API if local dev API key is available
+    final directKey = _effectiveApiKey;
+    if (directKey.isNotEmpty) {
+      final directUrl = Uri.parse(
+          'https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent?key=$directKey');
+      final body = <String, dynamic>{
+        'generationConfig': {'responseMimeType': 'application/json'},
+        'contents': [
+          {
+            'role': 'user',
+            'parts': [
+              {'text': fullPrompt}
+            ]
+          }
+        ],
       };
+      final response = await http.post(
+        directUrl,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      );
+      _logResponse(method, response.statusCode, timer.elapsedMilliseconds, response.body);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final jsonText = data['candidates']?[0]?['content']?['parts']?[0]?['text'];
+        if (jsonText != null) {
+          final cleanJson = jsonText.toString().replaceAll('```json', '').replaceAll('```', '').trim();
+          return jsonDecode(cleanJson) as Map<String, dynamic>;
+        }
+      }
     }
-    final response = await http.post(
-      _url,
-      headers: _headers,
-      body: jsonEncode(body),
-    );
-    _logResponse(
-        method, response.statusCode, timer.elapsedMilliseconds, response.body);
-    if (response.statusCode != 200) {
-      throw Exception(
-          'Gemini API error ${response.statusCode}: ${response.body}');
-    }
-    final data = jsonDecode(response.body);
-    final jsonText = data['candidates']?[0]?['content']?['parts']?[0]?['text'];
-    if (jsonText == null) {
-      throw Exception('Gemini returned empty JSON for $method');
-    }
-    return jsonDecode(jsonText.toString()) as Map<String, dynamic>;
+
+    throw Exception('AURA AI service temporarily unavailable. Please retry.');
   }
 
   Future<String> _callGeminiText(String method, String prompt,
       {String? systemInstruction}) async {
     _logRequest(method, prompt);
     final timer = Stopwatch()..start();
-    final body = <String, dynamic>{
-      'contents': [
-        {
-          'role': 'user',
-          'parts': [
-            {'text': prompt}
-          ]
+
+    final fullPrompt = systemInstruction != null
+        ? 'SYSTEM INSTRUCTION:\n$systemInstruction\n\nUSER REQUEST:\n$prompt'
+        : prompt;
+
+    // 1. Primary: Attempt Cloud Function Proxy (zero client secrets)
+    try {
+      final proxyResponse = await http.post(
+        Uri.parse(_proxyUrl),
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode({
+          'prompt': fullPrompt,
+          'model': modelName,
+          'isJson': false,
+        }),
+      );
+
+      if (proxyResponse.statusCode == 200) {
+        final data = jsonDecode(proxyResponse.body);
+        final rawText = data['text'] as String?;
+        if (rawText != null && rawText.trim().isNotEmpty) {
+          _logResponse(method, 200, timer.elapsedMilliseconds, rawText);
+          return rawText.trim();
         }
-      ],
-    };
-    if (systemInstruction != null) {
-      body['system_instruction'] = {
-        'parts': [
-          {'text': systemInstruction}
-        ]
+      } else {
+        debugPrint('[AURA PROXY] Proxy text returned status ${proxyResponse.statusCode}, checking fallback');
+      }
+    } catch (proxyError) {
+      debugPrint('[AURA PROXY] Proxy text call exception: $proxyError');
+    }
+
+    // 2. Fallback: Direct API if local dev API key is available
+    final directKey = _effectiveApiKey;
+    if (directKey.isNotEmpty) {
+      final directUrl = Uri.parse(
+          'https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent?key=$directKey');
+      final body = <String, dynamic>{
+        'contents': [
+          {
+            'role': 'user',
+            'parts': [
+              {'text': fullPrompt}
+            ]
+          }
+        ],
       };
+      final response = await http.post(
+        directUrl,
+        headers: {'Content-Type': 'application/json'},
+        body: jsonEncode(body),
+      );
+      _logResponse(method, response.statusCode, timer.elapsedMilliseconds, response.body);
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        final text = data['candidates']?[0]?['content']?['parts']?[0]?['text'];
+        if (text != null && text.toString().trim().isNotEmpty) {
+          return text.toString().trim();
+        }
+      }
     }
-    final response = await http.post(
-      _url,
-      headers: _headers,
-      body: jsonEncode(body),
-    );
-    _logResponse(
-        method, response.statusCode, timer.elapsedMilliseconds, response.body);
-    if (response.statusCode != 200) {
-      throw Exception(
-          'Gemini API error ${response.statusCode}: ${response.body}');
-    }
-    final data = jsonDecode(response.body);
-    final text = data['candidates']?[0]?['content']?['parts']?[0]?['text'];
-    if (text == null || text.toString().trim().isEmpty) {
-      throw Exception('Gemini returned empty text for $method');
-    }
-    return text.toString().trim();
+
+    throw Exception('AURA AI service temporarily unavailable. Please retry.');
   }
 
   @override
