@@ -37,21 +37,19 @@ export const callGeminiProxy = onRequest(
     try {
       const { prompt, model, isJson } = req.body || {};
 
-      if (!prompt || typeof prompt !== "string") {
+      if (!prompt || typeof prompt !== "string" || prompt.trim().length === 0) {
         res.status(400).json({ error: "Missing or invalid 'prompt' field." });
+        return;
+      }
+
+      if (prompt.length > 50000) {
+        res.status(413).json({ error: "Prompt payload exceeds maximum allowed size (50,000 chars)." });
         return;
       }
 
       const apiKey = geminiApiKey.value();
       if (!apiKey) {
         res.status(500).json({ error: "Server Gemini API key secret is not configured." });
-        return;
-      }
-
-      if (req.body?.action === "listModels") {
-        const listResp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
-        const listData = await listResp.json();
-        res.status(200).json(listData);
         return;
       }
 
