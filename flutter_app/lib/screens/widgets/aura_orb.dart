@@ -121,7 +121,7 @@ class OrbPainter extends CustomPainter {
 
     final paint = Paint()
       ..style = PaintingStyle.fill
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 16);
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, (size.width * 0.08).clamp(1.5, 16.0));
 
     // 1. Ripple Effect (outer wave)
     if (orbState == OrbState.rippling) {
@@ -130,8 +130,8 @@ class OrbPainter extends CustomPainter {
       final rippleRadius = baseRadius + (rippleProgress * (size.width / 2 - baseRadius));
       final ripplePaint = Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 2
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8)
+        ..strokeWidth = (size.width * 0.015).clamp(1.0, 2.0)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, (size.width * 0.04).clamp(1.0, 8.0))
         ..color = colors[0].withOpacity(rippleOpacity * 0.4);
 
       canvas.drawCircle(center, rippleRadius, ripplePaint);
@@ -141,8 +141,8 @@ class OrbPainter extends CustomPainter {
       final secondRadius = baseRadius + (secondProgress * (size.width / 2 - baseRadius));
       final secondPaint = Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6)
+        ..strokeWidth = (size.width * 0.01).clamp(0.8, 1.5)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, (size.width * 0.03).clamp(0.8, 6.0))
         ..color = colors[1].withOpacity(secondOpacity * 0.3);
 
       canvas.drawCircle(center, secondRadius, secondPaint);
@@ -181,8 +181,8 @@ class OrbPainter extends CustomPainter {
       final waveOpacity = (1.0 - pulseProgress) * 0.22;
       final wavePaint = Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 1.5
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10)
+        ..strokeWidth = (size.width * 0.015).clamp(1.0, 1.5)
+        ..maskFilter = MaskFilter.blur(BlurStyle.normal, (size.width * 0.05).clamp(1.0, 10.0))
         ..color = colors[0].withOpacity(waveOpacity);
       canvas.drawCircle(center, waveRadius, wavePaint);
     }
@@ -208,7 +208,7 @@ class OrbPainter extends CustomPainter {
     // Inner bright core: make it larger and brighter
     final corePaint = Paint()
       ..style = PaintingStyle.fill
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10)
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, (size.width * 0.05).clamp(1.0, 10.0))
       ..shader = RadialGradient(
         colors: [
           Colors.white.withOpacity(0.95),
