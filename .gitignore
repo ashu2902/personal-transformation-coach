@@ -53,4 +53,4 @@ GoogleService-Info.plist
 functions/node_modules/
 functions/lib/
 *.local
-
+.firebase/
