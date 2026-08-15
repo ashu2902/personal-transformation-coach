@@ -11,7 +11,7 @@ const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 /**
  * Secure Gemini Proxy Endpoint for AURA Coach.
  * Holds GEMINI_API_KEY strictly in Cloud Secret Manager.
- * Features automatic multi-model failover and resilience against transient upstream 503/429 spikes.
+ * Features automated retry on transient 503 capacity spikes and multi-tier model fallback.
  */
 export const callGeminiProxy = onRequest(
   {
@@ -56,10 +56,10 @@ export const callGeminiProxy = onRequest(
         return;
       }
 
-      const requestedModel = model || "gemini-2.0-flash";
-      // Multi-tier model fallback hierarchy
+      const requestedModel = model || "gemini-3.7-flash";
+      // Active verified model hierarchy in v1beta
       const candidateModels = Array.from(
-        new Set([requestedModel, "gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-3.7-flash"])
+        new Set([requestedModel, "gemini-3.7-flash", "gemini-3.6-flash", "gemini-2.5-flash", "gemini-2.5-pro"])
       );
 
       const parts: Array<Record<string, any>> = [];
@@ -90,51 +90,63 @@ export const callGeminiProxy = onRequest(
       let lastError: string | null = null;
       let lastStatus = 500;
 
-      for (let i = 0; i < candidateModels.length; i++) {
-        const targetModel = candidateModels[i];
+      for (const targetModel of candidateModels) {
         const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${apiKey}`;
 
-        try {
-          console.log(`[GEMINI PROXY] Attempting inference with model: ${targetModel}`);
-          const response = await fetch(geminiEndpoint, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(requestBody),
-          });
-
-          if (response.ok) {
-            const data: any = await response.json();
-            const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-
-            res.status(200).json({
-              text: rawText,
-              model: targetModel,
+        // Try model with up to 2 retries on 503 / 429 capacity spikes
+        for (let attempt = 1; attempt <= 2; attempt++) {
+          try {
+            console.log(`[GEMINI PROXY] Attempting inference with model: ${targetModel} (Attempt ${attempt})`);
+            const response = await fetch(geminiEndpoint, {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify(requestBody),
             });
-            return;
-          }
 
-          lastStatus = response.status;
-          lastError = await response.text();
-          console.warn(`[GEMINI PROXY] Model ${targetModel} failed with status ${response.status}: ${lastError}. Attempting fallback...`);
+            if (response.ok) {
+              const data: any = await response.json();
+              const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
 
-          if (response.status === 400) {
-            res.status(400).json({ error: "Gemini API bad request", details: lastError });
-            return;
-          }
+              res.status(200).json({
+                text: rawText,
+                model: targetModel,
+              });
+              return;
+            }
 
-          // Backoff before trying next model in chain
-          if (i < candidateModels.length - 1) {
-            await sleep(350);
-          }
-        } catch (fetchErr: any) {
-          console.warn(`[GEMINI PROXY] Network error invoking ${targetModel}:`, fetchErr?.message);
-          lastError = fetchErr?.message ?? "Network error";
-          if (i < candidateModels.length - 1) {
-            await sleep(350);
+            lastStatus = response.status;
+            lastError = await response.text();
+            console.warn(`[GEMINI PROXY] Model ${targetModel} attempt ${attempt} returned status ${response.status}: ${lastError}`);
+
+            // Stop immediately on non-transient bad requests (400)
+            if (response.status === 400) {
+              res.status(400).json({ error: "Gemini API bad request", details: lastError });
+              return;
+            }
+
+            // On 503 or 429 capacity spikes, backoff and retry the same model
+            if ((response.status === 503 || response.status === 429) && attempt < 2) {
+              await sleep(400);
+              continue;
+            }
+
+            // If 404 (model ID not found), immediately break inner loop to try next model
+            if (response.status === 404) {
+              break;
+            }
+          } catch (fetchErr: any) {
+            console.warn(`[GEMINI PROXY] Network error invoking ${targetModel}:`, fetchErr?.message);
+            lastError = fetchErr?.message ?? "Network error";
+            if (attempt < 2) {
+              await sleep(350);
+            }
           }
         }
+
+        // Small delay before moving to next fallback candidate model
+        await sleep(200);
       }
 
       // If all models failed

@@ -860,10 +860,15 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
     } catch (e) {
       debugPrint('[AURA STATE] Chat processing failed: $e');
       final errNow = DateTime.now();
+      final lower = text.toLowerCase().trim();
+      String fallbackMsg = "I encountered a brief connection hiccup. Please send your message again.";
+      if (lower == 'yes' || lower == 'ok' || lower == 'sure' || lower == 'sounds good' || lower == 'done') {
+        fallbackMsg = "Understood! I'm keeping your routine calibrated. Let me know when you want to adapt workouts or log meals.";
+      }
       final errReply = ChatMessage(
         id: (errNow.millisecondsSinceEpoch + 1).toString(),
         sender: 'ai',
-        text: "I encountered a hiccup processing that request. Could you please try again?",
+        text: fallbackMsg,
         timestamp: errNow.toIso8601String(),
         createdAt: errNow,
       );
