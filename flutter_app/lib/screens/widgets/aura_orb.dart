@@ -1,8 +1,9 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../models/models.dart';
+import '../../theme/theme.dart';
 
-enum OrbState { pulsing, rippling, swirling }
+enum OrbState { idle, pulsing, thinking, rippling, swirling, adapting, completed }
 
 class AuraOrb extends StatefulWidget {
   final CoachSoul soul;
@@ -28,29 +29,34 @@ class _AuraOrbState extends State<AuraOrb> with SingleTickerProviderStateMixin {
     super.initState();
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 4),
+      duration: _durationForState(widget.state),
     )..repeat();
+  }
+
+  Duration _durationForState(OrbState state) {
+    switch (state) {
+      case OrbState.idle:
+      case OrbState.pulsing:
+        return const Duration(seconds: 4);
+      case OrbState.thinking:
+      case OrbState.swirling:
+        return const Duration(milliseconds: 1800);
+      case OrbState.rippling:
+        return const Duration(milliseconds: 1400);
+      case OrbState.adapting:
+        return const Duration(milliseconds: 2200);
+      case OrbState.completed:
+        return const Duration(milliseconds: 1600);
+    }
   }
 
   @override
   void didUpdateWidget(AuraOrb oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (widget.state != oldWidget.state) {
-      _controller.stop();
-      switch (widget.state) {
-        case OrbState.pulsing:
-          _controller.duration = const Duration(seconds: 4);
-          _controller.repeat();
-          break;
-        case OrbState.rippling:
-          _controller.duration = const Duration(milliseconds: 1500);
-          _controller.repeat();
-          break;
-        case OrbState.swirling:
-          _controller.duration = const Duration(seconds: 2);
-          _controller.repeat();
-          break;
-      }
+      _controller.duration = _durationForState(widget.state);
+      _controller.reset();
+      _controller.repeat();
     }
   }
 
@@ -61,23 +67,21 @@ class _AuraOrbState extends State<AuraOrb> with SingleTickerProviderStateMixin {
   }
 
   List<Color> _getOrbColors() {
-    switch (widget.soul) {
-      case CoachSoul.supporter:
-        return [
-          const Color(0xFF8EA885), // Sage
-          const Color(0xFF9A7EB8), // Lavender
-        ];
-      case CoachSoul.pro:
-        return [
-          const Color(0xFF00B2FF), // Electric Blue
-          const Color(0xFFFF007A), // Neon Magenta
-        ];
-      case CoachSoul.teacher:
-        return [
-          const Color(0xFF00BFA5), // Teal
-          const Color(0xFFB0BEC5), // Silver
-        ];
+    final baseColors = AuraColors.getSoulColors(widget.soul);
+    if (widget.state == OrbState.adapting) {
+      // Shift toward Action Green during plan adaptation
+      final green = AuraColors.actionGreen;
+      return [
+        Color.lerp(baseColors.primary, green, 0.7)!,
+        Color.lerp(baseColors.secondary, green.withOpacity(0.8), 0.7)!,
+      ];
+    } else if (widget.state == OrbState.completed) {
+      return [
+        AuraColors.actionGreen,
+        AuraColors.actionGreen.withOpacity(0.5),
+      ];
     }
+    return [baseColors.primary, baseColors.secondary];
   }
 
   @override
@@ -148,31 +152,37 @@ class OrbPainter extends CustomPainter {
     double pulseScale = 1.0;
     double rotationAngle = 0.0;
 
-    if (orbState == OrbState.pulsing) {
-      // Breathing pulse: expand scale multiplier to 0.12 for prominent visual feedback
-      pulseScale = 1.0 + (math.sin(animationValue * 2 * math.pi) * 0.12);
-    } else if (orbState == OrbState.swirling) {
+    if (orbState == OrbState.idle || orbState == OrbState.pulsing) {
+      // Gentle calm breathing pulse
+      pulseScale = 1.0 + (math.sin(animationValue * 2 * math.pi) * 0.08);
+    } else if (orbState == OrbState.thinking || orbState == OrbState.swirling) {
       rotationAngle = animationValue * 2 * math.pi;
-      pulseScale = 1.0 + (math.sin(animationValue * 4 * math.pi) * 0.03);
+      pulseScale = 1.0 + (math.sin(animationValue * 4 * math.pi) * 0.05);
+    } else if (orbState == OrbState.adapting) {
+      rotationAngle = animationValue * math.pi;
+      pulseScale = 1.0 + (math.sin(animationValue * 2 * math.pi) * 0.12);
+    } else if (orbState == OrbState.completed) {
+      pulseScale = 1.0 + (math.sin(animationValue * math.pi) * 0.15);
     }
 
     final activeRadius = baseRadius * pulseScale;
 
-    // Draw the glow background: make opacity 0.45 and size multiplier 1.6 for rich depth
+    // Draw the glow background: restrained soft-tech blur
+    final glowOpacity = (orbState == OrbState.adapting || orbState == OrbState.completed) ? 0.55 : 0.35;
     final glowPaint = Paint()
-      ..color = colors[1].withOpacity(0.45)
-      ..maskFilter = MaskFilter.blur(BlurStyle.normal, activeRadius * 1.0);
-    canvas.drawCircle(center, activeRadius * 1.6, glowPaint);
+      ..color = colors[1].withOpacity(glowOpacity)
+      ..maskFilter = MaskFilter.blur(BlurStyle.normal, activeRadius * 0.9);
+    canvas.drawCircle(center, activeRadius * 1.5, glowPaint);
 
-    // Also draw a radiating secondary ring in pulsing state to enhance the aura effect
-    if (orbState == OrbState.pulsing) {
+    // Also draw a radiating secondary ring in pulsing/adapting state
+    if (orbState == OrbState.pulsing || orbState == OrbState.idle || orbState == OrbState.adapting) {
       final pulseProgress = animationValue;
-      final waveRadius = baseRadius * (1.1 + (pulseProgress * 0.5));
-      final waveOpacity = (1.0 - pulseProgress) * 0.25;
+      final waveRadius = baseRadius * (1.1 + (pulseProgress * 0.45));
+      final waveOpacity = (1.0 - pulseProgress) * 0.22;
       final wavePaint = Paint()
         ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.0
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 12)
+        ..strokeWidth = 1.5
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10)
         ..color = colors[0].withOpacity(waveOpacity);
       canvas.drawCircle(center, waveRadius, wavePaint);
     }

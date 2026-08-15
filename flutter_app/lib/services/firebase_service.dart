@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -283,6 +284,16 @@ class FirebaseFirestoreService {
 
   Future<void> saveChatMessage(String uid, ChatMessage message) async {
     try {
+      final docData = <String, dynamic>{
+        'id': message.id,
+        'sender': message.sender,
+        'text': message.text,
+        'timestamp': message.timestamp,
+        'serverTimestamp': FieldValue.serverTimestamp(),
+      };
+      if (message.imageBytes != null && message.imageBytes!.isNotEmpty) {
+        docData['imageBase64'] = base64Encode(message.imageBytes!);
+      }
       await _db
           .collection('users')
           .doc(uid)
@@ -290,13 +301,7 @@ class FirebaseFirestoreService {
           .doc('default_chat')
           .collection('messages')
           .doc(message.id)
-          .set({
-            'id': message.id,
-            'sender': message.sender,
-            'text': message.text,
-            'timestamp': message.timestamp,
-            'serverTimestamp': FieldValue.serverTimestamp(),
-          })
+          .set(docData)
           .timeout(const Duration(seconds: 15));
     } catch (e) {
       debugPrint('[FIRESTORE ERROR] saveChatMessage failed: $e');

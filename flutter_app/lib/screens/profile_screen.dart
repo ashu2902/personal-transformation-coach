@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import 'package:google_fonts/google_fonts.dart';
 import '../providers/transformation_state.dart';
 import '../models/models.dart';
+import '../theme/theme.dart';
+import '../widgets/common/common.dart';
+import 'widgets/aura_orb.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -13,41 +15,39 @@ class ProfileScreen extends ConsumerWidget {
     final state = ref.watch(transformationEngineProvider);
     final notifier = ref.read(transformationEngineProvider.notifier);
     final profile = state.profile;
-    final primaryColor = Theme.of(context).colorScheme.primary;
+    final auraTheme = context.auraTheme;
+    final soul = profile.coachSoul;
 
     return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+      backgroundColor: auraTheme.scaffoldBackground,
       appBar: AppBar(
-        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        backgroundColor: auraTheme.scaffoldBackground,
         elevation: 0,
         title: Text(
-          'Baseline Profile',
-          style: GoogleFonts.syne(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+          'Profile & Persona',
+          style: AuraTypography.titleLarge,
         ),
         leading: IconButton(
-          icon: const Icon(LucideIcons.arrowLeft, color: Colors.white),
+          icon: const Icon(LucideIcons.arrowLeft, color: AuraColors.textPrimary),
           onPressed: () => Navigator.of(context).maybePop(),
         ),
       ),
       body: SingleChildScrollView(
         physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.all(20.0),
+        padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // User Header Card
-            Container(
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Theme.of(context).cardColor,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withOpacity(0.08)),
-              ),
+            // 1. User Header Card
+            AuraCard(
+              padding: const EdgeInsets.all(18),
+              backgroundColor: auraTheme.surfaceCard,
+              borderColor: AuraColors.borderSubtle,
               child: Row(
                 children: [
                   CircleAvatar(
-                    radius: 26,
-                    backgroundColor: primaryColor,
+                    radius: 28,
+                    backgroundColor: auraTheme.primary,
                     child: Text(
                       profile.name.isNotEmpty ? profile.name.substring(0, 2).toUpperCase() : 'AV',
                       style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16),
@@ -60,27 +60,73 @@ class ProfileScreen extends ConsumerWidget {
                       children: [
                         Text(
                           profile.name,
-                          style: GoogleFonts.syne(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                          style: AuraTypography.titleLarge.copyWith(fontSize: 18),
                         ),
                         const SizedBox(height: 4),
                         Text(
                           '${profile.age} yrs • ${profile.heightCm.round()} cm • ${profile.weightKg} kg',
-                          style: GoogleFonts.plusJakartaSans(color: const Color(0xFFA1A1AA), fontSize: 12),
+                          style: AuraTypography.bodySmall.copyWith(color: AuraColors.textSecondary),
                         ),
                       ],
                     ),
+                  ),
+                  AuraOrb(
+                    soul: soul,
+                    state: OrbState.idle,
+                    size: 38,
                   ),
                 ],
               ),
             ),
             const SizedBox(height: 24),
 
+            // 2. COACH PERSONALITY SELECTOR (Interactive Persona Swapping)
+            AuraSectionHeader(
+              title: 'Active Coach Persona',
+            ),
+            const SizedBox(height: 4),
             Text(
-              'TRANSFORMATION GOALS',
-              style: GoogleFonts.syne(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2),
+              'Switching persona instantly shifts coaching tone, Orb presence, and visual themes.',
+              style: AuraTypography.bodySmall.copyWith(color: AuraColors.textSecondary),
             ),
             const SizedBox(height: 12),
+            Row(
+              children: [
+                _buildPersonaCard(
+                  context: context,
+                  title: 'The Supporter',
+                  subtitle: 'Warm & Empathetic',
+                  soulEnum: CoachSoul.supporter,
+                  activeSoul: soul,
+                  onTap: () => notifier.updateCoachSoul(CoachSoul.supporter),
+                ),
+                const SizedBox(width: 8),
+                _buildPersonaCard(
+                  context: context,
+                  title: 'The Pro',
+                  subtitle: 'Crisp & Accountable',
+                  soulEnum: CoachSoul.pro,
+                  activeSoul: soul,
+                  onTap: () => notifier.updateCoachSoul(CoachSoul.pro),
+                ),
+                const SizedBox(width: 8),
+                _buildPersonaCard(
+                  context: context,
+                  title: 'The Teacher',
+                  subtitle: 'Scientific & Analytical',
+                  soulEnum: CoachSoul.teacher,
+                  activeSoul: soul,
+                  onTap: () => notifier.updateCoachSoul(CoachSoul.teacher),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
 
+            // 3. TRANSFORMATION GOALS
+            AuraSectionHeader(
+              title: 'Transformation Goals',
+            ),
+            const SizedBox(height: 8),
             _buildDetailTile(
               context: context,
               icon: LucideIcons.target,
@@ -95,7 +141,7 @@ class ProfileScreen extends ConsumerWidget {
               context: context,
               icon: LucideIcons.trophy,
               title: 'Target Physique',
-              subtitle: profile.targetPhysique,
+              subtitle: profile.targetPhysique.isNotEmpty ? profile.targetPhysique : 'Athletic V-Taper',
             ),
             _buildDetailTile(
               context: context,
@@ -103,14 +149,13 @@ class ProfileScreen extends ConsumerWidget {
               title: 'Target Weight',
               subtitle: '${profile.targetWeightKg} kg (Current: ${profile.weightKg} kg)',
             ),
-
             const SizedBox(height: 24),
-            Text(
-              'TRAINING CONSTRAINTS',
-              style: GoogleFonts.syne(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2),
-            ),
-            const SizedBox(height: 12),
 
+            // 4. PERSISTENT CONSTRAINTS & EQUIPMENT MEMORY
+            AuraSectionHeader(
+              title: 'Persistent Constraints & Gear',
+            ),
+            const SizedBox(height: 8),
             _buildDetailTile(
               context: context,
               icon: LucideIcons.calendar,
@@ -121,23 +166,29 @@ class ProfileScreen extends ConsumerWidget {
               context: context,
               icon: LucideIcons.dumbbell,
               title: 'Available Equipment',
-              subtitle: profile.equipmentList.map((e) => e.toString()).join(', '),
+              subtitle: profile.equipmentList.isNotEmpty
+                  ? profile.equipmentList.map((e) => e.name).join(', ')
+                  : 'Bodyweight & Resistance Bands',
             ),
-
+            _buildDetailTile(
+              context: context,
+              icon: LucideIcons.shieldAlert,
+              title: 'Mobility Limitations',
+              subtitle: profile.activeInjuries.isNotEmpty
+                  ? profile.activeInjuries.join(', ')
+                  : 'None reported (Full range of motion)',
+            ),
             const SizedBox(height: 24),
-            Text(
-              'ACCOUNT & AUTHENTICATION',
-              style: GoogleFonts.syne(color: primaryColor, fontSize: 11, fontWeight: FontWeight.bold, letterSpacing: 1.2),
-            ),
-            const SizedBox(height: 12),
 
-            Container(
+            // 5. ACCOUNT & AUTHENTICATION
+            AuraSectionHeader(
+              title: 'Account & Synchronization',
+            ),
+            const SizedBox(height: 8),
+            AuraCard(
               padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: Theme.of(context).cardColor,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: Colors.white.withOpacity(0.08)),
-              ),
+              backgroundColor: auraTheme.surfaceCard,
+              borderColor: AuraColors.borderSubtle,
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -147,12 +198,14 @@ class ProfileScreen extends ConsumerWidget {
                         width: 32,
                         height: 32,
                         decoration: BoxDecoration(
-                          color: notifier.isAuthenticated ? const Color(0x2010B981) : const Color(0x20F59E0B),
+                          color: notifier.isAuthenticated
+                              ? AuraColors.actionGreen.withOpacity(0.15)
+                              : AuraColors.warningAmber.withOpacity(0.15),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Icon(
                           notifier.isAuthenticated ? LucideIcons.shieldCheck : LucideIcons.userX,
-                          color: notifier.isAuthenticated ? const Color(0xFF10B981) : const Color(0xFFF59E0B),
+                          color: notifier.isAuthenticated ? AuraColors.actionGreen : AuraColors.warningAmber,
                           size: 18,
                         ),
                       ),
@@ -163,11 +216,11 @@ class ProfileScreen extends ConsumerWidget {
                           children: [
                             Text(
                               notifier.currentAuthEmail ?? 'Guest Athlete',
-                              style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                              style: AuraTypography.labelBold.copyWith(fontSize: 14),
                             ),
                             Text(
-                              notifier.isAuthenticated ? 'Signed in with Google' : 'Local Guest Account',
-                              style: GoogleFonts.plusJakartaSans(color: const Color(0xFFA1A1AA), fontSize: 11),
+                              notifier.isAuthenticated ? 'Synced with Cloud Firestore' : 'Local Guest Account',
+                              style: AuraTypography.bodySmall.copyWith(color: AuraColors.textSecondary),
                             ),
                           ],
                         ),
@@ -176,111 +229,113 @@ class ProfileScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 16),
                   if (!notifier.isAuthenticated)
-                    SizedBox(
+                    AuraButton(
+                      text: 'Sign In with Google',
+                      variant: AuraButtonVariant.secondary,
                       width: double.infinity,
-                      height: 44,
-                      child: ElevatedButton.icon(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: Colors.white,
-                          foregroundColor: Colors.black87,
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        onPressed: () async {
-                          try {
-                            await notifier.signInWithGoogle();
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
-                                  content: Text('Successfully signed in with Google!'),
-                                  backgroundColor: Color(0xFF10B981),
-                                ),
-                              );
-                            }
-                          } catch (e) {
-                            if (context.mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
-                                  content: Text('Google Sign-In error: $e'),
-                                  backgroundColor: Colors.redAccent,
-                                ),
-                              );
-                            }
-                          }
-                        },
-                        icon: Container(
-                          width: 20,
-                          height: 20,
-                          alignment: Alignment.center,
-                          child: const Text(
-                            'G',
-                            style: TextStyle(color: Color(0xFF4285F4), fontWeight: FontWeight.w900, fontSize: 14),
-                          ),
-                        ),
-                        label: Text(
-                          'Sign In with Google',
-                          style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.bold, fontSize: 13),
-                        ),
-                      ),
-                    )
-                  else
-                    SizedBox(
-                      width: double.infinity,
-                      height: 40,
-                      child: OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(
-                          foregroundColor: Colors.redAccent,
-                          side: const BorderSide(color: Color(0x40EF4444)),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                        ),
-                        onPressed: () async {
-                          await notifier.signOut();
+                      onPressed: () async {
+                        try {
+                          await notifier.signInWithGoogle();
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(content: Text('Signed out successfully.')),
+                              const SnackBar(
+                                content: Text('Successfully signed in!'),
+                                backgroundColor: AuraColors.actionGreen,
+                              ),
                             );
                           }
-                        },
-                        icon: const Icon(LucideIcons.logOut, size: 14),
-                        label: Text(
-                          'Sign Out',
-                          style: GoogleFonts.plusJakartaSans(fontWeight: FontWeight.w600, fontSize: 12),
-                        ),
-                      ),
+                        } catch (e) {
+                          if (context.mounted) {
+                            ScaffoldMessenger.of(context).showSnackBar(
+                              SnackBar(
+                                content: Text('Sign-in error: $e'),
+                                backgroundColor: AuraColors.error,
+                              ),
+                            );
+                          }
+                        }
+                      },
+                    )
+                  else
+                    AuraButton(
+                      text: 'Sign Out',
+                      variant: AuraButtonVariant.outline,
+                      width: double.infinity,
+                      icon: LucideIcons.logOut,
+                      onPressed: () async {
+                        await notifier.signOut();
+                        if (context.mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('Signed out successfully.')),
+                          );
+                        }
+                      },
                     ),
                 ],
               ),
             ),
+            const SizedBox(height: 40),
+          ],
+        ),
+      ),
+    );
+  }
 
-            const SizedBox(height: 32),
-            SizedBox(
-              width: double.infinity,
-              height: 52,
-              child: ElevatedButton.icon(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Theme.of(context).cardColor,
-                  foregroundColor: Colors.white,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
-                  side: BorderSide(color: Colors.white.withOpacity(0.08)),
-                ),
-                onPressed: () {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Baseline updated automatically by active AI feedback loops.',
-                        style: GoogleFonts.plusJakartaSans(color: Colors.black, fontWeight: FontWeight.bold),
-                      ),
-                      backgroundColor: primaryColor,
-                    ),
-                  );
-                },
-                icon: Icon(LucideIcons.sliders, size: 16, color: primaryColor),
-                label: Text(
-                  'Edit Baseline Profile',
-                  style: GoogleFonts.syne(fontWeight: FontWeight.bold, fontSize: 13),
+  Widget _buildPersonaCard({
+    required BuildContext context,
+    required String title,
+    required String subtitle,
+    required CoachSoul soulEnum,
+    required CoachSoul activeSoul,
+    required VoidCallback onTap,
+  }) {
+    final isSelected = soulEnum == activeSoul;
+    final palette = AuraColors.getSoulPalette(soulEnum);
+
+    return Expanded(
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
+          decoration: BoxDecoration(
+            color: isSelected ? palette.primary.withOpacity(0.18) : AuraColors.surface2,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(
+              color: isSelected ? palette.primary : AuraColors.borderSubtle,
+              width: isSelected ? 1.5 : 1.0,
+            ),
+          ),
+          child: Column(
+            children: [
+              Container(
+                width: 10,
+                height: 10,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: palette.primary,
                 ),
               ),
-            ),
-          ],
+              const SizedBox(height: 8),
+              Text(
+                title,
+                textAlign: TextAlign.center,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.bold,
+                  color: isSelected ? palette.primary : AuraColors.textPrimary,
+                ),
+              ),
+              const SizedBox(height: 2),
+              Text(
+                subtitle,
+                textAlign: TextAlign.center,
+                style: const TextStyle(
+                  fontSize: 9,
+                  color: AuraColors.textSecondary,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -292,27 +347,29 @@ class ProfileScreen extends ConsumerWidget {
     required String title,
     required String subtitle,
   }) {
-    return Container(
+    final auraTheme = context.auraTheme;
+    return AuraCard(
       margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Theme.of(context).cardColor,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.white.withOpacity(0.06)),
-      ),
+      borderRadius: 12,
+      backgroundColor: auraTheme.surfaceCard,
+      borderColor: AuraColors.borderSubtle,
       child: Row(
         children: [
-          Icon(icon, size: 18, color: Theme.of(context).colorScheme.primary),
+          Icon(icon, size: 18, color: auraTheme.primary),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(title, style: GoogleFonts.plusJakartaSans(color: const Color(0xFFA1A1AA), fontSize: 11)),
+                Text(
+                  title,
+                  style: AuraTypography.bodySmall.copyWith(color: AuraColors.textSecondary),
+                ),
                 const SizedBox(height: 2),
                 Text(
                   subtitle,
-                  style: GoogleFonts.plusJakartaSans(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 13),
+                  style: AuraTypography.bodyLarge.copyWith(fontWeight: FontWeight.w600, fontSize: 13),
                 ),
               ],
             ),

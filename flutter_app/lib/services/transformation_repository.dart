@@ -18,9 +18,6 @@ abstract class ITransformationRepository {
 
   Future<List<ProgressEntry>> loadProgressHistory();
   Future<void> saveProgressEntry(ProgressEntry entry);
-
-  Future<String?> loadApiKey();
-  Future<void> saveApiKey(String key);
 }
 
 class LocalTransformationRepository implements ITransformationRepository {
@@ -29,19 +26,6 @@ class LocalTransformationRepository implements ITransformationRepository {
   static const String _keyNutrition = 'aura_daily_nutrition_';
   static const String _keyRecovery = 'aura_daily_recovery_';
   static const String _keyProgress = 'aura_progress_history';
-  static const String _keyApiKey = 'aura_gemini_api_key';
-
-  @override
-  Future<String?> loadApiKey() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_keyApiKey);
-  }
-
-  @override
-  Future<void> saveApiKey(String key) async {
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString(_keyApiKey, key);
-  }
 
   @override
   Future<UserProfile?> loadProfile() async {

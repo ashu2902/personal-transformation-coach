@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -35,7 +36,6 @@ class TransformationEngineState {
   final List<ChatMessage> chatMessages;
   final bool isOnboardingComplete;
   final String? adaptationNotice;
-  final String apiKey;
   final bool isAiThinking;
   final WeeklyPlan? weeklyPlan;
   final MasterContext masterContext;
@@ -49,7 +49,6 @@ class TransformationEngineState {
     required this.chatMessages,
     this.isOnboardingComplete = true,
     this.adaptationNotice,
-    this.apiKey = '',
     this.isAiThinking = false,
     this.weeklyPlan,
     MasterContext? masterContext,
@@ -64,7 +63,6 @@ class TransformationEngineState {
     List<ChatMessage>? chatMessages,
     bool? isOnboardingComplete,
     String? adaptationNotice,
-    String? apiKey,
     bool? isAiThinking,
     WeeklyPlan? weeklyPlan,
     MasterContext? masterContext,
@@ -78,7 +76,6 @@ class TransformationEngineState {
       chatMessages: chatMessages ?? this.chatMessages,
       isOnboardingComplete: isOnboardingComplete ?? this.isOnboardingComplete,
       adaptationNotice: adaptationNotice ?? this.adaptationNotice,
-      apiKey: apiKey ?? this.apiKey,
       isAiThinking: isAiThinking ?? this.isAiThinking,
       weeklyPlan: weeklyPlan ?? this.weeklyPlan,
       masterContext: masterContext ?? this.masterContext,
@@ -163,11 +160,7 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
   Future<void> initFromRepository() async {
     debugPrint('[AURA STATE] Initializing state from online Firestore...');
 
-    final savedApiKey = await _repository.loadApiKey() ?? const String.fromEnvironment('GEMINI_API_KEY');
-    if (savedApiKey.isNotEmpty) {
-      _aiService = GeminiAIProvider(apiKey: savedApiKey);
-      state = state.copyWith(apiKey: savedApiKey);
-    }
+    _aiService = GeminiAIProvider();
 
     final uid = _auth.uid;
     if (uid == null) {
@@ -242,11 +235,39 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
       final List<ChatMessage> messages = [];
       for (var doc in snapshot.docs) {
         final data = doc.data() as Map<String, dynamic>;
+        DateTime? msgTime;
+
+        if (data['serverTimestamp'] != null && data['serverTimestamp'] is Timestamp) {
+          msgTime = (data['serverTimestamp'] as Timestamp).toDate();
+        } else if (data['timestamp'] != null && data['timestamp'] != 'Just now') {
+          msgTime = DateTime.tryParse(data['timestamp'].toString());
+        }
+
+        // Fallback: If doc ID is millisecondsSinceEpoch (numeric string)
+        if (msgTime == null) {
+          final epoch = int.tryParse(doc.id);
+          if (epoch != null && epoch > 1000000000000) {
+            msgTime = DateTime.fromMillisecondsSinceEpoch(epoch);
+          }
+        }
+        msgTime ??= DateTime.now();
+
+        Uint8List? imgBytes;
+        if (data['imageBase64'] != null && data['imageBase64'] is String && (data['imageBase64'] as String).isNotEmpty) {
+          try {
+            imgBytes = base64Decode(data['imageBase64'] as String);
+          } catch (e) {
+            debugPrint('[AURA STATE] Image decode error: $e');
+          }
+        }
+
         messages.add(ChatMessage(
           id: data['id'] ?? doc.id,
           sender: data['sender'] ?? 'ai',
           text: data['text'] ?? '',
-          timestamp: data['timestamp'] ?? 'Just now',
+          timestamp: msgTime.toIso8601String(),
+          createdAt: msgTime,
+          imageBytes: imgBytes,
         ));
       }
       if (messages.isNotEmpty) {
@@ -305,13 +326,6 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
     state = state.copyWith(
       isOnboardingComplete: false,
     );
-  }
-
-  Future<void> updateApiKey(String apiKey) async {
-    debugPrint('[AURA STATE] Updating Gemini API Key...');
-    await _repository.saveApiKey(apiKey);
-    _aiService = GeminiAIProvider(apiKey: apiKey);
-    state = state.copyWith(apiKey: apiKey);
   }
 
   static TransformationEngineState _initialState() {
@@ -427,6 +441,38 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
     _loadCurrentWeeklyPlan(uid);
 
     debugPrint('[AURA STATE] Onboarding completed & baseline saved online!');
+  }
+
+  Future<bool> signInAndLoadUserProfile({bool useGoogleAuth = true}) async {
+    try {
+      UserCredential? cred;
+      if (useGoogleAuth) {
+        cred = await _auth.signInWithGoogle();
+      } else {
+        cred = await _auth.signInAnonymously();
+      }
+
+      final uid = cred?.user?.uid ?? _auth.uid;
+      if (uid == null) return false;
+
+      final existingProfile = await _firestore.getUserProfile(uid);
+      if (existingProfile != null && existingProfile.name.isNotEmpty) {
+        state = state.copyWith(
+          profile: existingProfile,
+          isOnboardingComplete: true,
+          adaptationNotice: "Welcome back, ${existingProfile.name}! Your transformation state has been synced.",
+        );
+
+        setupSubscriptions(uid);
+        _loadMasterContext(uid);
+        _loadCurrentWeeklyPlan(uid);
+        return true;
+      }
+      return false;
+    } catch (e) {
+      debugPrint('[AURA STATE] Sign in error: $e');
+      return false;
+    }
   }
 
   void updateExerciseSet(String exerciseId, int setIndex, bool completed) {
@@ -561,27 +607,32 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
     }
   }
 
-  AIService _aiService = GeminiAIProvider(apiKey: const String.fromEnvironment('GEMINI_API_KEY'));
+  AIService _aiService = GeminiAIProvider();
   AIService get aiService => _aiService;
 
   void appendUserMessage(String text) {
+    final now = DateTime.now();
     final userMsg = ChatMessage(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      id: now.millisecondsSinceEpoch.toString(),
       sender: 'user',
       text: text,
-      timestamp: 'Just now',
+      timestamp: now.toIso8601String(),
+      createdAt: now,
     );
     final uid = _auth.uid ?? 'firebase_user_vance_77';
     _firestore.saveChatMessage(uid, userMsg);
   }
 
-  Future<void> addChatMessage(String text) async {
-    debugPrint('[AURA STATE] User message: $text');
+  Future<void> addChatMessage(String text, {Uint8List? imageBytes, String mimeType = 'image/jpeg'}) async {
+    debugPrint('[AURA STATE] User message: $text (Image attached: ${imageBytes != null})');
+    final now = DateTime.now();
     final userMsg = ChatMessage(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      id: now.millisecondsSinceEpoch.toString(),
       sender: 'user',
       text: text,
-      timestamp: 'Just now',
+      timestamp: now.toIso8601String(),
+      createdAt: now,
+      imageBytes: imageBytes,
     );
 
     final uid = _auth.uid ?? 'firebase_user_vance_77';
@@ -595,7 +646,12 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
     );
 
     try {
-      final orchestratorResult = await _aiService.processCoachMessage(text, state);
+      final orchestratorResult = await _aiService.processCoachMessage(
+        text,
+        state,
+        imageBytes: imageBytes,
+        mimeType: mimeType,
+      );
       debugPrint('[AURA STATE] Orchestrator determined ${orchestratorResult.actions.length} action(s): ${orchestratorResult.actions.map((a) => a.functionName).toList()}');
 
       // Sequentially execute actions
@@ -739,11 +795,13 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
         }
       }
 
+      final now = DateTime.now();
       final aiReply = ChatMessage(
-        id: (DateTime.now().millisecondsSinceEpoch + 1).toString(),
+        id: (now.millisecondsSinceEpoch + 1).toString(),
         sender: 'ai',
         text: orchestratorResult.coachResponse,
-        timestamp: 'Just now',
+        timestamp: now.toIso8601String(),
+        createdAt: now,
       );
 
       final finalChat = List<ChatMessage>.from(state.chatMessages)..add(aiReply);
@@ -754,11 +812,13 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
       await _firestore.saveChatMessage(uid, aiReply);
     } catch (e) {
       debugPrint('[AURA STATE] Chat processing failed: $e');
+      final errNow = DateTime.now();
       final errReply = ChatMessage(
-        id: (DateTime.now().millisecondsSinceEpoch + 1).toString(),
+        id: (errNow.millisecondsSinceEpoch + 1).toString(),
         sender: 'ai',
         text: "I encountered a hiccup processing that request. Could you please try again?",
-        timestamp: 'Just now',
+        timestamp: errNow.toIso8601String(),
+        createdAt: errNow,
       );
       final finalChat = List<ChatMessage>.from(state.chatMessages)..add(errReply);
       state = state.copyWith(
@@ -773,11 +833,13 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
     state = state.copyWith(isAiThinking: true);
     await Future.delayed(const Duration(seconds: 3));
     
+    final scanNow = DateTime.now();
     final scanReply = ChatMessage(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      id: scanNow.millisecondsSinceEpoch.toString(),
       sender: 'ai',
       text: "Got it! 340 active calories burned during your workout. I've updated your Energy bar on the home screen.",
-      timestamp: 'Just now',
+      timestamp: scanNow.toIso8601String(),
+      createdAt: scanNow,
     );
     
     final updatedWorkout = state.workout.copyWith(
@@ -833,15 +895,36 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
         state,
         'High fatigue detected (Score: $score%). Deload the workout for active recovery.',
       ).then((adaptedWorkout) {
-        _firestore.saveDailyWorkout(uid, todayStr, adaptedWorkout);
         state = state.copyWith(
+          workout: adaptedWorkout,
           adaptationNotice: 'High fatigue detected. AI adjusted your workout to an active recovery session.',
         );
+        _firestore.saveDailyWorkout(uid, todayStr, adaptedWorkout);
         debugPrint('[AURA STATE] AI adapted workout for high fatigue recovery.');
       }).catchError((e) {
         debugPrint('[AURA STATE] AI workout adaptation failed: $e');
       });
     }
+  }
+
+  void updateSleep(double sleepHours) {
+    updateRecoveryCheckIn(
+      sleepHours: sleepHours,
+      sleepQuality: state.recovery.sleepQuality,
+      muscleSoreness: state.recovery.muscleSoreness,
+      energyLevel: state.recovery.energyLevel,
+      stressLevel: state.recovery.stressLevel,
+    );
+  }
+
+  void updateSoreness(int soreness) {
+    updateRecoveryCheckIn(
+      sleepHours: state.recovery.sleepHours,
+      sleepQuality: state.recovery.sleepQuality,
+      muscleSoreness: soreness,
+      energyLevel: state.recovery.energyLevel,
+      stressLevel: state.recovery.stressLevel,
+    );
   }
 
   Future<QuickLogParsedResult> parseAndApplyQuickLog(String rawText) async {
@@ -893,17 +976,20 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
     }
 
     // 5. Append to Chat Log
+    final now = DateTime.now();
     final userMsg = ChatMessage(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      id: now.millisecondsSinceEpoch.toString(),
       sender: 'user',
       text: rawText,
-      timestamp: 'Just now',
+      timestamp: now.toIso8601String(),
+      createdAt: now,
     );
     final aiReply = ChatMessage(
-      id: (DateTime.now().millisecondsSinceEpoch + 1).toString(),
+      id: (now.millisecondsSinceEpoch + 1).toString(),
       sender: 'ai',
       text: '⚡ Express Log Processed:\n${result.coachFeedback}',
-      timestamp: 'Just now',
+      timestamp: now.toIso8601String(),
+      createdAt: now,
     );
 
     await _firestore.saveChatMessage(uid, userMsg);
@@ -936,6 +1022,12 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
     state = state.copyWith(profile: updatedProfile);
     final uid = _auth.uid ?? 'firebase_user_vance_77';
     _firestore.saveUserProfile(uid, updatedProfile);
+  }
+
+  void updateCoachSoul(CoachSoul soul) {
+    debugPrint('[AURA STATE] Switching coach soul to ${soul.name}');
+    final updated = state.profile.copyWith(coachSoul: soul);
+    updateProfile(updated);
   }
 
   @override

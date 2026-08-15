@@ -1,4 +1,5 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../providers/transformation_state.dart';
@@ -6,7 +7,8 @@ import '../models/models.dart';
 
 abstract class AIService {
   Future<AIOrchestratorResult> processCoachMessage(
-      String userPrompt, TransformationEngineState contextState);
+      String userPrompt, TransformationEngineState contextState,
+      {Uint8List? imageBytes, String? mimeType});
   Future<String> generateCoachResponse(
       String userPrompt, TransformationEngineState contextState);
   Future<QuickLogParsedResult> parseQuickLog(
@@ -29,11 +31,9 @@ abstract class AIService {
 }
 
 class GeminiAIProvider implements AIService {
-  final String apiKey;
   final String modelName;
 
   GeminiAIProvider({
-    this.apiKey = '',
     this.modelName = 'gemini-3.7-flash',
   });
 
@@ -45,56 +45,51 @@ class GeminiAIProvider implements AIService {
     return 'https://us-central1-aura-coach-ashu-7.cloudfunctions.net/callGeminiProxy';
   }
 
-  String get _effectiveApiKey {
-    const envKey = String.fromEnvironment('GEMINI_API_KEY');
-    if (envKey.trim().isNotEmpty && !envKey.contains('REDACTED')) {
-      return envKey.trim();
-    }
-    if (apiKey.trim().isNotEmpty && !apiKey.contains('REDACTED')) {
-      return apiKey.trim();
-    }
-    return '';
-  }
-
   void _logRequest(String method, String prompt) {
-    debugPrint('\n===== 🚀 [AURA AI REQUEST: $method] =====');
-    debugPrint('Model: $modelName | Time: ${DateTime.now().toIso8601String()}');
+    debugPrint('\n===== 🚀 [AURA AI PROXY REQUEST: $method] =====');
+    debugPrint('Proxy URL: $_proxyUrl | Model: $modelName | Time: ${DateTime.now().toIso8601String()}');
     debugPrint('Prompt:\n$prompt');
-    debugPrint('===========================================\n');
+    debugPrint('================================================\n');
   }
 
   void _logResponse(String method, int statusCode, int ms, String body) {
-    debugPrint('\n===== ✅ [AURA AI RESPONSE: $method] =====');
+    debugPrint('\n===== ✅ [AURA AI PROXY RESPONSE: $method] =====');
     debugPrint('Status: $statusCode | Latency: ${ms}ms');
     debugPrint('Body:\n$body');
-    debugPrint('============================================\n');
+    debugPrint('=================================================\n');
   }
 
   void _logError(String method, dynamic error) {
-    debugPrint('\n===== ❌ [AURA AI ERROR: $method] =====');
+    debugPrint('\n===== ❌ [AURA AI PROXY ERROR: $method] =====');
     debugPrint('Error: $error');
-    debugPrint('=========================================\n');
+    debugPrint('==============================================\n');
   }
 
   Future<Map<String, dynamic>> _callGeminiJson(
-      String method, String prompt, {String? systemInstruction}) async {
-    _logRequest(method, prompt);
+      String method, String prompt,
+      {String? systemInstruction, Uint8List? imageBytes, String? mimeType}) async {
+    _logRequest(method, prompt + (imageBytes != null ? '\n[IMAGE ATTACHED: ${imageBytes.length} bytes]' : ''));
     final timer = Stopwatch()..start();
 
     final fullPrompt = systemInstruction != null
         ? 'SYSTEM INSTRUCTION:\n$systemInstruction\n\nUSER REQUEST:\n$prompt'
         : prompt;
 
-    // 1. Primary: Attempt Cloud Function Proxy (zero client secrets)
     try {
+      final proxyPayload = <String, dynamic>{
+        'prompt': fullPrompt,
+        'model': modelName,
+        'isJson': true,
+      };
+      if (imageBytes != null) {
+        proxyPayload['imageBase64'] = base64Encode(imageBytes);
+        proxyPayload['mimeType'] = mimeType ?? 'image/jpeg';
+      }
+
       final proxyResponse = await http.post(
         Uri.parse(_proxyUrl),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          'prompt': fullPrompt,
-          'model': modelName,
-          'isJson': true,
-        }),
+        body: jsonEncode(proxyPayload),
       );
 
       if (proxyResponse.statusCode == 200) {
@@ -106,42 +101,12 @@ class GeminiAIProvider implements AIService {
           return jsonDecode(cleanJson) as Map<String, dynamic>;
         }
       } else {
-        debugPrint('[AURA PROXY] Proxy returned status ${proxyResponse.statusCode}, checking fallback');
+        _logError(method, 'Proxy returned status ${proxyResponse.statusCode}: ${proxyResponse.body}');
+        throw Exception('AURA backend proxy error: ${proxyResponse.statusCode}');
       }
-    } catch (proxyError) {
-      debugPrint('[AURA PROXY] Proxy call exception: $proxyError');
-    }
-
-    // 2. Fallback: Direct API if local dev API key is available
-    final directKey = _effectiveApiKey;
-    if (directKey.isNotEmpty) {
-      final directUrl = Uri.parse(
-          'https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent?key=$directKey');
-      final body = <String, dynamic>{
-        'generationConfig': {'responseMimeType': 'application/json'},
-        'contents': [
-          {
-            'role': 'user',
-            'parts': [
-              {'text': fullPrompt}
-            ]
-          }
-        ],
-      };
-      final response = await http.post(
-        directUrl,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(body),
-      );
-      _logResponse(method, response.statusCode, timer.elapsedMilliseconds, response.body);
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final jsonText = data['candidates']?[0]?['content']?['parts']?[0]?['text'];
-        if (jsonText != null) {
-          final cleanJson = jsonText.toString().replaceAll('```json', '').replaceAll('```', '').trim();
-          return jsonDecode(cleanJson) as Map<String, dynamic>;
-        }
-      }
+    } catch (e) {
+      _logError(method, e);
+      rethrow;
     }
 
     throw Exception('AURA AI service temporarily unavailable. Please retry.');
@@ -156,7 +121,6 @@ class GeminiAIProvider implements AIService {
         ? 'SYSTEM INSTRUCTION:\n$systemInstruction\n\nUSER REQUEST:\n$prompt'
         : prompt;
 
-    // 1. Primary: Attempt Cloud Function Proxy (zero client secrets)
     try {
       final proxyResponse = await http.post(
         Uri.parse(_proxyUrl),
@@ -176,40 +140,12 @@ class GeminiAIProvider implements AIService {
           return rawText.trim();
         }
       } else {
-        debugPrint('[AURA PROXY] Proxy text returned status ${proxyResponse.statusCode}, checking fallback');
+        _logError(method, 'Proxy returned status ${proxyResponse.statusCode}: ${proxyResponse.body}');
+        throw Exception('AURA backend proxy error: ${proxyResponse.statusCode}');
       }
-    } catch (proxyError) {
-      debugPrint('[AURA PROXY] Proxy text call exception: $proxyError');
-    }
-
-    // 2. Fallback: Direct API if local dev API key is available
-    final directKey = _effectiveApiKey;
-    if (directKey.isNotEmpty) {
-      final directUrl = Uri.parse(
-          'https://generativelanguage.googleapis.com/v1beta/models/$modelName:generateContent?key=$directKey');
-      final body = <String, dynamic>{
-        'contents': [
-          {
-            'role': 'user',
-            'parts': [
-              {'text': fullPrompt}
-            ]
-          }
-        ],
-      };
-      final response = await http.post(
-        directUrl,
-        headers: {'Content-Type': 'application/json'},
-        body: jsonEncode(body),
-      );
-      _logResponse(method, response.statusCode, timer.elapsedMilliseconds, response.body);
-      if (response.statusCode == 200) {
-        final data = jsonDecode(response.body);
-        final text = data['candidates']?[0]?['content']?['parts']?[0]?['text'];
-        if (text != null && text.toString().trim().isNotEmpty) {
-          return text.toString().trim();
-        }
-      }
+    } catch (e) {
+      _logError(method, e);
+      rethrow;
     }
 
     throw Exception('AURA AI service temporarily unavailable. Please retry.');
@@ -217,7 +153,18 @@ class GeminiAIProvider implements AIService {
 
   @override
   Future<AIOrchestratorResult> processCoachMessage(
-      String userPrompt, TransformationEngineState contextState) async {
+      String userPrompt, TransformationEngineState contextState,
+      {Uint8List? imageBytes, String? mimeType}) async {
+    final imageInstructions = imageBytes != null ? '''
+MULTIMODAL IMAGE ATTACHED:
+The user has attached an image with caption/note: "$userPrompt".
+Examine the image carefully:
+1. Food Plate / Meal / Snack: Identify all visible ingredients, estimate portion sizes, calories, protein, carbs, and fat, and generate a "logNutrition" action.
+2. Nutrition Facts Label: Read calories, protein, carbs, and fat per serving and call "logNutrition".
+3. Workout Display / Smartwatch Summary: Extract duration, calories burned, workout type, and call "updateWorkoutStatus" with status="completed".
+4. Physique / Progress Photo: Provide encouraging, supportive observations on consistency.
+''' : '';
+
     final prompt = '''
 You are the AI Transformation Coach Orchestrator for AURA.
 Your job is to analyze the user's message in the context of their profile, workout, nutrition, and recovery, and decide what action(s) to execute, if any, along with an empathetic coach reply.
@@ -227,6 +174,8 @@ ${_buildSystemContext(contextState)}
 
 INCOMING USER MESSAGE:
 "$userPrompt"
+
+$imageInstructions
 
 AVAILABLE FUNCTIONS / ACTIONS:
 1. "updateEquipment": Call when the user mentions having new, limited, or specific workout equipment (e.g. "I only have a 10kg weight bag", "no gym today, only dumbbells", "I have dumbbells and bodyweight", "resistance bands and a pull up bar").
@@ -310,8 +259,13 @@ Return JSON:
     }
 
     try {
-      final parsed = await _callGeminiJson('processCoachMessage', prompt,
-          systemInstruction: coachInstruction);
+      final parsed = await _callGeminiJson(
+        'processCoachMessage',
+        prompt,
+        systemInstruction: coachInstruction,
+        imageBytes: imageBytes,
+        mimeType: mimeType,
+      );
       final List<AIActionCall> actions = [];
       if (parsed['actions'] is List) {
         for (var act in parsed['actions']) {
@@ -950,10 +904,12 @@ Days: ${dayNames.join(', ')}
 Dates: ${dates.join(', ')}
 
 Rules:
+- CRITICAL: ONLY prescribe exercises executable with the user's available equipment: ${p.equipmentList.isEmpty ? 'Bodyweight only' : p.equipmentList.map((e) => e.name).join(', ')}. NEVER prescribe gym machines, cables, or barbells if the user only has dumbbells or bodyweight!
 - Exactly ${p.daysPerWeek} training days and ${7 - p.daysPerWeek} rest/active recovery days
 - Rest days should be strategically placed (not all bunched together)
 - Each training day should have a clear focus (e.g., Upper Push, Lower Pull, Full Body)
-- List 4-6 exercise names per training day
+- List 4-6 exercise names per training day matching the user's exact equipment constraints
+- Today is ${dayNames[DateTime.now().weekday - 1]} (${dates[DateTime.now().weekday - 1]}): align today's title/focus with the active session
 - Include a nutritionFocus per day (e.g., "High protein, moderate carbs" or "Calorie surplus, extra carbs post-workout")
 - The overview should be 1-2 sentences summarizing the week's strategy
 

@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 enum Gender { male, female, other }
 
 enum GoalType { fatLoss, muscleGain, recomp }
@@ -322,6 +324,19 @@ enum ExperienceLevel { beginner, intermediate, advanced }
 
 enum CoachSoul { supporter, pro, teacher }
 
+extension CoachSoulExtension on CoachSoul {
+  String get displayName {
+    switch (this) {
+      case CoachSoul.supporter:
+        return 'The Supporter';
+      case CoachSoul.pro:
+        return 'The Pro';
+      case CoachSoul.teacher:
+        return 'The Teacher';
+    }
+  }
+}
+
 class UserProfile {
   final String name;
   final int age;
@@ -444,13 +459,52 @@ class ChatMessage {
   final String sender; // 'user' or 'ai'
   final String text;
   final String timestamp;
+  final DateTime createdAt;
+  final Uint8List? imageBytes;
 
   ChatMessage({
     required this.id,
     required this.sender,
     required this.text,
-    required this.timestamp,
-  });
+    String? timestamp,
+    DateTime? createdAt,
+    this.imageBytes,
+  })  : createdAt = createdAt ??
+            (timestamp != null && timestamp != 'Just now'
+                ? DateTime.tryParse(timestamp) ?? DateTime.now()
+                : DateTime.now()),
+        timestamp = (timestamp != null && timestamp != 'Just now')
+            ? timestamp
+            : (createdAt ?? DateTime.now()).toIso8601String();
+
+  String get formattedTime {
+    final now = DateTime.now();
+    final date = createdAt;
+    final diff = now.difference(date);
+
+    if (diff.inSeconds < 45 && diff.inSeconds >= -5) {
+      return 'Just now';
+    } else if (diff.inMinutes < 60 && diff.inMinutes >= 0 && date.day == now.day && date.month == now.month && date.year == now.year) {
+      return '${diff.inMinutes}m ago';
+    } else if (date.year == now.year && date.month == now.month && date.day == now.day) {
+      final hour = date.hour == 0 ? 12 : (date.hour > 12 ? date.hour - 12 : date.hour);
+      final minute = date.minute.toString().padLeft(2, '0');
+      final period = date.hour >= 12 ? 'PM' : 'AM';
+      return '$hour:$minute $period';
+    } else if (date.year == now.year && date.month == now.month && date.day == now.day - 1) {
+      final hour = date.hour == 0 ? 12 : (date.hour > 12 ? date.hour - 12 : date.hour);
+      final minute = date.minute.toString().padLeft(2, '0');
+      final period = date.hour >= 12 ? 'PM' : 'AM';
+      return 'Yesterday $hour:$minute $period';
+    } else {
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      final monthStr = months[date.month - 1];
+      final hour = date.hour == 0 ? 12 : (date.hour > 12 ? date.hour - 12 : date.hour);
+      final minute = date.minute.toString().padLeft(2, '0');
+      final period = date.hour >= 12 ? 'PM' : 'AM';
+      return '$monthStr ${date.day}, $hour:$minute $period';
+    }
+  }
 }
 
 class QuickLogParsedResult {

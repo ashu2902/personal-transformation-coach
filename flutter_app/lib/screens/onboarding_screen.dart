@@ -6,6 +6,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../models/models.dart';
 import '../providers/transformation_state.dart';
 import '../services/firebase_service.dart';
+import '../theme/theme.dart';
 import 'widgets/aura_orb.dart';
 
 class OnboardingScreen extends ConsumerStatefulWidget {
@@ -396,7 +397,30 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             ),
           ),
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 12),
+        // Sign-in option for returning users
+        TextButton(
+          onPressed: () => _showSignInModal(context),
+          child: RichText(
+            text: TextSpan(
+              text: 'Already an athlete with AURA? ',
+              style: GoogleFonts.plusJakartaSans(
+                color: const Color(0xFFA1A1AA),
+                fontSize: 14,
+              ),
+              children: [
+                TextSpan(
+                  text: 'Sign In',
+                  style: GoogleFonts.plusJakartaSans(
+                    color: const Color(0xFF39E6A3),
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+        const SizedBox(height: 14),
       ],
     );
   }
@@ -1224,25 +1248,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     required String colorsLabel,
   }) {
     final isSelected = _selectedSoul == soul;
-    Color borderColor = Colors.white.withOpacity(0.08);
-    Color highlightColor = Colors.transparent;
-
-    if (isSelected) {
-      switch (soul) {
-        case CoachSoul.supporter:
-          borderColor = const Color(0xFF9A7EB8);
-          highlightColor = const Color(0xFF9A7EB8).withOpacity(0.1);
-          break;
-        case CoachSoul.pro:
-          borderColor = const Color(0xFFFF007A);
-          highlightColor = const Color(0xFFFF007A).withOpacity(0.1);
-          break;
-        case CoachSoul.teacher:
-          borderColor = const Color(0xFF00BFA5);
-          highlightColor = const Color(0xFF00BFA5).withOpacity(0.1);
-          break;
-      }
-    }
+    final soulPalette = AuraColors.getSoulPalette(soul);
+    final borderColor = isSelected ? soulPalette.secondary : Colors.white.withOpacity(0.08);
+    final highlightColor = isSelected ? soulPalette.secondary.withOpacity(0.1) : Colors.transparent;
 
     return GestureDetector(
       onTap: () => setState(() => _selectedSoul = soul),
@@ -1305,6 +1313,132 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           ),
         ],
       ),
+    );
+  }
+
+  void _showSignInModal(BuildContext context) {
+    bool isLoading = false;
+    String? errorMessage;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF121416),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (modalContext, setModalState) {
+            return SafeArea(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 24.0),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Welcome Back',
+                          style: GoogleFonts.syne(
+                            color: Colors.white,
+                            fontSize: 22,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(LucideIcons.x, color: Colors.white60, size: 20),
+                          onPressed: () => Navigator.of(ctx).pop(),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      'Sign in with Google to sync your prescriptions, macros, and coaching history.',
+                      style: GoogleFonts.plusJakartaSans(
+                        color: const Color(0xFFA1A1AA),
+                        fontSize: 13,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 24),
+
+                    if (errorMessage != null)
+                      Container(
+                        padding: const EdgeInsets.all(12),
+                        margin: const EdgeInsets.only(bottom: 16),
+                        decoration: BoxDecoration(
+                          color: Colors.red.withOpacity(0.12),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: Colors.red.withOpacity(0.3)),
+                        ),
+                        child: Text(
+                          errorMessage!,
+                          style: GoogleFonts.plusJakartaSans(color: Colors.redAccent, fontSize: 12),
+                        ),
+                      ),
+
+                    // Google Sign-In Button
+                    SizedBox(
+                      width: double.infinity,
+                      height: 52,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: Colors.white,
+                          foregroundColor: Colors.black87,
+                          elevation: 2,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+                        ),
+                        icon: Container(
+                          width: 22,
+                          height: 22,
+                          alignment: Alignment.center,
+                          child: const Text('G', style: TextStyle(color: Color(0xFF4285F4), fontWeight: FontWeight.w900, fontSize: 16)),
+                        ),
+                        label: isLoading
+                            ? const SizedBox(
+                                width: 20,
+                                height: 20,
+                                child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black87),
+                              )
+                            : Text(
+                                'Continue with Google',
+                                style: GoogleFonts.plusJakartaSans(
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 15,
+                                ),
+                              ),
+                        onPressed: isLoading
+                            ? null
+                            : () async {
+                                setModalState(() {
+                                  isLoading = true;
+                                  errorMessage = null;
+                                });
+                                final success = await ref
+                                    .read(transformationEngineProvider.notifier)
+                                    .signInAndLoadUserProfile(useGoogleAuth: true);
+                                if (!mounted) return;
+                                if (success) {
+                                  Navigator.of(ctx).pop();
+                                } else {
+                                  setModalState(() {
+                                    isLoading = false;
+                                    errorMessage = 'No saved profile found. Please tap "Let\'s Begin" to calibrate your baseline.';
+                                  });
+                                }
+                              },
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                ),
+              ),
+            );
+          },
+        );
+      },
     );
   }
 }

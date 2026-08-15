@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../providers/transformation_state.dart';
 import '../models/models.dart';
+import '../theme/theme.dart';
+import '../widgets/common/common.dart';
 
 class NutritionScreen extends StatelessWidget {
   const NutritionScreen({super.key});
@@ -15,6 +16,7 @@ class NutritionScreen extends StatelessWidget {
         final state = ref.watch(transformationEngineProvider);
         final notifier = ref.read(transformationEngineProvider.notifier);
         final nutrition = state.nutrition;
+        final auraTheme = context.auraTheme;
 
         final totalCal = nutrition.meals.fold(0, (total, m) => total + m.calories);
         final totalProt = nutrition.meals.fold(0, (total, m) => total + m.proteinG);
@@ -35,13 +37,8 @@ class NutritionScreen extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // Macro Summary Card
-              Container(
+              AuraCard(
                 padding: const EdgeInsets.all(18),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF141217),
-                  borderRadius: BorderRadius.circular(18),
-                  border: Border.all(color: Colors.white.withOpacity(0.08)),
-                ),
                 child: Column(
                   children: [
                     Row(
@@ -52,21 +49,15 @@ class NutritionScreen extends StatelessWidget {
                           children: [
                             Text(
                               'ENERGY INTAKE',
-                              style: GoogleFonts.syne(
-                                color: const Color(0xFFA1A1AA),
+                              style: AuraTypography.sectionHeader.copyWith(
+                                color: AuraColors.textSecondary,
                                 fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 1.0,
                               ),
                             ),
                             const SizedBox(height: 4),
                             Text(
                               '$totalCal / $targetCal kcal',
-                              style: GoogleFonts.syne(
-                                color: Colors.white,
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
-                              ),
+                              style: AuraTypography.statNumber,
                             ),
                           ],
                         ),
@@ -75,20 +66,16 @@ class NutritionScreen extends StatelessWidget {
                           children: [
                             Text(
                               'PROTEIN TARGET',
-                              style: GoogleFonts.syne(
-                                color: const Color(0xFF00FFA3),
+                              style: AuraTypography.sectionHeader.copyWith(
+                                color: auraTheme.proteinAccent,
                                 fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 1.0,
                               ),
                             ),
                             const SizedBox(height: 4),
                             Text(
                               '$totalProt / ${targetProt}g',
-                              style: GoogleFonts.syne(
-                                color: const Color(0xFF00FFA3),
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
+                              style: AuraTypography.statNumber.copyWith(
+                                color: auraTheme.proteinAccent,
                               ),
                             ),
                           ],
@@ -101,8 +88,8 @@ class NutritionScreen extends StatelessWidget {
                       child: LinearProgressIndicator(
                         value: calPercent,
                         minHeight: 10,
-                        backgroundColor: Colors.white.withOpacity(0.06),
-                        valueColor: const AlwaysStoppedAnimation(Color(0xFF00FFA3)),
+                        backgroundColor: auraTheme.energyAccent.withOpacity(0.12),
+                        valueColor: AlwaysStoppedAnimation(auraTheme.energyAccent),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -112,20 +99,17 @@ class NutritionScreen extends StatelessWidget {
                         _buildMacroPill(
                           'Protein',
                           '${totalProt}g / ${targetProt}g',
-                          protPercent,
-                          const Color(0xFF00FFA3),
+                          auraTheme.proteinAccent,
                         ),
                         _buildMacroPill(
                           'Carbs',
                           '${totalCarbs}g / ${targetCarbs}g',
-                          (totalCarbs / targetCarbs).clamp(0.0, 1.0),
-                          const Color(0xFF38BDF8),
+                          AuraColors.carbs,
                         ),
                         _buildMacroPill(
                           'Fats',
                           '${totalFat}g / ${targetFat}g',
-                          (totalFat / targetFat).clamp(0.0, 1.0),
-                          const Color(0xFFFBBF24),
+                          AuraColors.fat,
                         ),
                       ],
                     ),
@@ -135,13 +119,8 @@ class NutritionScreen extends StatelessWidget {
               const SizedBox(height: 16),
 
               // Hydration Card
-              Container(
+              AuraCard(
                 padding: const EdgeInsets.all(16),
-                decoration: BoxDecoration(
-                  color: const Color(0xFF141217),
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(color: Colors.white.withOpacity(0.08)),
-                ),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -150,10 +129,10 @@ class NutritionScreen extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: const Color(0xFF38BDF8).withOpacity(0.12),
+                            color: auraTheme.waterAccent.withOpacity(0.12),
                             borderRadius: BorderRadius.circular(12),
                           ),
-                          child: const Icon(LucideIcons.droplets, color: Color(0xFF38BDF8), size: 20),
+                          child: Icon(LucideIcons.droplets, color: auraTheme.waterAccent, size: 20),
                         ),
                         const SizedBox(width: 12),
                         Column(
@@ -161,21 +140,15 @@ class NutritionScreen extends StatelessWidget {
                           children: [
                             Text(
                               'HYDRATION',
-                              style: GoogleFonts.syne(
-                                color: const Color(0xFFA1A1AA),
+                              style: AuraTypography.sectionHeader.copyWith(
+                                color: AuraColors.textSecondary,
                                 fontSize: 10,
-                                fontWeight: FontWeight.bold,
-                                letterSpacing: 1.0,
                               ),
                             ),
                             const SizedBox(height: 2),
                             Text(
                               '${nutrition.waterMl} / ${nutrition.targetWaterMl > 0 ? nutrition.targetWaterMl : 3000} ml',
-                              style: GoogleFonts.syne(
-                                color: Colors.white,
-                                fontWeight: FontWeight.bold,
-                                fontSize: 15,
-                              ),
+                              style: AuraTypography.titleMedium.copyWith(fontSize: 15),
                             ),
                           ],
                         ),
@@ -183,26 +156,20 @@ class NutritionScreen extends StatelessWidget {
                     ),
                     Row(
                       children: [
-                        OutlinedButton(
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF38BDF8),
-                            side: BorderSide(color: const Color(0xFF38BDF8).withOpacity(0.4)),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                          ),
+                        AuraButton(
+                          text: '+250 ml',
+                          variant: AuraButtonVariant.outline,
+                          height: 34,
+                          borderRadius: 10,
                           onPressed: () => notifier.addWater(250),
-                          child: const Text('+250 ml', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                         ),
                         const SizedBox(width: 6),
-                        OutlinedButton(
-                          style: OutlinedButton.styleFrom(
-                            foregroundColor: const Color(0xFF38BDF8),
-                            side: BorderSide(color: const Color(0xFF38BDF8).withOpacity(0.4)),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                          ),
+                        AuraButton(
+                          text: '+500 ml',
+                          variant: AuraButtonVariant.outline,
+                          height: 34,
+                          borderRadius: 10,
                           onPressed: () => notifier.addWater(500),
-                          child: const Text('+500 ml', style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                         ),
                       ],
                     ),
@@ -217,67 +184,48 @@ class NutritionScreen extends StatelessWidget {
                 children: [
                   Text(
                     'LOGGED MEALS',
-                    style: GoogleFonts.syne(
-                      color: const Color(0xFF00FFA3),
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                      letterSpacing: 1.2,
+                    style: AuraTypography.sectionHeader.copyWith(
+                      color: auraTheme.primary,
                     ),
                   ),
-                  ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFF00FFA3),
-                      foregroundColor: Colors.black,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-                    ),
+                  AuraButton(
+                    text: 'Log Meal with AI',
+                    icon: LucideIcons.sparkles,
+                    height: 36,
+                    borderRadius: 18,
                     onPressed: () => _showAddAIMealDialog(context, notifier),
-                    icon: const Icon(LucideIcons.sparkles, size: 14, color: Colors.black),
-                    label: Text(
-                      'Log Meal with AI',
-                      style: GoogleFonts.syne(fontSize: 12, fontWeight: FontWeight.bold),
-                    ),
                   ),
                 ],
               ),
               const SizedBox(height: 12),
 
               if (nutrition.meals.isEmpty)
-                Container(
-                  width: double.infinity,
+                AuraCard(
                   padding: const EdgeInsets.all(28),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF141217),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: Colors.white.withOpacity(0.06)),
-                  ),
-                  child: Column(
-                    children: [
-                      Icon(LucideIcons.utensils, color: Colors.white.withOpacity(0.2), size: 32),
-                      const SizedBox(height: 12),
-                      Text(
-                        'No meals logged today yet',
-                        style: GoogleFonts.syne(color: Colors.white, fontWeight: FontWeight.w600, fontSize: 14),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Tap "+ Log Meal with AI" to describe what you ate in natural language.',
-                        style: GoogleFonts.plusJakartaSans(color: const Color(0xFFA1A1AA), fontSize: 12),
-                        textAlign: TextAlign.center,
-                      ),
-                    ],
+                  child: Center(
+                    child: Column(
+                      children: [
+                        Icon(LucideIcons.utensils, color: AuraColors.textDisabled, size: 32),
+                        const SizedBox(height: 12),
+                        Text(
+                          'No meals logged today yet',
+                          style: AuraTypography.titleMedium,
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Tap "+ Log Meal with AI" to describe what you ate in natural language.',
+                          style: AuraTypography.bodySmall.copyWith(color: AuraColors.textSecondary),
+                          textAlign: TextAlign.center,
+                        ),
+                      ],
+                    ),
                   ),
                 )
               else
                 ...nutrition.meals.map((meal) {
-                  return Container(
+                  return AuraCard(
                     margin: const EdgeInsets.only(bottom: 10),
                     padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: const Color(0xFF141217),
-                      borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: Colors.white.withOpacity(0.08)),
-                    ),
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
@@ -287,38 +235,19 @@ class NutritionScreen extends StatelessWidget {
                             children: [
                               Text(
                                 meal.name,
-                                style: GoogleFonts.syne(
-                                  color: Colors.white,
-                                  fontWeight: FontWeight.bold,
-                                  fontSize: 14,
-                                ),
+                                style: AuraTypography.titleMedium,
                               ),
                               const SizedBox(height: 4),
                               Text(
                                 'Protein: ${meal.proteinG}g  •  Carbs: ${meal.carbsG}g  •  Fat: ${meal.fatG}g',
-                                style: GoogleFonts.plusJakartaSans(
-                                  color: const Color(0xFFA1A1AA),
-                                  fontSize: 11,
-                                ),
+                                style: AuraTypography.bodySmall.copyWith(color: AuraColors.textSecondary),
                               ),
                             ],
                           ),
                         ),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF00FFA3).withOpacity(0.12),
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFF00FFA3).withOpacity(0.2)),
-                          ),
-                          child: Text(
-                            '${meal.calories} kcal',
-                            style: GoogleFonts.syne(
-                              color: const Color(0xFF00FFA3),
-                              fontWeight: FontWeight.bold,
-                              fontSize: 12,
-                            ),
-                          ),
+                        AuraStatBadge(
+                          label: '${meal.calories} kcal',
+                          color: auraTheme.energyAccent,
                         ),
                       ],
                     ),
@@ -331,21 +260,22 @@ class NutritionScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildMacroPill(String label, String value, double percent, Color color) {
+  Widget _buildMacroPill(String label, String value, Color color) {
     return Column(
       children: [
-        Text(label, style: GoogleFonts.syne(color: color, fontSize: 11, fontWeight: FontWeight.bold)),
+        Text(label, style: AuraTypography.sectionHeader.copyWith(color: color, fontSize: 11)),
         const SizedBox(height: 2),
-        Text(value, style: GoogleFonts.plusJakartaSans(color: Colors.white, fontSize: 11)),
+        Text(value, style: AuraTypography.bodySmall.copyWith(color: AuraColors.textPrimary, fontWeight: FontWeight.w600)),
       ],
     );
   }
 
   void _showAddAIMealDialog(BuildContext context, TransformationEngineNotifier notifier) {
+    final auraTheme = context.auraTheme;
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
-      backgroundColor: const Color(0xFF0E0E12),
+      backgroundColor: auraTheme.surfaceCard,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
@@ -420,6 +350,8 @@ class _AIMealLoggerModalState extends State<AIMealLoggerModal> {
 
   @override
   Widget build(BuildContext context) {
+    final auraTheme = context.auraTheme;
+
     return Padding(
       padding: EdgeInsets.only(
         left: 20,
@@ -439,16 +371,16 @@ class _AIMealLoggerModalState extends State<AIMealLoggerModal> {
                 children: [
                   Row(
                     children: [
-                      const Icon(LucideIcons.sparkles, color: Color(0xFF00FFA3), size: 18),
+                      Icon(LucideIcons.sparkles, color: auraTheme.primary, size: 18),
                       const SizedBox(width: 8),
                       Text(
                         'AI Natural Meal Logger',
-                        style: GoogleFonts.syne(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16),
+                        style: AuraTypography.titleLarge,
                       ),
                     ],
                   ),
                   IconButton(
-                    icon: const Icon(LucideIcons.x, color: Color(0xFFA1A1AA), size: 18),
+                    icon: const Icon(LucideIcons.x, color: AuraColors.textSecondary, size: 18),
                     onPressed: () => Navigator.pop(context),
                   ),
                 ],
@@ -456,7 +388,7 @@ class _AIMealLoggerModalState extends State<AIMealLoggerModal> {
               const SizedBox(height: 6),
               Text(
                 'Describe what you ate or drank in plain language. AURA will calculate macros automatically.',
-                style: GoogleFonts.plusJakartaSans(color: const Color(0xFFA1A1AA), fontSize: 12),
+                style: AuraTypography.bodySmall.copyWith(color: AuraColors.textSecondary),
               ),
               const SizedBox(height: 14),
 
@@ -464,17 +396,17 @@ class _AIMealLoggerModalState extends State<AIMealLoggerModal> {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
                 decoration: BoxDecoration(
-                  color: const Color(0xFF141217),
+                  color: auraTheme.surfaceLight,
                   borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: Colors.white.withOpacity(0.1)),
+                  border: Border.all(color: AuraColors.borderSubtle),
                 ),
                 child: TextField(
                   controller: _inputCtrl,
                   maxLines: 2,
-                  style: GoogleFonts.plusJakartaSans(color: Colors.white, fontSize: 14),
-                  decoration: const InputDecoration(
+                  style: AuraTypography.bodyLarge,
+                  decoration: InputDecoration(
                     hintText: 'e.g. 2 fried eggs, 2 slices buttered toast, large coffee with milk',
-                    hintStyle: TextStyle(color: Colors.white30, fontSize: 13),
+                    hintStyle: AuraTypography.bodyMedium.copyWith(color: AuraColors.textTertiary),
                     border: InputBorder.none,
                   ),
                 ),
@@ -482,31 +414,19 @@ class _AIMealLoggerModalState extends State<AIMealLoggerModal> {
               const SizedBox(height: 10),
 
               // Action button to estimate
-              SizedBox(
+              AuraButton(
+                text: 'Calculate with AI',
+                icon: LucideIcons.calculator,
+                isLoading: _isEstimating,
                 width: double.infinity,
-                height: 46,
-                child: ElevatedButton.icon(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00FFA3),
-                    foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                  ),
-                  onPressed: _isEstimating ? null : () => _runAIEstimate(_inputCtrl.text),
-                  icon: _isEstimating
-                      ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black))
-                      : const Icon(LucideIcons.calculator, size: 16),
-                  label: Text(
-                    _isEstimating ? 'Analyzing with AI...' : 'Calculate with AI',
-                    style: GoogleFonts.syne(fontWeight: FontWeight.bold, fontSize: 13),
-                  ),
-                ),
+                onPressed: () => _runAIEstimate(_inputCtrl.text),
               ),
               const SizedBox(height: 14),
 
               // Quick suggestion chips
               Text(
                 'QUICK EXAMPLES',
-                style: GoogleFonts.syne(color: Colors.white38, fontSize: 10, fontWeight: FontWeight.bold, letterSpacing: 1.0),
+                style: AuraTypography.sectionHeader.copyWith(color: AuraColors.textTertiary, fontSize: 10),
               ),
               const SizedBox(height: 6),
               Wrap(
@@ -521,13 +441,13 @@ class _AIMealLoggerModalState extends State<AIMealLoggerModal> {
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF141217),
+                        color: auraTheme.surfaceLight,
                         borderRadius: BorderRadius.circular(8),
-                        border: Border.all(color: Colors.white.withOpacity(0.06)),
+                        border: Border.all(color: AuraColors.borderSubtle),
                       ),
                       child: Text(
                         suggestion,
-                        style: GoogleFonts.plusJakartaSans(color: const Color(0xFFA1A1AA), fontSize: 11),
+                        style: AuraTypography.bodySmall.copyWith(color: AuraColors.textSecondary),
                       ),
                     ),
                   );
@@ -536,19 +456,15 @@ class _AIMealLoggerModalState extends State<AIMealLoggerModal> {
 
               if (_errorMessage != null) ...[
                 const SizedBox(height: 12),
-                Text(_errorMessage!, style: const TextStyle(color: Colors.redAccent, fontSize: 12)),
+                Text(_errorMessage!, style: AuraTypography.bodySmall.copyWith(color: AuraColors.error)),
               ],
 
               // Estimated Card Preview
               if (_estimatedMeal != null) ...[
                 const SizedBox(height: 18),
-                Container(
+                AuraCard(
                   padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF141217),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFF00FFA3).withOpacity(0.4)),
-                  ),
+                  borderColor: auraTheme.energyAccent.withOpacity(0.4),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -558,19 +474,12 @@ class _AIMealLoggerModalState extends State<AIMealLoggerModal> {
                           Expanded(
                             child: Text(
                               _estimatedMeal!.name,
-                              style: GoogleFonts.syne(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+                              style: AuraTypography.titleMedium.copyWith(fontSize: 15),
                             ),
                           ),
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF00FFA3).withOpacity(0.15),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Text(
-                              '${_estimatedMeal!.calories} kcal',
-                              style: GoogleFonts.syne(color: const Color(0xFF00FFA3), fontWeight: FontWeight.bold, fontSize: 13),
-                            ),
+                          AuraStatBadge(
+                            label: '${_estimatedMeal!.calories} kcal',
+                            color: auraTheme.energyAccent,
                           ),
                         ],
                       ),
@@ -578,27 +487,16 @@ class _AIMealLoggerModalState extends State<AIMealLoggerModal> {
                       Row(
                         mainAxisAlignment: MainAxisAlignment.spaceAround,
                         children: [
-                          _buildMiniNutrient('Protein', '${_estimatedMeal!.proteinG}g', const Color(0xFF00FFA3)),
-                          _buildMiniNutrient('Carbs', '${_estimatedMeal!.carbsG}g', const Color(0xFF38BDF8)),
-                          _buildMiniNutrient('Fats', '${_estimatedMeal!.fatG}g', const Color(0xFFFBBF24)),
+                          _buildMiniNutrient('Protein', '${_estimatedMeal!.proteinG}g', auraTheme.proteinAccent),
+                          _buildMiniNutrient('Carbs', '${_estimatedMeal!.carbsG}g', AuraColors.carbs),
+                          _buildMiniNutrient('Fats', '${_estimatedMeal!.fatG}g', AuraColors.fat),
                         ],
                       ),
                       const SizedBox(height: 16),
-                      SizedBox(
+                      AuraButton(
+                        text: 'Log to Today\'s Nutrition',
                         width: double.infinity,
-                        height: 44,
-                        child: ElevatedButton(
-                          style: ElevatedButton.styleFrom(
-                            backgroundColor: const Color(0xFF00FFA3),
-                            foregroundColor: Colors.black,
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                          ),
-                          onPressed: _commitMeal,
-                          child: Text(
-                            'Log to Today\'s Nutrition',
-                            style: GoogleFonts.syne(fontWeight: FontWeight.bold, fontSize: 13),
-                          ),
-                        ),
+                        onPressed: _commitMeal,
                       ),
                     ],
                   ),
@@ -615,9 +513,9 @@ class _AIMealLoggerModalState extends State<AIMealLoggerModal> {
   Widget _buildMiniNutrient(String label, String value, Color color) {
     return Column(
       children: [
-        Text(label, style: GoogleFonts.syne(color: color, fontSize: 11, fontWeight: FontWeight.bold)),
+        Text(label, style: AuraTypography.sectionHeader.copyWith(color: color, fontSize: 11)),
         const SizedBox(height: 2),
-        Text(value, style: GoogleFonts.plusJakartaSans(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600)),
+        Text(value, style: AuraTypography.labelBold.copyWith(fontSize: 13)),
       ],
     );
   }

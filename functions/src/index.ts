@@ -16,6 +16,7 @@ export const callGeminiProxy = onRequest(
     secrets: [geminiApiKey],
     cors: true,
     maxInstances: 20,
+    invoker: "public",
   },
   async (req, res) => {
     // Handle CORS preflight
@@ -35,7 +36,7 @@ export const callGeminiProxy = onRequest(
     }
 
     try {
-      const { prompt, model, isJson } = req.body || {};
+      const { prompt, model, isJson, imageBase64, mimeType } = req.body || {};
 
       if (!prompt || typeof prompt !== "string" || prompt.trim().length === 0) {
         res.status(400).json({ error: "Missing or invalid 'prompt' field." });
@@ -56,17 +57,28 @@ export const callGeminiProxy = onRequest(
       const targetModel = model || "gemini-3.7-flash";
       const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${apiKey}`;
 
+      const parts: Array<Record<string, any>> = [];
+      if (imageBase64 && typeof imageBase64 === "string" && imageBase64.trim().length > 0) {
+        parts.push({
+          inlineData: {
+            mimeType: mimeType || "image/jpeg",
+            data: imageBase64,
+          },
+        });
+      }
+      parts.push({ text: prompt });
+
       const requestBody: Record<string, any> = {
         contents: [
           {
-            parts: [{ text: prompt }],
+            parts,
           },
         ],
       };
 
       if (isJson) {
         requestBody.generationConfig = {
-          response_mime_type: "application/json",
+          responseMimeType: "application/json",
         };
       }
 

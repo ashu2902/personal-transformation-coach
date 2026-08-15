@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../providers/transformation_state.dart';
 import '../models/models.dart';
+import '../theme/theme.dart';
+import '../widgets/common/common.dart';
 
 class WeeklyPlanScreen extends ConsumerWidget {
   const WeeklyPlanScreen({super.key});
@@ -13,26 +14,33 @@ class WeeklyPlanScreen extends ConsumerWidget {
     final state = ref.watch(transformationEngineProvider);
     final plan = state.weeklyPlan;
     final isLoading = state.isAiThinking;
-    final theme = Theme.of(context);
+    final auraTheme = context.auraTheme;
     final todayStr = DateTime.now().toIso8601String().split('T')[0];
 
     return Scaffold(
-      backgroundColor: theme.scaffoldBackgroundColor,
+      backgroundColor: auraTheme.scaffoldBackground,
       appBar: AppBar(
-        backgroundColor: theme.scaffoldBackgroundColor,
+        backgroundColor: auraTheme.scaffoldBackground,
         elevation: 0,
         title: Text(
           'Weekly Plan',
-          style: GoogleFonts.syne(fontWeight: FontWeight.bold, fontSize: 18),
+          style: AuraTypography.titleLarge,
         ),
       ),
-      body: plan == null
-          ? _buildEmptyState(context, ref, isLoading, theme)
-          : _buildPlanView(context, ref, plan, todayStr, isLoading, theme),
+      body: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 680),
+          child: plan == null
+              ? _buildEmptyState(context, ref, isLoading)
+              : _buildPlanView(context, ref, plan, todayStr, isLoading),
+        ),
+      ),
     );
   }
 
-  Widget _buildEmptyState(BuildContext context, WidgetRef ref, bool isLoading, ThemeData theme) {
+  Widget _buildEmptyState(BuildContext context, WidgetRef ref, bool isLoading) {
+    final auraTheme = context.auraTheme;
+
     return Center(
       child: Padding(
         padding: const EdgeInsets.all(32),
@@ -42,68 +50,36 @@ class WeeklyPlanScreen extends ConsumerWidget {
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: theme.colorScheme.primary.withOpacity(0.08),
+                color: auraTheme.primary.withOpacity(0.08),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Icon(
                 LucideIcons.calendarDays,
                 size: 48,
-                color: theme.colorScheme.primary.withOpacity(0.6),
+                color: auraTheme.primary.withOpacity(0.6),
               ),
             ),
             const SizedBox(height: 24),
             Text(
               'No Weekly Plan Yet',
-              style: GoogleFonts.syne(
-                fontSize: 22,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-              ),
+              style: AuraTypography.displayMedium,
             ),
             const SizedBox(height: 8),
             Text(
               'Generate a personalized 7-day workout and nutrition plan tailored to your goals.',
               textAlign: TextAlign.center,
-              style: TextStyle(
-                fontSize: 14,
-                color: Colors.white.withOpacity(0.5),
-                height: 1.5,
-              ),
+              style: AuraTypography.bodyMedium.copyWith(height: 1.5),
             ),
             const SizedBox(height: 32),
-            SizedBox(
+            AuraButton(
+              text: 'Generate My Plan',
+              icon: LucideIcons.sparkles,
+              isLoading: isLoading,
               width: double.infinity,
               height: 52,
-              child: ElevatedButton(
-                onPressed: isLoading
-                    ? null
-                    : () {
-                        ref.read(transformationEngineProvider.notifier).generateWeeklyPlan();
-                      },
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: theme.colorScheme.primary,
-                  foregroundColor: Colors.black,
-                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                  elevation: 0,
-                ),
-                child: isLoading
-                    ? const SizedBox(
-                        width: 20,
-                        height: 20,
-                        child: CircularProgressIndicator(strokeWidth: 2, color: Colors.black),
-                      )
-                    : Row(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          const Icon(LucideIcons.sparkles, size: 18),
-                          const SizedBox(width: 8),
-                          Text(
-                            'Generate My Plan',
-                            style: GoogleFonts.syne(fontWeight: FontWeight.bold, fontSize: 15),
-                          ),
-                        ],
-                      ),
-              ),
+              onPressed: () {
+                ref.read(transformationEngineProvider.notifier).generateWeeklyPlan();
+              },
             ),
           ],
         ),
@@ -111,64 +87,46 @@ class WeeklyPlanScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildPlanView(BuildContext context, WidgetRef ref, WeeklyPlan plan, String todayStr, bool isLoading, ThemeData theme) {
+  Widget _buildPlanView(BuildContext context, WidgetRef ref, WeeklyPlan plan, String todayStr, bool isLoading) {
+    final auraTheme = context.auraTheme;
+
     return CustomScrollView(
       slivers: [
         // Header
         SliverToBoxAdapter(
           child: Padding(
-            padding: const EdgeInsets.fromLTRB(20, 8, 20, 4),
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 12),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Week label
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.primary.withOpacity(0.12),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
-                  child: Text(
-                    '${plan.weekId}  •  ${_formatDate(plan.startDate)} – ${_formatDate(plan.endDate)}',
-                    style: TextStyle(
-                      color: theme.colorScheme.primary,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                      letterSpacing: 0.3,
-                    ),
-                  ),
+                AuraStatBadge(
+                  label: '${plan.weekId}  •  ${_formatDate(plan.startDate)} – ${_formatDate(plan.endDate)}',
+                  color: auraTheme.primary,
                 ),
                 const SizedBox(height: 14),
                 // Overview
                 Text(
                   plan.overview,
-                  style: TextStyle(
-                    color: Colors.white.withOpacity(0.8),
-                    fontSize: 14,
-                    height: 1.5,
-                  ),
+                  style: AuraTypography.bodyLarge.copyWith(color: AuraColors.textPrimary.withOpacity(0.85)),
                 ),
                 if (plan.coachNote != null) ...[
                   const SizedBox(height: 12),
-                  Container(
-                    width: double.infinity,
+                  AuraCard(
                     padding: const EdgeInsets.all(14),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.secondary.withOpacity(0.06),
-                      borderRadius: BorderRadius.circular(12),
-                      border: Border.all(color: theme.colorScheme.secondary.withOpacity(0.15)),
-                    ),
+                    borderRadius: 12,
+                    backgroundColor: auraTheme.secondary.withOpacity(0.06),
+                    borderColor: auraTheme.secondary.withOpacity(0.15),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(LucideIcons.messageSquare, size: 14, color: theme.colorScheme.secondary.withOpacity(0.7)),
+                        Icon(LucideIcons.messageSquare, size: 14, color: auraTheme.secondary.withOpacity(0.7)),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
                             plan.coachNote!,
-                            style: TextStyle(
-                              color: Colors.white.withOpacity(0.6),
-                              fontSize: 13,
+                            style: AuraTypography.bodySmall.copyWith(
+                              color: AuraColors.textSecondary,
                               fontStyle: FontStyle.italic,
                               height: 1.4,
                             ),
@@ -194,10 +152,10 @@ class WeeklyPlanScreen extends ConsumerWidget {
                             height: 14,
                             child: CircularProgressIndicator(strokeWidth: 2),
                           )
-                        : const Icon(LucideIcons.refreshCw, size: 14),
-                    label: Text(isLoading ? 'Generating...' : 'Regenerate', style: const TextStyle(fontSize: 12)),
-                    style: TextButton.styleFrom(
-                      foregroundColor: theme.colorScheme.primary.withOpacity(0.7),
+                        : Icon(LucideIcons.refreshCw, size: 14, color: auraTheme.primary),
+                    label: Text(
+                      isLoading ? 'Generating...' : 'Regenerate',
+                      style: AuraTypography.bodySmall.copyWith(color: auraTheme.primary, fontWeight: FontWeight.bold),
                     ),
                   ),
                 ),
@@ -207,7 +165,7 @@ class WeeklyPlanScreen extends ConsumerWidget {
         ),
         // Day cards
         SliverPadding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+          padding: const EdgeInsets.fromLTRB(16, 8, 16, 40),
           sliver: SliverList(
             delegate: SliverChildBuilderDelegate(
               (context, index) {
@@ -226,7 +184,7 @@ class WeeklyPlanScreen extends ConsumerWidget {
                       ),
                     );
                   },
-                  child: _buildDayCard(context, day, isToday, theme),
+                  child: _buildDayCard(context, ref, day, isToday, todayStr),
                 );
               },
               childCount: plan.days.length,
@@ -237,156 +195,122 @@ class WeeklyPlanScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildDayCard(BuildContext context, WeeklyDayPlan day, bool isToday, ThemeData theme) {
-    return Container(
+  Widget _buildDayCard(BuildContext context, WidgetRef ref, WeeklyDayPlan day, bool isToday, String todayStr) {
+    final auraTheme = context.auraTheme;
+    final isPast = day.date.compareTo(todayStr) < 0;
+    final isTracked = ref.watch(transformationEngineProvider).isProgressTrackedForDate(day.date);
+
+    return AuraCard(
       margin: const EdgeInsets.only(bottom: 10),
-      decoration: BoxDecoration(
-        color: theme.cardColor,
-        borderRadius: BorderRadius.circular(14),
-        border: isToday
-            ? Border.all(color: theme.colorScheme.primary.withOpacity(0.4), width: 1.5)
-            : Border.all(color: Colors.white.withOpacity(0.04)),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(16),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Day header row
+      padding: const EdgeInsets.all(16),
+      borderColor: isToday ? auraTheme.primary.withOpacity(0.4) : AuraColors.borderSubtle,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Day header row
+          Row(
+            children: [
+              // Day name + date
+              Expanded(
+                child: Row(
+                  children: [
+                    Text(
+                      day.dayName,
+                      style: AuraTypography.titleMedium.copyWith(
+                        color: isToday ? auraTheme.primary : AuraColors.textPrimary,
+                        fontSize: 15,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      _formatDate(day.date),
+                      style: AuraTypography.bodySmall.copyWith(color: AuraColors.textTertiary),
+                    ),
+                  ],
+                ),
+              ),
+              if (isToday)
+                AuraStatBadge(
+                  label: 'TODAY',
+                  color: auraTheme.primary,
+                  isFilled: true,
+                )
+              else if (day.isRestDay)
+                AuraStatBadge(
+                  label: 'REST',
+                  icon: LucideIcons.moonStar,
+                  color: AuraColors.textTertiary,
+                )
+              else if (isPast && isTracked)
+                AuraStatBadge(
+                  label: 'COMPLETED',
+                  icon: LucideIcons.check,
+                  color: AuraColors.success,
+                )
+              else if (isPast)
+                AuraStatBadge(
+                  label: 'MISSED',
+                  color: AuraColors.textTertiary,
+                ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          // Title + focus area
+          Text(
+            day.title,
+            style: AuraTypography.bodyLarge.copyWith(
+              fontWeight: FontWeight.w600,
+              color: day.isRestDay ? AuraColors.textDisabled : AuraColors.textPrimary.withOpacity(0.85),
+            ),
+          ),
+          if (day.focusArea.isNotEmpty && !day.isRestDay) ...[
+            const SizedBox(height: 4),
+            Text(
+              day.focusArea,
+              style: AuraTypography.bodySmall.copyWith(color: auraTheme.secondary.withOpacity(0.8)),
+            ),
+          ],
+          // Exercise chips
+          if (day.exerciseNames.isNotEmpty && !day.isRestDay) ...[
+            const SizedBox(height: 10),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: day.exerciseNames.map((name) {
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: auraTheme.surfaceLight,
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    name,
+                    style: AuraTypography.bodySmall.copyWith(color: AuraColors.textSecondary, fontSize: 11),
+                  ),
+                );
+              }).toList(),
+            ),
+          ],
+          // Nutrition focus
+          if (day.nutritionFocus != null) ...[
+            const SizedBox(height: 10),
             Row(
               children: [
-                // Day name + date
+                Icon(LucideIcons.utensils, size: 12, color: auraTheme.primary.withOpacity(0.5)),
+                const SizedBox(width: 6),
                 Expanded(
-                  child: Row(
-                    children: [
-                      Text(
-                        day.dayName,
-                        style: GoogleFonts.syne(
-                          fontSize: 15,
-                          fontWeight: FontWeight.bold,
-                          color: isToday ? theme.colorScheme.primary : Colors.white,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Text(
-                        _formatDate(day.date),
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: Colors.white.withOpacity(0.35),
-                        ),
-                      ),
-                    ],
+                  child: Text(
+                    day.nutritionFocus!,
+                    style: AuraTypography.bodySmall.copyWith(
+                      color: AuraColors.textTertiary,
+                      fontStyle: FontStyle.italic,
+                    ),
                   ),
                 ),
-                if (isToday)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: theme.colorScheme.primary.withOpacity(0.15),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      'TODAY',
-                      style: TextStyle(
-                        fontSize: 10,
-                        fontWeight: FontWeight.w700,
-                        color: theme.colorScheme.primary,
-                        letterSpacing: 0.5,
-                      ),
-                    ),
-                  ),
-                if (day.isRestDay)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.06),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Icon(LucideIcons.moonStar, size: 12, color: Colors.white.withOpacity(0.4)),
-                        const SizedBox(width: 4),
-                        Text(
-                          'REST',
-                          style: TextStyle(
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                            color: Colors.white.withOpacity(0.4),
-                            letterSpacing: 0.5,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
               ],
             ),
-            const SizedBox(height: 10),
-            // Title + focus area
-            Text(
-              day.title,
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-                color: day.isRestDay ? Colors.white.withOpacity(0.4) : Colors.white.withOpacity(0.85),
-              ),
-            ),
-            if (day.focusArea.isNotEmpty && !day.isRestDay) ...[
-              const SizedBox(height: 4),
-              Text(
-                day.focusArea,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: theme.colorScheme.secondary.withOpacity(0.6),
-                ),
-              ),
-            ],
-            // Exercise chips
-            if (day.exerciseNames.isNotEmpty && !day.isRestDay) ...[
-              const SizedBox(height: 10),
-              Wrap(
-                spacing: 6,
-                runSpacing: 6,
-                children: day.exerciseNames.map((name) {
-                  return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.05),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                    child: Text(
-                      name,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.white.withOpacity(0.55),
-                      ),
-                    ),
-                  );
-                }).toList(),
-              ),
-            ],
-            // Nutrition focus
-            if (day.nutritionFocus != null) ...[
-              const SizedBox(height: 10),
-              Row(
-                children: [
-                  Icon(LucideIcons.utensils, size: 12, color: theme.colorScheme.primary.withOpacity(0.5)),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: Text(
-                      day.nutritionFocus!,
-                      style: TextStyle(
-                        fontSize: 11,
-                        color: Colors.white.withOpacity(0.4),
-                        fontStyle: FontStyle.italic,
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
           ],
-        ),
+        ],
       ),
     );
   }

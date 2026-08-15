@@ -8,10 +8,11 @@ import 'firebase_options.dart';
 
 import 'providers/transformation_state.dart';
 import 'models/models.dart';
+import 'theme/theme.dart';
 import 'screens/today_screen.dart';
-import 'screens/plan_log_screen.dart';
-import 'screens/progress_screen.dart';
+import 'screens/workout_screen.dart';
 import 'screens/coach_screen.dart';
+import 'screens/insights_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/onboarding_screen.dart';
 import 'screens/weekly_plan_screen.dart';
@@ -22,56 +23,6 @@ void main() async {
     options: DefaultFirebaseOptions.currentPlatform,
   );
   runApp(const ProviderScope(child: AuraPwaApp()));
-}
-
-ThemeData getAuraTheme(CoachSoul soul) {
-  Color primaryColor;
-  Color secondaryColor;
-  Color scaffoldBackgroundColor;
-  Color cardColor;
-
-  switch (soul) {
-    case CoachSoul.supporter:
-      primaryColor = const Color(0xFF8EA885); // Soft Sage Green
-      secondaryColor = const Color(0xFF9A7EB8); // Soft Lavender-Purple
-      scaffoldBackgroundColor = const Color(0xFF0C0A0D); // Warm Void
-      cardColor = const Color(0xFF141217);
-      break;
-    case CoachSoul.pro:
-      primaryColor = const Color(0xFF00B2FF); // Electric Blue
-      secondaryColor = const Color(0xFFFF007A); // Neon Magenta
-      scaffoldBackgroundColor = const Color(0xFF0B0B0E); // Deep Void
-      cardColor = const Color(0xFF131317);
-      break;
-    case CoachSoul.teacher:
-      primaryColor = const Color(0xFF00BFA5); // Vivid Teal
-      secondaryColor = const Color(0xFFB0BEC5); // Cool Metallic Silver
-      scaffoldBackgroundColor = const Color(0xFF0B0D0F); // Slate Void
-      cardColor = const Color(0xFF131619);
-      break;
-  }
-
-  final baseTheme = ThemeData.dark();
-  return baseTheme.copyWith(
-    scaffoldBackgroundColor: scaffoldBackgroundColor,
-    cardColor: cardColor,
-    colorScheme: ColorScheme.dark(
-      primary: primaryColor,
-      secondary: secondaryColor,
-      surface: cardColor,
-    ),
-    textTheme: GoogleFonts.plusJakartaSansTextTheme(
-      baseTheme.textTheme.copyWith(
-        displayLarge: GoogleFonts.syne(fontWeight: FontWeight.bold, letterSpacing: -0.02),
-        displayMedium: GoogleFonts.syne(fontWeight: FontWeight.bold, letterSpacing: -0.02),
-        displaySmall: GoogleFonts.syne(fontWeight: FontWeight.bold, letterSpacing: -0.02),
-        headlineLarge: GoogleFonts.syne(fontWeight: FontWeight.bold, letterSpacing: -0.02),
-        headlineMedium: GoogleFonts.syne(fontWeight: FontWeight.bold, letterSpacing: -0.02),
-        headlineSmall: GoogleFonts.syne(fontWeight: FontWeight.bold, letterSpacing: -0.02),
-        titleLarge: GoogleFonts.syne(fontWeight: FontWeight.bold, letterSpacing: -0.02),
-      ),
-    ),
-  );
 }
 
 class AuraPwaApp extends ConsumerWidget {
@@ -102,43 +53,21 @@ class _MainShellState extends State<MainShell> {
 
   void _navigateToTab(int tabIndex, {int subIndex = 0}) {
     if (tabIndex == 1) {
-      // Push Workouts / Nutrition logs as a detailed sub-page
+      // Push Workout Session Mode directly
       Navigator.of(context).push(
         MaterialPageRoute(
-          builder: (context) => Scaffold(
-            appBar: AppBar(
-              backgroundColor: const Color(0xFF0B0B0E),
-              title: Text(
-                subIndex == 0 ? 'Workout Outline' : 'Nutrition Balance',
-                style: GoogleFonts.syne(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-              elevation: 0,
-            ),
-            body: PlanLogScreen(key: ValueKey('plan_sub_$subIndex'), initialSubIndex: subIndex),
-          ),
+          builder: (context) => const WorkoutScreen(),
         ),
       );
     } else if (tabIndex == 2) {
-      // Push Progress trends as a detailed sub-page
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => Scaffold(
-            appBar: AppBar(
-              backgroundColor: const Color(0xFF0B0B0E),
-              title: Text(
-                'Progress Trends',
-                style: GoogleFonts.syne(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-              elevation: 0,
-            ),
-            body: const ProgressScreen(),
-          ),
-        ),
-      );
-    } else if (tabIndex == 3) {
-      // Toggle to Coach screen index (now index 2)
+      // Toggle to Insights tab
       setState(() {
         _selectedIndex = 2;
+      });
+    } else if (tabIndex == 3) {
+      // Toggle to Coach tab (Index 1)
+      setState(() {
+        _selectedIndex = 1;
       });
     } else {
       setState(() {
@@ -156,8 +85,8 @@ class _MainShellState extends State<MainShell> {
 
         final List<Widget> screens = [
           TodayScreen(onNavigateToTab: _navigateToTab),
-          const WeeklyPlanScreen(),
           const CoachScreen(),
+          const InsightsScreen(),
         ];
 
         return Scaffold(
@@ -228,13 +157,13 @@ class _MainShellState extends State<MainShell> {
             type: BottomNavigationBarType.fixed,
             backgroundColor: Theme.of(context).cardColor,
             selectedItemColor: Theme.of(context).colorScheme.primary,
-            unselectedItemColor: const Color(0xFFA1A1AA),
+            unselectedItemColor: AuraColors.textSecondary,
             selectedFontSize: 11,
             unselectedFontSize: 11,
             items: const [
-              BottomNavigationBarItem(icon: Icon(LucideIcons.home, size: 20), label: 'Today'),
-              BottomNavigationBarItem(icon: Icon(LucideIcons.calendarDays, size: 20), label: 'Plan'),
+              BottomNavigationBarItem(icon: Icon(LucideIcons.compass, size: 20), label: 'Today'),
               BottomNavigationBarItem(icon: Icon(LucideIcons.bot, size: 20), label: 'Coach'),
+              BottomNavigationBarItem(icon: Icon(LucideIcons.sparkles, size: 20), label: 'Insights'),
             ],
           ),
         );
