@@ -34,7 +34,7 @@ class GeminiAIProvider implements AIService {
   final String modelName;
 
   GeminiAIProvider({
-    this.modelName = 'gemini-3.7-flash',
+    this.modelName = 'gemini-2.0-flash',
   });
 
   String get _proxyUrl {

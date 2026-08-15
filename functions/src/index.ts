@@ -6,10 +6,12 @@ admin.initializeApp();
 
 const geminiApiKey = defineSecret("GEMINI_API_KEY");
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
 /**
  * Secure Gemini Proxy Endpoint for AURA Coach.
  * Holds GEMINI_API_KEY strictly in Cloud Secret Manager.
- * Validates request payload and invokes Gemini API server-to-server.
+ * Features automatic multi-model failover and resilience against transient upstream 503/429 spikes.
  */
 export const callGeminiProxy = onRequest(
   {
@@ -54,8 +56,11 @@ export const callGeminiProxy = onRequest(
         return;
       }
 
-      const targetModel = model || "gemini-3.7-flash";
-      const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${apiKey}`;
+      const requestedModel = model || "gemini-2.0-flash";
+      // Multi-tier model fallback hierarchy
+      const candidateModels = Array.from(
+        new Set([requestedModel, "gemini-2.0-flash", "gemini-2.0-flash-lite", "gemini-3.7-flash"])
+      );
 
       const parts: Array<Record<string, any>> = [];
       if (imageBase64 && typeof imageBase64 === "string" && imageBase64.trim().length > 0) {
@@ -82,27 +87,60 @@ export const callGeminiProxy = onRequest(
         };
       }
 
-      const response = await fetch(geminiEndpoint, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(requestBody),
-      });
+      let lastError: string | null = null;
+      let lastStatus = 500;
 
-      if (!response.ok) {
-        const errorBody = await response.text();
-        console.error(`[GEMINI PROXY] Gemini API error: ${response.status}`, errorBody);
-        res.status(response.status).json({ error: "Gemini API error", details: errorBody });
-        return;
+      for (let i = 0; i < candidateModels.length; i++) {
+        const targetModel = candidateModels[i];
+        const geminiEndpoint = `https://generativelanguage.googleapis.com/v1beta/models/${targetModel}:generateContent?key=${apiKey}`;
+
+        try {
+          console.log(`[GEMINI PROXY] Attempting inference with model: ${targetModel}`);
+          const response = await fetch(geminiEndpoint, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify(requestBody),
+          });
+
+          if (response.ok) {
+            const data: any = await response.json();
+            const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+
+            res.status(200).json({
+              text: rawText,
+              model: targetModel,
+            });
+            return;
+          }
+
+          lastStatus = response.status;
+          lastError = await response.text();
+          console.warn(`[GEMINI PROXY] Model ${targetModel} failed with status ${response.status}: ${lastError}. Attempting fallback...`);
+
+          if (response.status === 400) {
+            res.status(400).json({ error: "Gemini API bad request", details: lastError });
+            return;
+          }
+
+          // Backoff before trying next model in chain
+          if (i < candidateModels.length - 1) {
+            await sleep(350);
+          }
+        } catch (fetchErr: any) {
+          console.warn(`[GEMINI PROXY] Network error invoking ${targetModel}:`, fetchErr?.message);
+          lastError = fetchErr?.message ?? "Network error";
+          if (i < candidateModels.length - 1) {
+            await sleep(350);
+          }
+        }
       }
 
-      const data: any = await response.json();
-      const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-
-      res.status(200).json({
-        text: rawText,
-        model: targetModel,
+      // If all models failed
+      res.status(lastStatus).json({
+        error: "All Gemini models in fallback chain were unavailable",
+        details: lastError,
       });
     } catch (error: any) {
       console.error("[GEMINI PROXY] Internal error:", error);

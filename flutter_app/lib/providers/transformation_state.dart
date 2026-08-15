@@ -690,17 +690,64 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
           case 'adaptWorkout':
             final reason = action.arguments['reason']?.toString() ?? text;
             final maxWeightNum = (action.arguments['maxWeightKg'] as num?)?.toDouble();
-            final adaptedWorkout = await _aiService.adaptWorkoutWithAI(
-              reason,
-              state,
-              explicitEquipment: state.profile.availableEquipment,
-              maxWeightKg: maxWeightNum,
-            );
-            state = state.copyWith(
-              workout: adaptedWorkout,
-              adaptationNotice: 'Workout adapted via AURA AI: "${adaptedWorkout.adaptationNote ?? reason}"',
-            );
-            await _firestore.saveDailyWorkout(uid, state.workout.date, adaptedWorkout);
+            try {
+              final adaptedWorkout = await _aiService.adaptWorkoutWithAI(
+                reason,
+                state,
+                explicitEquipment: state.profile.availableEquipment,
+                maxWeightKg: maxWeightNum,
+              );
+              state = state.copyWith(
+                workout: adaptedWorkout,
+                adaptationNotice: 'Workout adapted via AURA AI: "${adaptedWorkout.adaptationNote ?? reason}"',
+              );
+              await _firestore.saveDailyWorkout(uid, state.workout.date, adaptedWorkout);
+            } catch (adaptErr) {
+              debugPrint('[AURA STATE] adaptWorkoutWithAI network error, applying local fallback: $adaptErr');
+              final isHome = reason.toLowerCase().contains('home') ||
+                  reason.toLowerCase().contains('bodyweight') ||
+                  reason.toLowerCase().contains('no gym') ||
+                  reason.toLowerCase().contains("can't go");
+
+              final fallbackExercises = <Exercise>[];
+              for (var ex in state.workout.exercises) {
+                final subs = ExerciseDatabase.getSubstitutions(
+                  currentExerciseName: ex.name,
+                  availableEquipment: isHome
+                      ? [EquipmentType.bodyweight]
+                      : state.profile.availableEquipment,
+                );
+                if (subs.isNotEmpty) {
+                  fallbackExercises.add(Exercise(
+                    id: 'sub_${ex.id}',
+                    name: subs.first.name,
+                    targetMuscle: subs.first.targetMuscle,
+                    equipmentRequired: subs.first.equipment.name,
+                    sets: ex.sets.map((s) => ExerciseSet(
+                      setNumber: s.setNumber,
+                      targetReps: s.targetReps,
+                      targetWeightKg: 0.0,
+                    )).toList(),
+                    notes: isHome ? 'Bodyweight adaptation for home workout' : 'Adapted variation',
+                  ));
+                } else {
+                  fallbackExercises.add(ex);
+                }
+              }
+
+              final adapted = state.workout.copyWith(
+                title: isHome ? "Today's Home Workout Session" : state.workout.title,
+                focusArea: state.workout.focusArea,
+                status: WorkoutStatus.adapted,
+                exercises: fallbackExercises,
+                adaptationNote: reason,
+              );
+              state = state.copyWith(
+                workout: adapted,
+                adaptationNotice: 'Workout adapted: "$reason"',
+              );
+              await _firestore.saveDailyWorkout(uid, state.workout.date, adapted);
+            }
             break;
 
           case 'logNutrition':
