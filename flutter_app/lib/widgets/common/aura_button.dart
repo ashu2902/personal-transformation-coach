@@ -8,8 +8,9 @@ enum AuraButtonVariant {
   ghost,
 }
 
-/// Standardized action button for AURA.
-class AuraButton extends StatelessWidget {
+/// Tactile, Fluid UI action button for AURA.
+/// Features spring scale feedback, smooth hover states, and responsive layout scaling.
+class AuraButton extends StatefulWidget {
   final String text;
   final VoidCallback? onPressed;
   final AuraButtonVariant variant;
@@ -36,40 +37,48 @@ class AuraButton extends StatelessWidget {
   });
 
   @override
+  State<AuraButton> createState() => _AuraButtonState();
+}
+
+class _AuraButtonState extends State<AuraButton> {
+  bool _isHovered = false;
+  bool _isPressed = false;
+
+  @override
   Widget build(BuildContext context) {
     final auraTheme = context.auraTheme;
-    final isEnabled = onPressed != null && !isLoading;
+    final isEnabled = widget.onPressed != null && !widget.isLoading;
 
     Color bg;
     Color fg;
     BorderSide side = BorderSide.none;
 
-    switch (variant) {
+    switch (widget.variant) {
       case AuraButtonVariant.primary:
-        bg = backgroundColor ?? auraTheme.primary;
-        fg = textColor ?? Colors.black;
+        bg = widget.backgroundColor ?? auraTheme.primary;
+        fg = widget.textColor ?? Colors.black;
         break;
       case AuraButtonVariant.secondary:
-        bg = backgroundColor ?? auraTheme.surfaceLight;
-        fg = textColor ?? AuraColors.textPrimary;
+        bg = widget.backgroundColor ?? auraTheme.surfaceLight;
+        fg = widget.textColor ?? AuraColors.textPrimary;
         break;
       case AuraButtonVariant.outline:
-        bg = backgroundColor ?? Colors.transparent;
-        fg = textColor ?? auraTheme.primary;
-        side = BorderSide(color: auraTheme.primary.withOpacity(0.4), width: 1);
+        bg = widget.backgroundColor ?? Colors.transparent;
+        fg = widget.textColor ?? auraTheme.primary;
+        side = BorderSide(color: auraTheme.primary.withValues(alpha: 0.4), width: 1);
         break;
       case AuraButtonVariant.ghost:
-        bg = backgroundColor ?? Colors.transparent;
-        fg = textColor ?? AuraColors.textSecondary;
+        bg = widget.backgroundColor ?? Colors.transparent;
+        fg = widget.textColor ?? AuraColors.textSecondary;
         break;
     }
 
-    if (!isEnabled && variant == AuraButtonVariant.primary) {
-      bg = bg.withOpacity(0.4);
-      fg = fg.withOpacity(0.6);
+    if (!isEnabled && widget.variant == AuraButtonVariant.primary) {
+      bg = bg.withValues(alpha: 0.4);
+      fg = fg.withValues(alpha: 0.6);
     }
 
-    final childWidget = isLoading
+    final childWidget = widget.isLoading
         ? SizedBox(
             width: 20,
             height: 20,
@@ -82,33 +91,67 @@ class AuraButton extends StatelessWidget {
             mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              if (icon != null) ...[
-                Icon(icon, size: 18, color: fg),
+              if (widget.icon != null) ...[
+                Icon(widget.icon, size: 18, color: fg),
                 const SizedBox(width: 8),
               ],
               Text(
-                text,
+                widget.text,
                 style: AuraTypography.buttonText.copyWith(color: fg),
               ),
             ],
           );
 
-    return SizedBox(
-      width: width,
-      height: height,
-      child: ElevatedButton(
-        onPressed: isEnabled ? onPressed : null,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: bg,
-          foregroundColor: fg,
-          elevation: 0,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(borderRadius),
-            side: side,
+    double scale = 1.0;
+    if (isEnabled) {
+      if (_isPressed) {
+        scale = 0.96;
+      } else if (_isHovered) {
+        scale = 1.02;
+      }
+    }
+
+    return MouseRegion(
+      onEnter: (_) {
+        if (isEnabled) setState(() => _isHovered = true);
+      },
+      onExit: (_) {
+        if (isEnabled) setState(() => _isHovered = false);
+      },
+      cursor: isEnabled ? SystemMouseCursors.click : SystemMouseCursors.basic,
+      child: GestureDetector(
+        onTapDown: (_) {
+          if (isEnabled) setState(() => _isPressed = true);
+        },
+        onTapUp: (_) {
+          if (isEnabled) setState(() => _isPressed = false);
+        },
+        onTapCancel: () {
+          if (isEnabled) setState(() => _isPressed = false);
+        },
+        child: AnimatedScale(
+          scale: scale,
+          duration: const Duration(milliseconds: 160),
+          curve: AuraCurves.fluidSpring,
+          child: SizedBox(
+            width: widget.width,
+            height: widget.height,
+            child: ElevatedButton(
+              onPressed: isEnabled ? widget.onPressed : null,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: bg,
+                foregroundColor: fg,
+                elevation: 0,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(widget.borderRadius),
+                  side: side,
+                ),
+                padding: const EdgeInsets.symmetric(horizontal: 20),
+              ),
+              child: childWidget,
+            ),
           ),
-          padding: const EdgeInsets.symmetric(horizontal: 20),
         ),
-        child: childWidget,
       ),
     );
   }

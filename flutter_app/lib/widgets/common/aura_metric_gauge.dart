@@ -9,7 +9,8 @@ enum AuraMetricVariant {
   custom,
 }
 
-/// Standardized progress / macro gauge for AURA.
+/// Fluid animated progress / macro gauge for AURA.
+/// Smoothly animates value transitions with spring ease curves.
 class AuraMetricGauge extends StatelessWidget {
   final String label;
   final num currentValue;
@@ -19,6 +20,7 @@ class AuraMetricGauge extends StatelessWidget {
   final Color? customColor;
   final IconData? icon;
   final bool showValuesRow;
+  final double height;
 
   const AuraMetricGauge({
     super.key,
@@ -30,6 +32,7 @@ class AuraMetricGauge extends StatelessWidget {
     this.customColor,
     this.icon,
     this.showValuesRow = true,
+    this.height = 8.0,
   });
 
   Color _resolveColor(BuildContext context) {
@@ -53,7 +56,7 @@ class AuraMetricGauge extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final activeColor = _resolveColor(context);
-    final progress = targetValue > 0 ? (currentValue / targetValue).clamp(0.0, 1.0) : 0.0;
+    final targetProgress = targetValue > 0 ? (currentValue / targetValue).clamp(0.0, 1.0) : 0.0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -97,14 +100,41 @@ class AuraMetricGauge extends StatelessWidget {
             ],
           ),
         if (showValuesRow) const SizedBox(height: 8),
-        ClipRRect(
-          borderRadius: BorderRadius.circular(6),
-          child: LinearProgressIndicator(
-            value: progress.toDouble(),
-            minHeight: 8,
-            backgroundColor: activeColor.withOpacity(0.12),
-            valueColor: AlwaysStoppedAnimation<Color>(activeColor),
-          ),
+        TweenAnimationBuilder<double>(
+          tween: Tween<double>(begin: 0.0, end: targetProgress.toDouble()),
+          duration: const Duration(milliseconds: 600),
+          curve: AuraCurves.fluidEaseOut,
+          builder: (context, animatedVal, child) {
+            return ClipRRect(
+              borderRadius: BorderRadius.circular(height / 2),
+              child: Stack(
+                children: [
+                  Container(
+                    height: height,
+                    width: double.infinity,
+                    color: activeColor.withValues(alpha: 0.12),
+                  ),
+                  FractionallySizedBox(
+                    widthFactor: animatedVal.clamp(0.0, 1.0),
+                    child: Container(
+                      height: height,
+                      decoration: BoxDecoration(
+                        color: activeColor,
+                        borderRadius: BorderRadius.circular(height / 2),
+                        boxShadow: [
+                          BoxShadow(
+                            color: activeColor.withValues(alpha: 0.4),
+                            blurRadius: 6,
+                            offset: const Offset(0, 1),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
         ),
       ],
     );

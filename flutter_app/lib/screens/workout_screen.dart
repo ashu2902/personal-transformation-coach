@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../providers/transformation_state.dart';
+import '../providers/analytics_provider.dart';
+import '../services/analytics_service.dart';
 import '../models/models.dart';
 import '../engine/exercise_database.dart';
 import '../theme/theme.dart';
@@ -117,6 +119,21 @@ class WorkoutScreen extends ConsumerWidget {
                           }
                         }
                         notifier.trackProgressForToday();
+
+                        // Track Core Value Moment in Mixpanel
+                        ref.read(analyticsServiceProvider).logEvent(
+                          AuraAnalyticsEvents.prescriptionCompleted,
+                          properties: {
+                            'workout_type': workout.title,
+                            'focus_area': workout.focusArea,
+                            'estimated_duration_min': workout.estimatedDurationMin,
+                            'exercise_count': workout.exercises.length,
+                            'total_sets': totalSets,
+                            'is_adapted': workout.adaptationNote != null && workout.adaptationNote!.isNotEmpty,
+                            'coach_soul': state.profile.coachSoul.name,
+                          },
+                        );
+
                         _showWorkoutCompletedDialog(context, state, workout);
                       },
               ),
@@ -126,7 +143,7 @@ class WorkoutScreen extends ConsumerWidget {
       ),
       body: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 680),
+          constraints: BoxConstraints(maxWidth: context.maxFluidContentWidth),
           child: SingleChildScrollView(
             physics: const BouncingScrollPhysics(),
             padding: const EdgeInsets.fromLTRB(16.0, 12.0, 16.0, 40.0),

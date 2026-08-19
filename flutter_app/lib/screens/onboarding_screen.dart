@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
@@ -5,6 +6,8 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../models/models.dart';
 import '../providers/transformation_state.dart';
+import '../providers/analytics_provider.dart';
+import '../services/analytics_service.dart';
 import '../services/firebase_service.dart';
 import '../theme/theme.dart';
 import 'widgets/aura_orb.dart';
@@ -63,6 +66,39 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     _heightController = TextEditingController(text: _heightCm.round().toString());
     _weightController = TextEditingController(text: _weightKg.round().toString());
     _customEquipmentController = TextEditingController();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(analyticsServiceProvider).logEvent(
+        AuraAnalyticsEvents.onboardingStarted,
+        properties: {
+          'platform': kIsWeb ? 'flutter_pwa' : 'mobile',
+        },
+      );
+    });
+  }
+
+  void _goToStep(int nextStep) {
+    const stepNames = [
+      'welcome',
+      'identity_and_body',
+      'goals_and_frequency',
+      'equipment',
+      'coach_soul',
+      'plan_summary',
+      'calibration_loading',
+    ];
+    final currentName = _currentStep < stepNames.length ? stepNames[_currentStep] : 'step_$_currentStep';
+    ref.read(analyticsServiceProvider).logEvent(
+      AuraAnalyticsEvents.onboardingStepCompleted,
+      properties: {
+        'step_index': _currentStep,
+        'step_name': currentName,
+        'next_step_index': nextStep,
+      },
+    );
+    setState(() {
+      _currentStep = nextStep;
+    });
   }
 
   @override
@@ -277,6 +313,46 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
       // Step 4: Launch
       if (mounted) setState(() => _calibrationProgressStep = 4);
+
+      // Track with Mixpanel
+      final analytics = ref.read(analyticsServiceProvider);
+      await analytics.setUserId(uid);
+      await analytics.setUserProperties({
+        r'$name': finalProfile.name,
+        'coach_soul': finalProfile.coachSoul.name,
+        'goal_type': finalProfile.goal.name,
+        'days_per_week': finalProfile.daysPerWeek,
+        'dietary_preference': finalProfile.dietaryPreference,
+        'experience_level': finalProfile.experienceLevel.name,
+      });
+      await analytics.registerSuperProperties({
+        'coach_soul': finalProfile.coachSoul.name,
+        'goal_type': finalProfile.goal.name,
+      });
+
+      await analytics.logEvent(
+        AuraAnalyticsEvents.planCalibrated,
+        properties: {
+          'goal_type': finalProfile.goal.name,
+          'target_calories': nutrition.targetCalories,
+          'target_protein_g': nutrition.targetProteinG,
+          'days_per_week': finalProfile.daysPerWeek,
+          'equipment_count': finalProfile.equipmentList.length,
+          'coach_soul': finalProfile.coachSoul.name,
+        },
+      );
+
+      final signUpMethod = useGoogleAuth ? 'google' : (email != null ? 'email' : 'anonymous');
+      await analytics.logEvent(
+        AuraAnalyticsEvents.signUpCompleted,
+        properties: {
+          'sign_up_method': signUpMethod,
+          'coach_soul': finalProfile.coachSoul.name,
+          'goal_type': finalProfile.goal.name,
+          'platform': kIsWeb ? 'flutter_pwa' : 'mobile',
+        },
+      );
+
       await Future.delayed(const Duration(milliseconds: 600));
 
       if (mounted) {
@@ -294,31 +370,42 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF0B0B0E), // Deep Void
-      body: SafeArea(
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 480),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
-              child: AnimatedSwitcher(
-                duration: const Duration(milliseconds: 350),
-                transitionBuilder: (child, animation) {
-                  return FadeTransition(
-                    opacity: animation,
-                    child: SlideTransition(
-                      position: Tween<Offset>(
-                        begin: const Offset(0.0, 0.02),
-                        end: Offset.zero,
-                      ).animate(CurvedAnimation(parent: animation, curve: Curves.easeInOut)),
-                      child: child,
-                    ),
-                  );
-                },
-                child: KeyedSubtree(
-                  key: ValueKey<int>(_currentStep),
-                  child: _buildCurrentScreen(),
+    return PopScope(
+      canPop: _currentStep == 0,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        if (_currentStep > 0 && _currentStep < 6) {
+          setState(() {
+            _currentStep--;
+          });
+        }
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFF0B0B0E), // Deep Void
+        body: SafeArea(
+          child: Center(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 480),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
+                child: AnimatedSwitcher(
+                  duration: const Duration(milliseconds: 350),
+                  transitionBuilder: (child, animation) {
+                    return FadeTransition(
+                      opacity: animation,
+                      child: SlideTransition(
+                        position: Tween<Offset>(
+                          begin: const Offset(0.0, 0.02),
+                          end: Offset.zero,
+                        ).animate(CurvedAnimation(parent: animation, curve: Curves.easeInOut)),
+                        child: child,
+                      ),
+                    );
+                  },
+                  child: KeyedSubtree(
+                    key: ValueKey<int>(_currentStep),
+                    child: _buildCurrentScreen(),
+                  ),
                 ),
               ),
             ),
@@ -355,7 +442,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
         const Spacer(),
-        AuraOrb(soul: CoachSoul.supporter, state: OrbState.pulsing, size: 200),
+        const AuraOrb(soul: CoachSoul.supporter, state: OrbState.pulsing, size: 200),
         const SizedBox(height: 40),
         Text(
           'Hi, I’m AURA.',
@@ -390,7 +477,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(27)),
               elevation: 3,
             ),
-            onPressed: () => setState(() => _currentStep = 1),
+            onPressed: () => _goToStep(1),
             child: Text(
               "Let's Begin",
               style: GoogleFonts.syne(fontWeight: FontWeight.bold, fontSize: 16),
@@ -550,7 +637,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
                     padding: const EdgeInsets.symmetric(vertical: 15),
                   ),
-                  onPressed: () => setState(() => _currentStep = 0),
+                  onPressed: () => _goToStep(0),
                   child: const Text('Back'),
                 ),
               ),
@@ -563,7 +650,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
                     padding: const EdgeInsets.symmetric(vertical: 15),
                   ),
-                  onPressed: canProceed ? () => setState(() => _currentStep = 2) : null,
+                  onPressed: canProceed ? () => _goToStep(2) : null,
                   child: Text('Continue', style: GoogleFonts.syne(fontWeight: FontWeight.bold)),
                 ),
               ),
@@ -687,7 +774,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
                     padding: const EdgeInsets.symmetric(vertical: 15),
                   ),
-                  onPressed: () => setState(() => _currentStep = 1),
+                  onPressed: () => _goToStep(1),
                   child: const Text('Back'),
                 ),
               ),
@@ -700,7 +787,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
                     padding: const EdgeInsets.symmetric(vertical: 15),
                   ),
-                  onPressed: () => setState(() => _currentStep = 3),
+                  onPressed: () => _goToStep(3),
                   child: Text('Continue', style: GoogleFonts.syne(fontWeight: FontWeight.bold)),
                 ),
               ),
@@ -792,7 +879,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
                     padding: const EdgeInsets.symmetric(vertical: 15),
                   ),
-                  onPressed: () => setState(() => _currentStep = 2),
+                  onPressed: () => _goToStep(2),
                   child: const Text('Back'),
                 ),
               ),
@@ -805,7 +892,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
                     padding: const EdgeInsets.symmetric(vertical: 15),
                   ),
-                  onPressed: () => setState(() => _currentStep = 4),
+                  onPressed: () => _goToStep(4),
                   child: Text('Continue', style: GoogleFonts.syne(fontWeight: FontWeight.bold)),
                 ),
               ),
@@ -870,7 +957,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
                   padding: const EdgeInsets.symmetric(vertical: 15),
                 ),
-                onPressed: () => setState(() => _currentStep = 3),
+                onPressed: () => _goToStep(3),
                 child: const Text('Back'),
               ),
             ),
@@ -883,7 +970,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
                   padding: const EdgeInsets.symmetric(vertical: 15),
                 ),
-                onPressed: () => setState(() => _currentStep = 5),
+                onPressed: () => _goToStep(5),
                 child: Text('Review Plan', style: GoogleFonts.syne(fontWeight: FontWeight.bold)),
               ),
             ),
@@ -999,7 +1086,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
           Center(
             child: TextButton(
-              onPressed: () => setState(() => _currentStep = 4),
+              onPressed: () => _goToStep(4),
               child: Text('Edit soul selection', style: GoogleFonts.plusJakartaSans(color: const Color(0xFFA1A1AA), fontSize: 12)),
             ),
           ),
@@ -1253,7 +1340,17 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     final highlightColor = isSelected ? soulPalette.secondary.withOpacity(0.1) : Colors.transparent;
 
     return GestureDetector(
-      onTap: () => setState(() => _selectedSoul = soul),
+      onTap: () {
+        ref.read(analyticsServiceProvider).logEvent(
+          AuraAnalyticsEvents.soulSelected,
+          properties: {
+            'soul_name': soul.name,
+            'previous_soul': _selectedSoul.name,
+            'surface': 'onboarding',
+          },
+        );
+        setState(() => _selectedSoul = soul);
+      },
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(

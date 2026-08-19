@@ -3,6 +3,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
 import '../providers/transformation_state.dart';
+import '../providers/analytics_provider.dart';
+import '../services/analytics_service.dart';
 import '../models/models.dart';
 import '../theme/theme.dart';
 import '../widgets/common/common.dart';
@@ -47,7 +49,7 @@ class TodayScreen extends ConsumerWidget {
 
     return Center(
       child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 680),
+        constraints: BoxConstraints(maxWidth: context.maxFluidContentWidth),
         child: SingleChildScrollView(
           physics: const BouncingScrollPhysics(),
           padding: const EdgeInsets.fromLTRB(20.0, 12.0, 20.0, 120.0),
@@ -189,7 +191,7 @@ class TodayScreen extends ConsumerWidget {
                           ),
                         ),
                         const SizedBox(width: 12),
-                        Icon(LucideIcons.clock, size: 14, color: AuraColors.textTertiary),
+                        const Icon(LucideIcons.clock, size: 14, color: AuraColors.textTertiary),
                         const SizedBox(width: 6),
                         Text(
                           '${workout.estimatedDurationMin} min • ${workout.exercises.length} Exercises',
@@ -794,6 +796,13 @@ class TodayScreen extends ConsumerWidget {
                     width: double.infinity,
                     onPressed: () {
                       ref.read(transformationEngineProvider.notifier).updateSleep(tempSleep);
+                      ref.read(analyticsServiceProvider).logEvent(
+                        AuraAnalyticsEvents.recoveryLogged,
+                        properties: {
+                          'sleep_hours': tempSleep,
+                          'metric_type': 'sleep',
+                        },
+                      );
                       Navigator.of(context).pop();
                     },
                   ),
@@ -863,6 +872,13 @@ class TodayScreen extends ConsumerWidget {
                     width: double.infinity,
                     onPressed: () {
                       ref.read(transformationEngineProvider.notifier).updateSoreness(tempSoreness);
+                      ref.read(analyticsServiceProvider).logEvent(
+                        AuraAnalyticsEvents.recoveryLogged,
+                        properties: {
+                          'soreness_score': tempSoreness,
+                          'metric_type': 'soreness',
+                        },
+                      );
                       Navigator.of(context).pop();
                     },
                   ),

@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../providers/transformation_state.dart';
@@ -34,7 +33,7 @@ class GeminiAIProvider implements AIService {
   final String modelName;
 
   GeminiAIProvider({
-    this.modelName = 'gemini-3.7-flash',
+    this.modelName = 'gemini-2.0-flash',
   });
 
   String get _proxyUrl {
@@ -804,12 +803,12 @@ Return JSON:
         ? 'None reported.'
         : injuryList.map((i) => '• $i').join('\n');
 
-    final allNotes = [
+    final allNotes = <dynamic>{
       ...p.dislikedExercises.map((d) => 'Dislikes: $d'),
       ...ctx.deduced.dislikedExercises.map((d) => 'Dislikes: $d'),
       ...p.personalNotes,
       ...ctx.deduced.personalNotes,
-    ].toSet().toList();
+    }.toList();
     final notesStr = allNotes.isEmpty ? 'No additional notes recorded yet.' : allNotes.map((n) => '• $n').join('\n');
 
     return '''
@@ -872,12 +871,12 @@ Recent AI Adaptation Notice: ${state.adaptationNotice ?? 'None'}
     });
 
     final ctx = contextState.masterContext;
-    final allNotes = [
+    final allNotes = <dynamic>{
       ...p.dislikedExercises.map((d) => 'AVOID: $d'),
       ...ctx.deduced.dislikedExercises.map((d) => 'AVOID: $d'),
       ...p.personalNotes,
       ...ctx.deduced.personalNotes,
-    ].toSet().toList();
+    }.toList();
     final deducedNotes = allNotes.isNotEmpty
         ? 'User preferences & constraints: ${allNotes.join("; ")}'
         : 'No additional notes.';
@@ -932,28 +931,60 @@ Return JSON:
 }
 ''';
 
-    final parsed = await _callGeminiJson('generateAIWeeklyPlan', prompt);
+    try {
+      final parsed = await _callGeminiJson('generateAIWeeklyPlan', prompt);
 
-    final days = (parsed['days'] as List? ?? []).map((d) {
-      return WeeklyDayPlan(
-        dayName: d['dayName']?.toString() ?? '',
-        date: d['date']?.toString() ?? '',
-        title: d['title']?.toString() ?? 'Training Day',
-        focusArea: d['focusArea']?.toString() ?? '',
-        isRestDay: d['isRestDay'] == true,
-        exerciseNames: (d['exerciseNames'] as List? ?? []).map((e) => e.toString()).toList(),
-        nutritionFocus: d['nutritionFocus']?.toString(),
+      final days = (parsed['days'] as List? ?? []).map((d) {
+        return WeeklyDayPlan(
+          dayName: d['dayName']?.toString() ?? '',
+          date: d['date']?.toString() ?? '',
+          title: d['title']?.toString() ?? 'Training Day',
+          focusArea: d['focusArea']?.toString() ?? '',
+          isRestDay: d['isRestDay'] == true,
+          exerciseNames: (d['exerciseNames'] as List? ?? []).map((e) => e.toString()).toList(),
+          nutritionFocus: d['nutritionFocus']?.toString(),
+        );
+      }).toList();
+
+      return WeeklyPlan(
+        weekId: weekId,
+        startDate: dates.first,
+        endDate: dates.last,
+        overview: parsed['overview']?.toString() ?? 'Your personalized weekly plan.',
+        coachNote: parsed['coachNote']?.toString(),
+        days: days,
+        createdAt: DateTime.now().toIso8601String(),
       );
-    }).toList();
-
-    return WeeklyPlan(
-      weekId: weekId,
-      startDate: dates.first,
-      endDate: dates.last,
-      overview: parsed['overview']?.toString() ?? 'Your personalized weekly plan.',
-      coachNote: parsed['coachNote']?.toString(),
-      days: days,
-      createdAt: DateTime.now().toIso8601String(),
-    );
+    } catch (e) {
+      _logError('generateAIWeeklyPlan (Using Fallback Baseline Plan)', e);
+      // Fallback deterministic plan matching user's training frequency & equipment
+      final List<WeeklyDayPlan> fallbackDays = [];
+      final trainingDayIndices = p.daysPerWeek == 4 ? [0, 1, 3, 4] : [0, 2, 4]; // Mon/Tue/Thu/Fri or Mon/Wed/Fri
+      for (int i = 0; i < 7; i++) {
+        final isTraining = trainingDayIndices.contains(i);
+        fallbackDays.add(WeeklyDayPlan(
+          dayName: dayNames[i],
+          date: dates[i],
+          title: isTraining ? 'Bodyweight Hypertrophy & Core' : 'Rest & Recovery',
+          focusArea: isTraining ? (i % 2 == 0 ? 'Upper Body Push' : 'Lower Body & Core') : 'Active Recovery',
+          isRestDay: !isTraining,
+          exerciseNames: isTraining
+              ? ['Push-ups', 'Bodyweight Squats', 'Plank Hold', 'Glute Bridges', 'Lunges']
+              : [],
+          nutritionFocus: isTraining
+              ? 'Target protein baseline (${contextState.nutrition.targetProteinG}g) with workout hydration'
+              : 'Maintenance calories with light recovery focus',
+        ));
+      }
+      return WeeklyPlan(
+        weekId: weekId,
+        startDate: dates.first,
+        endDate: dates.last,
+        overview: 'Adaptive 7-day body transformation baseline customized for ${p.name}.',
+        coachNote: 'Plan generated using baseline adaptive rules.',
+        days: fallbackDays,
+        createdAt: DateTime.now().toIso8601String(),
+      );
+    }
   }
 }

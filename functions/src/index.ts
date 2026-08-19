@@ -17,6 +17,7 @@ export const callGeminiProxy = onRequest(
   {
     secrets: [geminiApiKey],
     cors: true,
+    timeoutSeconds: 180,
     maxInstances: 20,
     invoker: "public",
   },
@@ -56,10 +57,10 @@ export const callGeminiProxy = onRequest(
         return;
       }
 
-      const requestedModel = model || "gemini-3.7-flash";
+      const requestedModel = model || "gemini-2.0-flash";
       // Active verified model hierarchy in v1beta
       const candidateModels = Array.from(
-        new Set([requestedModel, "gemini-3.7-flash", "gemini-3.6-flash", "gemini-2.5-flash", "gemini-2.5-pro"])
+        new Set([requestedModel, "gemini-2.0-flash", "gemini-1.5-flash", "gemini-3.6-flash", "gemini-1.5-pro"])
       );
 
       const parts: Array<Record<string, any>> = [];
@@ -120,9 +121,9 @@ export const callGeminiProxy = onRequest(
             lastError = await response.text();
             console.warn(`[GEMINI PROXY] Model ${targetModel} attempt ${attempt} returned status ${response.status}: ${lastError}`);
 
-            // Stop immediately on non-transient bad requests (400)
-            if (response.status === 400) {
-              res.status(400).json({ error: "Gemini API bad request", details: lastError });
+            // Stop immediately on non-transient bad requests (400, 401, 403)
+            if (response.status === 400 || response.status === 401 || response.status === 403) {
+              res.status(response.status).json({ error: `Gemini API error (${response.status})`, details: lastError });
               return;
             }
 
@@ -132,7 +133,7 @@ export const callGeminiProxy = onRequest(
               continue;
             }
 
-            // If 404 (model ID not found), immediately break inner loop to try next model
+            // If 404 (model ID not found), break inner loop immediately to move to next candidate model
             if (response.status === 404) {
               break;
             }

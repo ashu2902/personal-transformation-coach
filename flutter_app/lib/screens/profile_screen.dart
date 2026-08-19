@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../providers/transformation_state.dart';
+import '../providers/analytics_provider.dart';
+import '../services/analytics_service.dart';
 import '../models/models.dart';
 import '../theme/theme.dart';
 import '../widgets/common/common.dart';
@@ -9,6 +11,25 @@ import 'widgets/aura_orb.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
+
+  void _switchSoul(WidgetRef ref, CoachSoul newSoul, CoachSoul currentSoul) {
+    if (newSoul == currentSoul) return;
+    ref.read(transformationEngineProvider.notifier).updateCoachSoul(newSoul);
+
+    // Track persona switch in Mixpanel
+    final analytics = ref.read(analyticsServiceProvider);
+    analytics.logEvent(
+      AuraAnalyticsEvents.soulSwitched,
+      properties: {
+        'soul_name': newSoul.name,
+        'previous_soul': currentSoul.name,
+        'surface': 'profile',
+      },
+    );
+    analytics.registerSuperProperties({
+      'coach_soul': newSoul.name,
+    });
+  }
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
@@ -32,12 +53,15 @@ class ProfileScreen extends ConsumerWidget {
           onPressed: () => Navigator.of(context).maybePop(),
         ),
       ),
-      body: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+      body: Center(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: context.maxFluidContentWidth),
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
             // 1. User Header Card
             AuraCard(
               padding: const EdgeInsets.all(18),
@@ -81,7 +105,7 @@ class ProfileScreen extends ConsumerWidget {
             const SizedBox(height: 24),
 
             // 2. COACH PERSONALITY SELECTOR (Interactive Persona Swapping)
-            AuraSectionHeader(
+            const AuraSectionHeader(
               title: 'Active Coach Persona',
             ),
             const SizedBox(height: 4),
@@ -98,7 +122,7 @@ class ProfileScreen extends ConsumerWidget {
                   subtitle: 'Warm & Empathetic',
                   soulEnum: CoachSoul.supporter,
                   activeSoul: soul,
-                  onTap: () => notifier.updateCoachSoul(CoachSoul.supporter),
+                  onTap: () => _switchSoul(ref, CoachSoul.supporter, soul),
                 ),
                 const SizedBox(width: 8),
                 _buildPersonaCard(
@@ -107,7 +131,7 @@ class ProfileScreen extends ConsumerWidget {
                   subtitle: 'Crisp & Accountable',
                   soulEnum: CoachSoul.pro,
                   activeSoul: soul,
-                  onTap: () => notifier.updateCoachSoul(CoachSoul.pro),
+                  onTap: () => _switchSoul(ref, CoachSoul.pro, soul),
                 ),
                 const SizedBox(width: 8),
                 _buildPersonaCard(
@@ -116,14 +140,14 @@ class ProfileScreen extends ConsumerWidget {
                   subtitle: 'Scientific & Analytical',
                   soulEnum: CoachSoul.teacher,
                   activeSoul: soul,
-                  onTap: () => notifier.updateCoachSoul(CoachSoul.teacher),
+                  onTap: () => _switchSoul(ref, CoachSoul.teacher, soul),
                 ),
               ],
             ),
             const SizedBox(height: 24),
 
             // 3. TRANSFORMATION GOALS
-            AuraSectionHeader(
+            const AuraSectionHeader(
               title: 'Transformation Goals',
             ),
             const SizedBox(height: 8),
@@ -152,7 +176,7 @@ class ProfileScreen extends ConsumerWidget {
             const SizedBox(height: 24),
 
             // 4. PERSISTENT CONSTRAINTS & EQUIPMENT MEMORY
-            AuraSectionHeader(
+            const AuraSectionHeader(
               title: 'Persistent Constraints & Gear',
             ),
             const SizedBox(height: 8),
@@ -181,7 +205,7 @@ class ProfileScreen extends ConsumerWidget {
             const SizedBox(height: 24),
 
             // 5. ACCOUNT & AUTHENTICATION
-            AuraSectionHeader(
+            const AuraSectionHeader(
               title: 'Account & Synchronization',
             ),
             const SizedBox(height: 8),
@@ -199,8 +223,8 @@ class ProfileScreen extends ConsumerWidget {
                         height: 32,
                         decoration: BoxDecoration(
                           color: notifier.isAuthenticated
-                              ? AuraColors.actionGreen.withOpacity(0.15)
-                              : AuraColors.warningAmber.withOpacity(0.15),
+                              ? AuraColors.actionGreen.withValues(alpha: 0.15)
+                              : AuraColors.warningAmber.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Icon(
@@ -278,7 +302,9 @@ class ProfileScreen extends ConsumerWidget {
           ],
         ),
       ),
-    );
+    ),
+  ),
+);
   }
 
   Widget _buildPersonaCard({
@@ -295,10 +321,12 @@ class ProfileScreen extends ConsumerWidget {
     return Expanded(
       child: GestureDetector(
         onTap: onTap,
-        child: Container(
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 200),
+          curve: AuraCurves.fluidEaseOut,
           padding: const EdgeInsets.symmetric(vertical: 14, horizontal: 8),
           decoration: BoxDecoration(
-            color: isSelected ? palette.primary.withOpacity(0.18) : AuraColors.surface2,
+            color: isSelected ? palette.primary.withValues(alpha: 0.18) : AuraColors.surface2,
             borderRadius: BorderRadius.circular(14),
             border: Border.all(
               color: isSelected ? palette.primary : AuraColors.borderSubtle,

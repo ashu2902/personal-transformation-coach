@@ -29,69 +29,71 @@ class NutritionScreen extends StatelessWidget {
         final targetFat = nutrition.targetFatG > 0 ? nutrition.targetFatG : 60;
 
         final calPercent = (totalCal / targetCal).clamp(0.0, 1.0);
-        final protPercent = (totalProt / targetProt).clamp(0.0, 1.0);
 
-        return SingleChildScrollView(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              // Macro Summary Card
-              AuraCard(
-                padding: const EdgeInsets.all(18),
-                child: Column(
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        return Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: context.maxFluidContentWidth),
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Macro Summary Card
+                  AuraCard(
+                    padding: const EdgeInsets.all(18),
+                    child: Column(
                       children: [
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
-                            Text(
-                              'ENERGY INTAKE',
-                              style: AuraTypography.sectionHeader.copyWith(
-                                color: AuraColors.textSecondary,
-                                fontSize: 10,
-                              ),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'ENERGY INTAKE',
+                                  style: AuraTypography.sectionHeader.copyWith(
+                                    color: AuraColors.textSecondary,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '$totalCal / $targetCal kcal',
+                                  style: AuraTypography.statNumber,
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '$totalCal / $targetCal kcal',
-                              style: AuraTypography.statNumber,
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.end,
+                              children: [
+                                Text(
+                                  'PROTEIN TARGET',
+                                  style: AuraTypography.sectionHeader.copyWith(
+                                    color: auraTheme.proteinAccent,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '$totalProt / ${targetProt}g',
+                                  style: AuraTypography.statNumber.copyWith(
+                                    color: auraTheme.proteinAccent,
+                                  ),
+                                ),
+                              ],
                             ),
                           ],
                         ),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.end,
-                          children: [
-                            Text(
-                              'PROTEIN TARGET',
-                              style: AuraTypography.sectionHeader.copyWith(
-                                color: auraTheme.proteinAccent,
-                                fontSize: 10,
-                              ),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(
-                              '$totalProt / ${targetProt}g',
-                              style: AuraTypography.statNumber.copyWith(
-                                color: auraTheme.proteinAccent,
-                              ),
-                            ),
-                          ],
+                        const SizedBox(height: 16),
+                        ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: LinearProgressIndicator(
+                            value: calPercent,
+                            minHeight: 10,
+                            backgroundColor: auraTheme.energyAccent.withValues(alpha: 0.12),
+                            valueColor: AlwaysStoppedAnimation(auraTheme.energyAccent),
+                          ),
                         ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(8),
-                      child: LinearProgressIndicator(
-                        value: calPercent,
-                        minHeight: 10,
-                        backgroundColor: auraTheme.energyAccent.withOpacity(0.12),
-                        valueColor: AlwaysStoppedAnimation(auraTheme.energyAccent),
-                      ),
-                    ),
                     const SizedBox(height: 16),
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceAround,
@@ -205,7 +207,7 @@ class NutritionScreen extends StatelessWidget {
                   child: Center(
                     child: Column(
                       children: [
-                        Icon(LucideIcons.utensils, color: AuraColors.textDisabled, size: 32),
+                        const Icon(LucideIcons.utensils, color: AuraColors.textDisabled, size: 32),
                         const SizedBox(height: 12),
                         Text(
                           'No meals logged today yet',
@@ -255,7 +257,9 @@ class NutritionScreen extends StatelessWidget {
                 }),
             ],
           ),
-        );
+        ),
+      ),
+    );
       },
     );
   }
@@ -464,7 +468,7 @@ class _AIMealLoggerModalState extends State<AIMealLoggerModal> {
                 const SizedBox(height: 18),
                 AuraCard(
                   padding: const EdgeInsets.all(16),
-                  borderColor: auraTheme.energyAccent.withOpacity(0.4),
+                  borderColor: auraTheme.energyAccent.withValues(alpha: 0.4),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [

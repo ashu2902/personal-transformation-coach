@@ -1,9 +1,10 @@
-import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:image_picker/image_picker.dart';
 import '../providers/transformation_state.dart';
+import '../providers/analytics_provider.dart';
+import '../services/analytics_service.dart';
 import '../models/models.dart';
 import '../theme/theme.dart';
 import '../widgets/common/common.dart';
@@ -29,27 +30,24 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
     super.initState();
     _thinkingAnimController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 1200),
-    )..repeat();
+      duration: const Duration(milliseconds: 1500),
+    )..repeat(reverse: true);
 
     _scrollController.addListener(() {
-      if (_scrollController.hasClients) {
-        // In reverse scroll mode, offset 0 is the bottom (latest messages)
-        final shouldShow = _scrollController.offset > 240;
-        if (shouldShow != _showScrollToBottom) {
-          setState(() {
-            _showScrollToBottom = shouldShow;
-          });
-        }
+      final isScrolledUp = _scrollController.hasClients && _scrollController.offset > 120;
+      if (isScrolledUp != _showScrollToBottom) {
+        setState(() {
+          _showScrollToBottom = isScrolledUp;
+        });
       }
     });
   }
 
   @override
   void dispose() {
-    _thinkingAnimController.dispose();
-    _scrollController.dispose();
     _inputController.dispose();
+    _scrollController.dispose();
+    _thinkingAnimController.dispose();
     super.dispose();
   }
 
@@ -94,6 +92,17 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
     if (text.trim().isEmpty) return;
     _inputController.clear();
     final notifier = ref.read(transformationEngineProvider.notifier);
+
+    // Track chat message event in Mixpanel
+    ref.read(analyticsServiceProvider).logEvent(
+      AuraAnalyticsEvents.chatMessageSent,
+      properties: {
+        'input_type': 'text',
+        'length': text.length,
+        'coach_soul': ref.read(transformationEngineProvider).profile.coachSoul.name,
+      },
+    );
+
     _scrollToBottom();
     await notifier.addChatMessage(text);
     _scrollToBottom();
@@ -114,6 +123,18 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
       _inputController.clear();
 
       final notifier = ref.read(transformationEngineProvider.notifier);
+
+      // Track image upload in Mixpanel
+      ref.read(analyticsServiceProvider).logEvent(
+        AuraAnalyticsEvents.chatMessageSent,
+        properties: {
+          'input_type': 'image',
+          'source': source.name,
+          'has_caption': caption.isNotEmpty,
+          'coach_soul': ref.read(transformationEngineProvider).profile.coachSoul.name,
+        },
+      );
+
       _scrollToBottom();
       await notifier.addChatMessage(
         caption.isEmpty ? 'Uploaded an image for analysis' : caption,
@@ -147,8 +168,11 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
 
     return Stack(
       children: [
-        Column(
-          children: [
+        Center(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: context.maxFluidContentWidth),
+            child: Column(
+              children: [
             // 1. SLIM & NON-INTRUSIVE COACH STATUS BAR (Only ~46px)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
@@ -361,7 +385,7 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                                               ],
                                             ),
                                             const SizedBox(height: 8),
-                                            Row(
+                                            const Row(
                                               children: [
                                                 Expanded(
                                                   child: Text(
@@ -373,10 +397,10 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                                                     ),
                                                   ),
                                                 ),
-                                                const Icon(LucideIcons.arrowRight,
+                                                Icon(LucideIcons.arrowRight,
                                                     size: 14, color: AuraColors.actionGreen),
-                                                const SizedBox(width: 6),
-                                                const Expanded(
+                                                SizedBox(width: 6),
+                                                Expanded(
                                                   child: Text(
                                                     'Active Recovery Walk',
                                                     style: TextStyle(
@@ -457,7 +481,15 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                                                 _buildCompactActionBtn(
                                                   label: 'Edit',
                                                   color: AuraColors.textSecondary,
-                                                  onTap: () => _sendMessage('I want to adjust the portion size.'),
+                                                  onTap: () {
+                                                    ref.read(analyticsServiceProvider).logEvent(
+                                                      AuraAnalyticsEvents.portionCorrected,
+                                                      properties: {
+                                                        'action': 'edit_requested',
+                                                      },
+                                                    );
+                                                    _sendMessage('I want to adjust the portion size.');
+                                                  },
                                                 ),
                                               ],
                                             ),
@@ -642,6 +674,8 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
             ),
           ],
         ),
+      ),
+    ),
 
         // FLOATING "SCROLL TO LATEST" BUTTON (Appears when scrolled up)
         if (_showScrollToBottom)
@@ -655,10 +689,10 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                 decoration: BoxDecoration(
                   color: auraTheme.surfaceCard,
                   borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: auraTheme.primary.withOpacity(0.5)),
+                  border: Border.all(color: auraTheme.primary.withValues(alpha: 0.5)),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withOpacity(0.3),
+                      color: Colors.black.withValues(alpha: 0.3),
                       blurRadius: 8,
                       offset: const Offset(0, 3),
                     ),
@@ -733,7 +767,7 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                   ],
                 ),
                 const SizedBox(height: 4),
-                Text(
+                const Text(
                   'Evaluating metabolic state & progressive load...',
                   style: TextStyle(
                     fontSize: 10,

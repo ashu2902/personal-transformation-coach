@@ -45,12 +45,15 @@ class InsightsScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: auraTheme.scaffoldBackground,
-      body: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
+      body: Center(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxWidth: context.maxFluidContentWidth),
+          child: SingleChildScrollView(
+            physics: const BouncingScrollPhysics(),
+            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
             // Screen Header
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -382,7 +385,9 @@ class InsightsScreen extends ConsumerWidget {
           ],
         ),
       ),
-    );
+    ),
+  ),
+);
   }
 
   ({String quote, String explanation}) _generateDynamicPattern({

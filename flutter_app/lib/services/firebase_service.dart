@@ -5,9 +5,11 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import '../models/models.dart';
 import 'transformation_repository.dart';
+import 'analytics_service.dart';
 
 class FirebaseAuthService {
   final FirebaseAuth _auth = FirebaseAuth.instance;
+  final IAnalyticsService _analytics = MixpanelAnalyticsService();
 
   String? get uid => _auth.currentUser?.uid;
   String? get email => _auth.currentUser?.email;
@@ -16,22 +18,49 @@ class FirebaseAuthService {
 
   Future<UserCredential?> signInWithGoogle() async {
     try {
-      return await _auth.signInWithPopup(GoogleAuthProvider());
+      final cred = await _auth.signInWithPopup(GoogleAuthProvider());
+      final user = cred.user;
+      if (user != null) {
+        await _analytics.setUserId(user.uid);
+        await _analytics.setUserProperties({
+          if (user.displayName != null) r'$name': user.displayName,
+          if (user.email != null) r'$email': user.email,
+          'sign_up_method': 'google',
+        });
+      }
+      return cred;
     } catch (e) {
       debugPrint('[FIREBASE AUTH] Google Sign-In error: $e');
       return null;
     }
   }
 
-
   Future<UserCredential?> signUpWithEmailAndPassword(String email, String password) async {
     try {
-      return await _auth.createUserWithEmailAndPassword(email: email, password: password);
+      final cred = await _auth.createUserWithEmailAndPassword(email: email, password: password);
+      final user = cred.user;
+      if (user != null) {
+        await _analytics.setUserId(user.uid);
+        await _analytics.setUserProperties({
+          r'$email': email,
+          'sign_up_method': 'email',
+        });
+      }
+      return cred;
     } catch (e) {
       debugPrint('[FIREBASE AUTH] Email sign-up error: $e');
       // If account exists, try signing in instead
       try {
-        return await _auth.signInWithEmailAndPassword(email: email, password: password);
+        final cred = await _auth.signInWithEmailAndPassword(email: email, password: password);
+        final user = cred.user;
+        if (user != null) {
+          await _analytics.setUserId(user.uid);
+          await _analytics.setUserProperties({
+            r'$email': email,
+            'sign_up_method': 'email',
+          });
+        }
+        return cred;
       } catch (e2) {
         debugPrint('[FIREBASE AUTH] Email sign-in fallback error: $e2');
         return null;
@@ -41,7 +70,15 @@ class FirebaseAuthService {
 
   Future<UserCredential?> signInAnonymously() async {
     try {
-      return await _auth.signInAnonymously();
+      final cred = await _auth.signInAnonymously();
+      final user = cred.user;
+      if (user != null) {
+        await _analytics.setUserId(user.uid);
+        await _analytics.setUserProperties({
+          'sign_up_method': 'anonymous',
+        });
+      }
+      return cred;
     } catch (e) {
       debugPrint('[FIREBASE AUTH] Anonymous sign-in error: $e');
       return null;
@@ -49,6 +86,7 @@ class FirebaseAuthService {
   }
 
   Future<void> signOut() async {
+    await _analytics.reset();
     await _auth.signOut();
   }
 }

@@ -11,7 +11,7 @@ class AuraSegmentItem {
   });
 }
 
-/// A clean, animated segmented tab control for AURA.
+/// A fluid, tactile segmented tab control for AURA.
 class AuraSegmentedControl extends StatelessWidget {
   final List<AuraSegmentItem> items;
   final int selectedIndex;
@@ -35,7 +35,7 @@ class AuraSegmentedControl extends StatelessWidget {
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
         color: auraTheme.surfaceLight,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: AuraColors.borderSubtle),
       ),
       child: Row(
@@ -47,17 +47,17 @@ class AuraSegmentedControl extends StatelessWidget {
             child: GestureDetector(
               onTap: () => onItemSelected(index),
               child: AnimatedContainer(
-                duration: const Duration(milliseconds: 200),
-                curve: Curves.easeInOut,
+                duration: const Duration(milliseconds: 220),
+                curve: AuraCurves.fluidEaseOut,
                 padding: const EdgeInsets.symmetric(vertical: 10),
                 decoration: BoxDecoration(
                   color: isSelected ? auraTheme.primary : Colors.transparent,
-                  borderRadius: BorderRadius.circular(8),
+                  borderRadius: BorderRadius.circular(10),
                   boxShadow: isSelected
                       ? [
                           BoxShadow(
-                            color: auraTheme.primary.withOpacity(0.2),
-                            blurRadius: 8,
+                            color: auraTheme.primary.withValues(alpha: 0.25),
+                            blurRadius: 10,
                             offset: const Offset(0, 2),
                           ),
                         ]

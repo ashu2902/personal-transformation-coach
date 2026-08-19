@@ -70,15 +70,15 @@ class _AuraOrbState extends State<AuraOrb> with SingleTickerProviderStateMixin {
     final baseColors = AuraColors.getSoulColors(widget.soul);
     if (widget.state == OrbState.adapting) {
       // Shift toward Action Green during plan adaptation
-      final green = AuraColors.actionGreen;
+      const green = AuraColors.actionGreen;
       return [
         Color.lerp(baseColors.primary, green, 0.7)!,
-        Color.lerp(baseColors.secondary, green.withOpacity(0.8), 0.7)!,
+        Color.lerp(baseColors.secondary, green.withValues(alpha: 0.8), 0.7)!,
       ];
     } else if (widget.state == OrbState.completed) {
       return [
         AuraColors.actionGreen,
-        AuraColors.actionGreen.withOpacity(0.5),
+        AuraColors.actionGreen.withValues(alpha: 0.5),
       ];
     }
     return [baseColors.primary, baseColors.secondary];
@@ -132,7 +132,7 @@ class OrbPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = (size.width * 0.015).clamp(1.0, 2.0)
         ..maskFilter = MaskFilter.blur(BlurStyle.normal, (size.width * 0.04).clamp(1.0, 8.0))
-        ..color = colors[0].withOpacity(rippleOpacity * 0.4);
+        ..color = colors[0].withValues(alpha: rippleOpacity * 0.4);
 
       canvas.drawCircle(center, rippleRadius, ripplePaint);
 
@@ -143,7 +143,7 @@ class OrbPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = (size.width * 0.01).clamp(0.8, 1.5)
         ..maskFilter = MaskFilter.blur(BlurStyle.normal, (size.width * 0.03).clamp(0.8, 6.0))
-        ..color = colors[1].withOpacity(secondOpacity * 0.3);
+        ..color = colors[1].withValues(alpha: secondOpacity * 0.3);
 
       canvas.drawCircle(center, secondRadius, secondPaint);
     }
@@ -170,7 +170,7 @@ class OrbPainter extends CustomPainter {
     // Draw the glow background: restrained soft-tech blur
     final glowOpacity = (orbState == OrbState.adapting || orbState == OrbState.completed) ? 0.55 : 0.35;
     final glowPaint = Paint()
-      ..color = colors[1].withOpacity(glowOpacity)
+      ..color = colors[1].withValues(alpha: glowOpacity)
       ..maskFilter = MaskFilter.blur(BlurStyle.normal, activeRadius * 0.9);
     canvas.drawCircle(center, activeRadius * 1.5, glowPaint);
 
@@ -183,7 +183,7 @@ class OrbPainter extends CustomPainter {
         ..style = PaintingStyle.stroke
         ..strokeWidth = (size.width * 0.015).clamp(1.0, 1.5)
         ..maskFilter = MaskFilter.blur(BlurStyle.normal, (size.width * 0.05).clamp(1.0, 10.0))
-        ..color = colors[0].withOpacity(waveOpacity);
+        ..color = colors[0].withValues(alpha: waveOpacity);
       canvas.drawCircle(center, waveRadius, wavePaint);
     }
 
@@ -195,9 +195,9 @@ class OrbPainter extends CustomPainter {
       ),
       radius: 0.85,
       colors: [
-        colors[0].withOpacity(0.95),
-        colors[1].withOpacity(0.65),
-        colors[1].withOpacity(0.0),
+        colors[0].withValues(alpha: 0.95),
+        colors[1].withValues(alpha: 0.65),
+        colors[1].withValues(alpha: 0.0),
       ],
       stops: const [0.0, 0.65, 1.0],
     );
@@ -211,8 +211,8 @@ class OrbPainter extends CustomPainter {
       ..maskFilter = MaskFilter.blur(BlurStyle.normal, (size.width * 0.05).clamp(1.0, 10.0))
       ..shader = RadialGradient(
         colors: [
-          Colors.white.withOpacity(0.95),
-          colors[0].withOpacity(0.45),
+          Colors.white.withValues(alpha: 0.95),
+          colors[0].withValues(alpha: 0.45),
           Colors.transparent,
         ],
         stops: const [0.0, 0.6, 1.0],

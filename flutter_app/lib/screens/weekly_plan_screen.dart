@@ -29,7 +29,7 @@ class WeeklyPlanScreen extends ConsumerWidget {
       ),
       body: Center(
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 680),
+          constraints: BoxConstraints(maxWidth: context.maxFluidContentWidth),
           child: plan == null
               ? _buildEmptyState(context, ref, isLoading)
               : _buildPlanView(context, ref, plan, todayStr, isLoading),
@@ -50,13 +50,13 @@ class WeeklyPlanScreen extends ConsumerWidget {
             Container(
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: auraTheme.primary.withOpacity(0.08),
+                color: auraTheme.primary.withValues(alpha: 0.08),
                 borderRadius: BorderRadius.circular(20),
               ),
               child: Icon(
                 LucideIcons.calendarDays,
                 size: 48,
-                color: auraTheme.primary.withOpacity(0.6),
+                color: auraTheme.primary.withValues(alpha: 0.6),
               ),
             ),
             const SizedBox(height: 24),
@@ -91,6 +91,7 @@ class WeeklyPlanScreen extends ConsumerWidget {
     final auraTheme = context.auraTheme;
 
     return CustomScrollView(
+      physics: const BouncingScrollPhysics(),
       slivers: [
         // Header
         SliverToBoxAdapter(
@@ -108,19 +109,19 @@ class WeeklyPlanScreen extends ConsumerWidget {
                 // Overview
                 Text(
                   plan.overview,
-                  style: AuraTypography.bodyLarge.copyWith(color: AuraColors.textPrimary.withOpacity(0.85)),
+                  style: AuraTypography.bodyLarge.copyWith(color: AuraColors.textPrimary.withValues(alpha: 0.85)),
                 ),
                 if (plan.coachNote != null) ...[
                   const SizedBox(height: 12),
                   AuraCard(
                     padding: const EdgeInsets.all(14),
                     borderRadius: 12,
-                    backgroundColor: auraTheme.secondary.withOpacity(0.06),
-                    borderColor: auraTheme.secondary.withOpacity(0.15),
+                    backgroundColor: auraTheme.secondary.withValues(alpha: 0.06),
+                    borderColor: auraTheme.secondary.withValues(alpha: 0.15),
                     child: Row(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
-                        Icon(LucideIcons.messageSquare, size: 14, color: auraTheme.secondary.withOpacity(0.7)),
+                        Icon(LucideIcons.messageSquare, size: 14, color: auraTheme.secondary.withValues(alpha: 0.7)),
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
@@ -173,8 +174,8 @@ class WeeklyPlanScreen extends ConsumerWidget {
                 final isToday = day.date == todayStr;
                 return TweenAnimationBuilder<double>(
                   tween: Tween(begin: 0.0, end: 1.0),
-                  duration: Duration(milliseconds: 300 + (index * 60)),
-                  curve: Curves.easeOut,
+                  duration: Duration(milliseconds: 250 + (index * 50)),
+                  curve: AuraCurves.fluidEaseOut,
                   builder: (context, value, child) {
                     return Opacity(
                       opacity: value,
@@ -203,7 +204,7 @@ class WeeklyPlanScreen extends ConsumerWidget {
     return AuraCard(
       margin: const EdgeInsets.only(bottom: 10),
       padding: const EdgeInsets.all(16),
-      borderColor: isToday ? auraTheme.primary.withOpacity(0.4) : AuraColors.borderSubtle,
+      borderColor: isToday ? auraTheme.primary.withValues(alpha: 0.4) : AuraColors.borderSubtle,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -236,19 +237,19 @@ class WeeklyPlanScreen extends ConsumerWidget {
                   isFilled: true,
                 )
               else if (day.isRestDay)
-                AuraStatBadge(
+                const AuraStatBadge(
                   label: 'REST',
                   icon: LucideIcons.moonStar,
                   color: AuraColors.textTertiary,
                 )
               else if (isPast && isTracked)
-                AuraStatBadge(
+                const AuraStatBadge(
                   label: 'COMPLETED',
                   icon: LucideIcons.check,
                   color: AuraColors.success,
                 )
               else if (isPast)
-                AuraStatBadge(
+                const AuraStatBadge(
                   label: 'MISSED',
                   color: AuraColors.textTertiary,
                 ),
@@ -260,14 +261,14 @@ class WeeklyPlanScreen extends ConsumerWidget {
             day.title,
             style: AuraTypography.bodyLarge.copyWith(
               fontWeight: FontWeight.w600,
-              color: day.isRestDay ? AuraColors.textDisabled : AuraColors.textPrimary.withOpacity(0.85),
+              color: day.isRestDay ? AuraColors.textDisabled : AuraColors.textPrimary.withValues(alpha: 0.85),
             ),
           ),
           if (day.focusArea.isNotEmpty && !day.isRestDay) ...[
             const SizedBox(height: 4),
             Text(
               day.focusArea,
-              style: AuraTypography.bodySmall.copyWith(color: auraTheme.secondary.withOpacity(0.8)),
+              style: AuraTypography.bodySmall.copyWith(color: auraTheme.secondary.withValues(alpha: 0.8)),
             ),
           ],
           // Exercise chips
@@ -296,7 +297,7 @@ class WeeklyPlanScreen extends ConsumerWidget {
             const SizedBox(height: 10),
             Row(
               children: [
-                Icon(LucideIcons.utensils, size: 12, color: auraTheme.primary.withOpacity(0.5)),
+                Icon(LucideIcons.utensils, size: 12, color: auraTheme.primary.withValues(alpha: 0.5)),
                 const SizedBox(width: 6),
                 Expanded(
                   child: Text(
