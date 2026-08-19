@@ -57,10 +57,17 @@ export const callGeminiProxy = onRequest(
         return;
       }
 
-      const requestedModel = model || "gemini-2.0-flash";
-      // Active verified model hierarchy in v1beta
+      const requestedModel = model || "gemini-3.6-flash";
+      // Active verified candidate models in v1beta
       const candidateModels = Array.from(
-        new Set([requestedModel, "gemini-2.0-flash", "gemini-1.5-flash", "gemini-3.6-flash", "gemini-1.5-pro"])
+        new Set([
+          requestedModel,
+          "gemini-3.6-flash",
+          "gemini-3.5-flash",
+          "gemini-3.7-flash",
+          "gemini-flash-latest",
+          "gemini-pro-latest",
+        ])
       );
 
       const parts: Array<Record<string, any>> = [];
@@ -147,7 +154,43 @@ export const callGeminiProxy = onRequest(
         }
 
         // Small delay before moving to next fallback candidate model
-        await sleep(200);
+        await sleep(150);
+      }
+
+      // Dynamic fallback: Query ListModels to find any model available to this key
+      try {
+        console.log("[GEMINI PROXY] Querying ListModels to discover available models for this key...");
+        const listResp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
+        const listData: any = await listResp.json();
+        if (listData?.models && Array.isArray(listData.models)) {
+          const available = listData.models.map((m: any) => m.name);
+          console.log(`[GEMINI PROXY] Discovered models:`, available);
+
+          for (const m of listData.models) {
+            if (m.supportedGenerationMethods?.includes("generateContent")) {
+              const modelName = m.name.replace(/^models\//, "");
+              console.log(`[GEMINI PROXY] Attempting inference with discovered model: ${modelName}`);
+              const dynResp = await fetch(
+                `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
+                {
+                  method: "POST",
+                  headers: { "Content-Type": "application/json" },
+                  body: JSON.stringify(requestBody),
+                }
+              );
+              if (dynResp.ok) {
+                const dynData: any = await dynResp.json();
+                const rawText = dynData?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+                res.status(200).json({ text: rawText, model: modelName });
+                return;
+              }
+            }
+          }
+        } else if (listData?.error) {
+          lastError = `ListModels response: ${JSON.stringify(listData.error)}`;
+        }
+      } catch (listErr: any) {
+        console.warn("[GEMINI PROXY] Model discovery error:", listErr);
       }
 
       // If all models failed
