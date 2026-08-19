@@ -176,13 +176,23 @@ class TransformationEngineState {
   List<Map<String, String>> get unloggedPreviousDays {
     final List<Map<String, String>> unlogged = [];
     final now = DateTime.now();
+    final todayStr = now.toIso8601String().split('T')[0];
     // Monday of current week
     final monday = now.subtract(Duration(days: now.weekday - 1));
     final daysPassed = now.weekday - 1; // Number of days before today in this week
 
+    // Creation date of user account (defaults to today if brand new)
+    final creationDateStr = profile.createdAtDateStr ?? todayStr;
+
     for (int i = 0; i < daysPassed; i++) {
       final d = monday.add(Duration(days: i));
       final dateStr = d.toIso8601String().split('T')[0];
+
+      // IGNORE past days that occurred BEFORE the user created their account!
+      if (dateStr.compareTo(creationDateStr) < 0) {
+        continue;
+      }
+
       final dayName = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][d.weekday - 1];
 
       final isTracked = isProgressTrackedForDate(dateStr);

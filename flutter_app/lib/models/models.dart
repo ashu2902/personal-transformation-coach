@@ -359,6 +359,7 @@ class UserProfile {
   final List<String> personalNotes;
   final CoachSoul coachSoul;
   final String dietaryPreference; // 'nonVeg', 'vegetarian', 'vegan', 'pescatarian', 'eggetarian'
+  final String? createdAtDateStr;
 
   UserProfile({
     required this.name,
@@ -381,6 +382,7 @@ class UserProfile {
     this.personalNotes = const [],
     this.coachSoul = CoachSoul.supporter,
     this.dietaryPreference = 'nonVeg',
+    this.createdAtDateStr,
   }) : equipmentList = equipmentList ??
             (availableEquipment != null
                 ? availableEquipment.map((e) => EquipmentItem.fromString(e.name)).toList()
@@ -431,6 +433,7 @@ class UserProfile {
     List<String>? personalNotes,
     CoachSoul? coachSoul,
     String? dietaryPreference,
+    String? createdAtDateStr,
   }) {
     return UserProfile(
       name: name ?? this.name,
@@ -452,6 +455,7 @@ class UserProfile {
       personalNotes: personalNotes ?? this.personalNotes,
       coachSoul: coachSoul ?? this.coachSoul,
       dietaryPreference: dietaryPreference ?? this.dietaryPreference,
+      createdAtDateStr: createdAtDateStr ?? this.createdAtDateStr,
     );
   }
 }

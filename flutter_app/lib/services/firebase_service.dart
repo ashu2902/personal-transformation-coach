@@ -119,6 +119,7 @@ class FirebaseFirestoreService {
       'personalNotes': profile.personalNotes,
       'coachSoul': profile.coachSoul.name,
       'dietaryPreference': profile.dietaryPreference,
+      'createdAtDateStr': profile.createdAtDateStr ?? DateTime.now().toIso8601String().split('T')[0],
       'updatedAt': FieldValue.serverTimestamp(),
     };
     try {
@@ -176,6 +177,7 @@ class FirebaseFirestoreService {
           personalNotes: (map['personalNotes'] as List? ?? []).map((e) => e.toString()).toList(),
           coachSoul: CoachSoul.values.firstWhere((c) => c.name == map['coachSoul'], orElse: () => CoachSoul.supporter),
           dietaryPreference: map['dietaryPreference'] ?? 'nonVeg',
+          createdAtDateStr: map['createdAtDateStr']?.toString(),
         );
         return profile;
       }

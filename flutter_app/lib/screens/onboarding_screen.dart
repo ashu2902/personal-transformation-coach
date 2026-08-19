@@ -221,7 +221,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           ? cred.user!.displayName!.trim()
           : userName;
 
-      final finalProfile = profile.copyWith(name: effectiveName);
+      final todayStr = DateTime.now().toIso8601String().split('T')[0];
+      final finalProfile = profile.copyWith(name: effectiveName, createdAtDateStr: todayStr);
 
       if (uid.isNotEmpty) {
         await firestore.saveUserProfile(uid, finalProfile);
