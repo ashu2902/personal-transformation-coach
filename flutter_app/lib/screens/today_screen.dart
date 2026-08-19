@@ -107,8 +107,8 @@ class TodayScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 16),
 
-              // UNLOGGED WORKOUTS BANNER (If any past workouts in this week are pending)
-              if (state.unloggedPreviousDays.isNotEmpty) ...[
+              // UNLOGGED WORKOUTS BANNER (Only after initial sync completes)
+              if (!state.isInitializing && state.unloggedPreviousDays.isNotEmpty) ...[
                 _buildUnloggedWorkoutsBanner(
                   context: context,
                   ref: ref,

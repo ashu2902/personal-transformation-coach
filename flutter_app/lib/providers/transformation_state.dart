@@ -101,21 +101,15 @@ class TransformationEngineState {
     );
   }
 
-  /// Evaluates if progress is accounted for (logged, marked skipped, or a scheduled rest day) for a given date
+  /// Evaluates if progress is accounted for (logged or marked skipped) for a given date
   bool isProgressTrackedForDate(String dateStr) {
     final hasProgressEntry = progressHistory.any((p) => p.date == dateStr);
-    final recent = recentWorkouts[dateStr];
-    final hasRecentWorkout = recent != null &&
-        (recent.status == WorkoutStatus.completed ||
-            recent.status == WorkoutStatus.skipped ||
-            recent.exercises.any((ex) => ex.sets.any((s) => s.completed)));
+    final hasRecentWorkout = recentWorkouts.containsKey(dateStr);
     final hasWorkoutActivity = workout.date == dateStr &&
         (workout.status == WorkoutStatus.completed ||
             workout.status == WorkoutStatus.skipped ||
             workout.exercises.any((ex) => ex.sets.any((s) => s.completed)));
-    final isRestDay = weeklyPlan?.days.any((pd) => pd.date == dateStr && pd.isRestDay) ?? false;
-
-    return hasProgressEntry || hasRecentWorkout || hasWorkoutActivity || isRestDay;
+    return hasProgressEntry || hasRecentWorkout || hasWorkoutActivity;
   }
 
   /// Determines if a workout was specifically completed (not skipped) on a date
