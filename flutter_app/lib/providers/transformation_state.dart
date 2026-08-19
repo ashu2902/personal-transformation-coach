@@ -426,6 +426,19 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
         final data = doc.data() as Map<String, dynamic>;
         final remoteNutrition = _firestore.nutritionFromMap(data);
         state = state.copyWith(nutrition: remoteNutrition);
+      } else {
+        // Reset nutrition to fresh empty slate for today
+        final freshNutrition = DailyNutrition(
+          date: todayStr,
+          targetCalories: state.nutrition.targetCalories,
+          targetProteinG: state.nutrition.targetProteinG,
+          targetCarbsG: state.nutrition.targetCarbsG,
+          targetFatG: state.nutrition.targetFatG,
+          targetWaterMl: 2800,
+          waterMl: 0,
+          meals: [],
+        );
+        state = state.copyWith(nutrition: freshNutrition);
       }
     }, onError: (err) {
       debugPrint('[AURA STATE] Nutrition subscription error: $err');
@@ -911,6 +924,16 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
     }
   }
 
+  void clearTodayNutrition() {
+    debugPrint('[AURA STATE] Clearing today\'s logged nutrition entries...');
+    final updatedNutrition = state.nutrition.copyWith(meals: []);
+    state = state.copyWith(nutrition: updatedNutrition);
+    final uid = _auth.uid;
+    if (uid != null) {
+      _firestore.saveDailyNutrition(uid, state.nutrition.date, updatedNutrition);
+    }
+  }
+
   Future<MealItem> logMealWithAI(String mealDescription) async {
     debugPrint('[AURA STATE] Estimating meal with AI: "$mealDescription"');
     final meal = await _aiService.estimateAIMealNutrition(mealDescription);
@@ -1131,6 +1154,10 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
             }
             state = state.copyWith(nutrition: updatedNutrition);
             await _firestore.saveDailyNutrition(uid, state.nutrition.date, updatedNutrition);
+            break;
+
+          case 'clearNutrition':
+            clearTodayNutrition();
             break;
 
           case 'logRecovery':
