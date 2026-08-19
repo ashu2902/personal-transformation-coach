@@ -316,7 +316,9 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                             padding: const EdgeInsets.only(top: 2.0, right: 10.0),
                             child: AuraOrb(
                               soul: soul,
-                              state: isAdapted ? OrbState.adapting : OrbState.idle,
+                              state: state.isInitializing
+                                  ? OrbState.pulsing
+                                  : (isAdapted ? OrbState.adapting : OrbState.idle),
                               size: 28,
                             ),
                           ),

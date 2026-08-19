@@ -87,7 +87,9 @@ class TodayScreen extends ConsumerWidget {
                       tag: 'aura_orb_hero',
                       child: AuraOrb(
                         soul: soul,
-                        state: isAdapted ? OrbState.adapting : OrbState.idle,
+                        state: state.isInitializing
+                            ? OrbState.pulsing
+                            : (isAdapted ? OrbState.adapting : OrbState.idle),
                         size: 42,
                       ),
                     ),
