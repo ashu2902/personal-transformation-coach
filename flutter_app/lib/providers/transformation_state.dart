@@ -172,17 +172,34 @@ class TransformationEngineState {
     return workout.status;
   }
 
+  String get effectiveCreationDateStr {
+    if (profile.createdAtDateStr != null && profile.createdAtDateStr!.isNotEmpty) {
+      return profile.createdAtDateStr!;
+    }
+    if (progressHistory.isNotEmpty) {
+      final dates = progressHistory.map((p) => p.date).where((d) => d.isNotEmpty).toList()..sort();
+      if (dates.isNotEmpty) {
+        return dates.first;
+      }
+    }
+    if (recentWorkouts.isNotEmpty) {
+      final dates = recentWorkouts.keys.where((d) => d.isNotEmpty).toList()..sort();
+      if (dates.isNotEmpty) {
+        return dates.first;
+      }
+    }
+    return DateTime.now().toIso8601String().split('T')[0];
+  }
+
   /// Unlogged past days in the current week (from Monday up to yesterday)
   List<Map<String, String>> get unloggedPreviousDays {
     final List<Map<String, String>> unlogged = [];
     final now = DateTime.now();
-    final todayStr = now.toIso8601String().split('T')[0];
     // Monday of current week
     final monday = now.subtract(Duration(days: now.weekday - 1));
     final daysPassed = now.weekday - 1; // Number of days before today in this week
 
-    // Creation date of user account (defaults to today if brand new)
-    final creationDateStr = profile.createdAtDateStr ?? todayStr;
+    final creationDateStr = effectiveCreationDateStr;
 
     for (int i = 0; i < daysPassed; i++) {
       final d = monday.add(Duration(days: i));
