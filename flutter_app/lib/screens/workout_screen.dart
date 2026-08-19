@@ -110,14 +110,8 @@ class WorkoutScreen extends ConsumerWidget {
                 onPressed: isCompleted
                     ? null
                     : () {
-                        // Mark all sets done if finishing
-                        for (var ex in workout.exercises) {
-                          for (int s = 0; s < ex.sets.length; s++) {
-                            if (!ex.sets[s].completed) {
-                              notifier.updateExerciseSet(ex.id, s, true);
-                            }
-                          }
-                        }
+                        // Mark all sets done atomically in bulk
+                        notifier.markAllExercisesCompleted();
                         notifier.trackProgressForToday();
 
                         // Track Core Value Moment in Mixpanel

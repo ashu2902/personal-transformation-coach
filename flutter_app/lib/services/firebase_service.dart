@@ -160,9 +160,9 @@ class FirebaseFirestoreService {
           name: map['name'] ?? '',
           age: map['age'] ?? 25,
           gender: map['gender'] ?? 'male',
-          heightCm: (map['heightCm'] as num).toDouble(),
-          weightKg: (map['weightKg'] as num).toDouble(),
-          targetWeightKg: (map['targetWeightKg'] as num).toDouble(),
+          heightCm: (map['heightCm'] as num?)?.toDouble() ?? 170.0,
+          weightKg: (map['weightKg'] as num?)?.toDouble() ?? 70.0,
+          targetWeightKg: (map['targetWeightKg'] as num?)?.toDouble() ?? 68.0,
           goal: GoalType.values.firstWhere((g) => g.name == map['goal'], orElse: () => GoalType.recomp),
           daysPerWeek: map['daysPerWeek'] ?? 4,
           targetPhysique: map['targetPhysique'] ?? 'Athletic Physique',
@@ -211,6 +211,48 @@ class FirebaseFirestoreService {
         .collection('workouts')
         .doc(dateStr)
         .snapshots();
+  }
+
+  Future<DailyWorkout?> getDailyWorkout(String uid, String dateStr) async {
+    try {
+      final doc = await _db
+          .collection('users')
+          .doc(uid)
+          .collection('workouts')
+          .doc(dateStr)
+          .get()
+          .timeout(const Duration(seconds: 15));
+      if (doc.exists && doc.data() != null) {
+        return workoutFromMap(doc.data()!);
+      }
+      return null;
+    } catch (e) {
+      debugPrint('[FIRESTORE ERROR] getDailyWorkout failed: $e');
+      return null;
+    }
+  }
+
+  Future<Map<String, DailyWorkout>> getRecentWorkouts(String uid, {int limit = 14}) async {
+    try {
+      final snapshot = await _db
+          .collection('users')
+          .doc(uid)
+          .collection('workouts')
+          .orderBy('date', descending: true)
+          .limit(limit)
+          .get()
+          .timeout(const Duration(seconds: 15));
+      final map = <String, DailyWorkout>{};
+      for (final doc in snapshot.docs) {
+        final data = doc.data();
+        final w = workoutFromMap(data);
+        map[w.date] = w;
+      }
+      return map;
+    } catch (e) {
+      debugPrint('[FIRESTORE ERROR] getRecentWorkouts failed: $e');
+      return {};
+    }
   }
 
   // ─── Nutrition (Split Collection) ───
@@ -284,6 +326,7 @@ class FirebaseFirestoreService {
             'bodyFatPercent': entry.bodyFatPercent,
             'waistCm': entry.waistCm,
             'notes': entry.notes,
+            if (entry.workoutStatus != null) 'workoutStatus': entry.workoutStatus!.name,
             'updatedAt': FieldValue.serverTimestamp(),
           })
           .timeout(const Duration(seconds: 15));
@@ -304,12 +347,26 @@ class FirebaseFirestoreService {
           .timeout(const Duration(seconds: 15));
       return snapshot.docs.map((doc) {
         final map = doc.data();
+        final notesStr = map['notes']?.toString().toLowerCase() ?? '';
+        final fallbackStatus = notesStr.contains('skipped')
+            ? WorkoutStatus.skipped
+            : (notesStr.contains('workout') ? WorkoutStatus.completed : null);
+
+        final rawStatus = map['workoutStatus']?.toString();
+        final status = rawStatus != null
+            ? WorkoutStatus.values.firstWhere(
+                (s) => s.name == rawStatus,
+                orElse: () => fallbackStatus ?? WorkoutStatus.completed,
+              )
+            : fallbackStatus;
+
         return ProgressEntry(
           date: map['date'] ?? doc.id,
           weightKg: (map['weightKg'] as num?)?.toDouble() ?? 0.0,
           bodyFatPercent: (map['bodyFatPercent'] as num?)?.toDouble(),
           waistCm: (map['waistCm'] as num?)?.toDouble(),
           notes: map['notes'],
+          workoutStatus: status,
         );
       }).toList();
     } catch (e) {

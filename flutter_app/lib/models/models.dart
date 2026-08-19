@@ -310,6 +310,7 @@ class ProgressEntry {
   final double? bodyFatPercent;
   final double? waistCm;
   final String? notes;
+  final WorkoutStatus? workoutStatus;
 
   ProgressEntry({
     required this.date,
@@ -317,6 +318,7 @@ class ProgressEntry {
     this.bodyFatPercent,
     this.waistCm,
     this.notes,
+    this.workoutStatus,
   });
 }
 
@@ -440,7 +442,7 @@ class UserProfile {
       goal: goal ?? this.goal,
       daysPerWeek: daysPerWeek ?? this.daysPerWeek,
       targetPhysique: targetPhysique ?? this.targetPhysique,
-      equipmentList: equipmentList ?? (availableEquipment != null ? availableEquipment.map((e) => EquipmentItem.fromString(e.name)).toList() : this.equipmentList),
+      equipmentList: equipmentList ?? this.equipmentList,
       experienceLevel: experienceLevel ?? this.experienceLevel,
       benchPress1RMKg: benchPress1RMKg ?? this.benchPress1RMKg,
       squat1RMKg: squat1RMKg ?? this.squat1RMKg,

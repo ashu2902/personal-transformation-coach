@@ -24,7 +24,7 @@ class TransformationOrchestrator {
     required List<ProgressEntry> history,
   }) {
     final isWorkoutDone = workout.status == WorkoutStatus.completed;
-    final totalProt = nutrition.meals.fold(0, (sum, m) => sum + m.proteinG);
+    final totalProt = nutrition.meals.fold<num>(0, (sum, m) => sum + m.proteinG);
     final remainingProt = (nutrition.targetProteinG - totalProt).clamp(0, 999);
 
     if (recovery.recoveryScore < 50) {

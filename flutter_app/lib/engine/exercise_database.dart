@@ -203,11 +203,11 @@ class ExerciseDatabase {
     required String currentExerciseName,
     required List<EquipmentType> availableEquipment,
   }) {
-    // Find current definition or match by name
-    final current = library.firstWhere(
+    final current = library.where(
       (e) => e.name.toLowerCase() == currentExerciseName.toLowerCase(),
-      orElse: () => library.first,
-    );
+    ).firstOrNull;
+
+    if (current == null) return [];
 
     return library.where((e) {
       if (e.name == current.name) return false;

@@ -1,6 +1,7 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:firebase_auth/firebase_auth.dart';
 import '../providers/transformation_state.dart';
 import '../models/models.dart';
 
@@ -15,6 +16,9 @@ abstract class AIService {
   Future<DailyWorkout> adaptWorkoutWithAI(
       String adaptationRequest, TransformationEngineState contextState,
       {List<EquipmentType>? explicitEquipment, double? maxWeightKg});
+  Future<DailyWorkout> parseWorkoutFromNaturalText(
+      String naturalText, TransformationEngineState contextState,
+      {String? targetDate});
   Future<String> generateEngineDailyInsight(
       TransformationEngineState contextState);
   Future<DailyWorkout> generateAIInitialWorkout(UserProfile profile);
@@ -42,6 +46,23 @@ class GeminiAIProvider implements AIService {
       return customProxy.trim();
     }
     return 'https://us-central1-aura-coach-ashu-7.cloudfunctions.net/callGeminiProxy';
+  }
+
+  Future<Map<String, String>> _getAuthHeaders() async {
+    var user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      try {
+        final cred = await FirebaseAuth.instance.signInAnonymously();
+        user = cred.user;
+      } catch (e) {
+        debugPrint('[AURA AI] Anonymous auth fallback error: $e');
+      }
+    }
+    final token = await user?.getIdToken();
+    return {
+      'Content-Type': 'application/json',
+      if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
+    };
   }
 
   void _logRequest(String method, String prompt) {
@@ -85,11 +106,12 @@ class GeminiAIProvider implements AIService {
         proxyPayload['mimeType'] = mimeType ?? 'image/jpeg';
       }
 
+      final headers = await _getAuthHeaders();
       final proxyResponse = await http.post(
         Uri.parse(_proxyUrl),
-        headers: {'Content-Type': 'application/json'},
+        headers: headers,
         body: jsonEncode(proxyPayload),
-      );
+      ).timeout(const Duration(seconds: 30));
 
       if (proxyResponse.statusCode == 200) {
         final data = jsonDecode(proxyResponse.body);
@@ -99,6 +121,7 @@ class GeminiAIProvider implements AIService {
           final cleanJson = rawText.replaceAll('```json', '').replaceAll('```', '').trim();
           return jsonDecode(cleanJson) as Map<String, dynamic>;
         }
+        throw Exception('Empty response from AI proxy.');
       } else {
         _logError(method, 'Proxy returned status ${proxyResponse.statusCode}: ${proxyResponse.body}');
         throw Exception('AURA backend proxy error: ${proxyResponse.statusCode}');
@@ -107,8 +130,6 @@ class GeminiAIProvider implements AIService {
       _logError(method, e);
       rethrow;
     }
-
-    throw Exception('AURA AI service temporarily unavailable. Please retry.');
   }
 
   Future<String> _callGeminiText(String method, String prompt,
@@ -121,15 +142,16 @@ class GeminiAIProvider implements AIService {
         : prompt;
 
     try {
+      final headers = await _getAuthHeaders();
       final proxyResponse = await http.post(
         Uri.parse(_proxyUrl),
-        headers: {'Content-Type': 'application/json'},
+        headers: headers,
         body: jsonEncode({
           'prompt': fullPrompt,
           'model': modelName,
           'isJson': false,
         }),
-      );
+      ).timeout(const Duration(seconds: 30));
 
       if (proxyResponse.statusCode == 200) {
         final data = jsonDecode(proxyResponse.body);
@@ -138,6 +160,7 @@ class GeminiAIProvider implements AIService {
           _logResponse(method, 200, timer.elapsedMilliseconds, rawText);
           return rawText.trim();
         }
+        throw Exception('Empty text response from AI proxy.');
       } else {
         _logError(method, 'Proxy returned status ${proxyResponse.statusCode}: ${proxyResponse.body}');
         throw Exception('AURA backend proxy error: ${proxyResponse.statusCode}');
@@ -146,8 +169,6 @@ class GeminiAIProvider implements AIService {
       _logError(method, e);
       rethrow;
     }
-
-    throw Exception('AURA AI service temporarily unavailable. Please retry.');
   }
 
   @override
@@ -217,10 +238,11 @@ AVAILABLE FUNCTIONS / ACTIONS:
 8. "regenerateWeeklyPlan": Call when structural profile parameters are changed (e.g., equipment is updated, injuries are logged/updated, or long-term training goals/preferences are modified) indicating that the user's 7-day schedule/weekly plan should be recalculated and rebuilt.
    Parameters: none.
 
-SEQUENCING RULE:
-If the user specifies equipment changes and asks to adapt the workout, return ["updateEquipment", "adaptWorkout"] in that order!
-If structural changes (equipment, goals, injuries) are made, you should include "regenerateWeeklyPlan" in the actions.
-If the user's message is pure conversation, general Q&A, or encouragement without data to log or workouts to change, return "actions": [].
+NATURAL RECOVERY & READINESS DIRECTIVE:
+1. Do NOT read, track, or cite background recovery scores, sleep logs, or soreness numbers.
+2. Assume the user is in normal, healthy operating condition unless they explicitly state otherwise in chat.
+3. If the user mentions feeling sore, tired, stressed, or injured in their message, respond empathetically, ask them naturally how their body is feeling, and adapt their workout session accordingly.
+4. Speak naturally about energy, form, safety, and progressive overload without ever quoting background metrics, scores, or percentage figures.
 
 Return JSON:
 {
@@ -464,7 +486,7 @@ Return JSON:
   Future<String> generateEngineDailyInsight(
       TransformationEngineState contextState) async {
     final totalProt =
-        contextState.nutrition.meals.fold(0, (sum, m) => sum + m.proteinG);
+        contextState.nutrition.meals.fold<num>(0, (sum, m) => sum + m.proteinG);
     final prompt = '''
 Write a 1-2 sentence daily coach briefing for ${contextState.profile.name}.
 Goal: ${contextState.profile.goal.name} | Workout: ${contextState.workout.title} (${contextState.workout.status.name})
@@ -681,7 +703,7 @@ Return strictly valid JSON:
     final prompt = '''
 Adapt the workout for ${contextState.profile.name} because: "$reason"
 Current workout: "${contextState.workout.title}" — ${contextState.workout.focusArea}
-Recovery score: ${contextState.recovery.recoveryScore}% | Sleep: ${contextState.recovery.sleepHours}hrs
+Recovery Status: ${contextState.recovery.status}
 Available Equipment: ${contextState.profile.availableEquipment.map((e) => e.name).join(', ')}
 Safeguards: ${contextState.profile.activeInjuries.isEmpty ? 'None' : contextState.profile.activeInjuries.join(', ')}
 
@@ -770,10 +792,9 @@ Return JSON:
     final p = state.profile;
     final w = state.workout;
     final n = state.nutrition;
-    final r = state.recovery;
     final ctx = state.masterContext;
-    final totalCal = n.meals.fold(0, (sum, m) => sum + m.calories);
-    final totalProt = n.meals.fold(0, (sum, m) => sum + m.proteinG);
+    final totalCal = n.meals.fold<num>(0, (sum, m) => sum + m.calories);
+    final totalProt = n.meals.fold<num>(0, (sum, m) => sum + m.proteinG);
 
     final exercisesStr = w.exercises.isEmpty
         ? 'No exercises prescribed yet.'
@@ -841,14 +862,6 @@ Target: ${n.targetCalories} kcal | Protein: ${n.targetProteinG}g | Carbs: ${n.ta
 Logged Today: $totalCal / ${n.targetCalories} kcal | Protein: $totalProt / ${n.targetProteinG}g | Water: ${n.waterMl} / ${n.targetWaterMl} ml
 Logged Meals:
 $mealsStr
-
-[CURRENT RECOVERY STATUS]
-Recovery Score: ${r.recoveryScore}%
-Status Label: ${r.status}
-Sleep: ${r.sleepHours} hrs (Quality: ${r.sleepQuality}/10)
-Muscle Soreness: ${r.muscleSoreness}/10
-Energy Level: ${r.energyLevel}/10
-Stress Level: ${r.stressLevel}/10
 
 [AURA SYSTEM NOTICES]
 Recent AI Adaptation Notice: ${state.adaptationNotice ?? 'None'}
@@ -984,6 +997,122 @@ Return JSON:
         coachNote: 'Plan generated using baseline adaptive rules.',
         days: fallbackDays,
         createdAt: DateTime.now().toIso8601String(),
+      );
+    }
+  }
+
+  @override
+  Future<DailyWorkout> parseWorkoutFromNaturalText(
+      String naturalText, TransformationEngineState contextState,
+      {String? targetDate}) async {
+    final dateStr = targetDate ?? DateTime.now().toIso8601String().split('T')[0];
+    final soul = contextState.profile.coachSoul;
+
+    final prompt = '''
+You are AURA AI Coach. The user typed what they did for their workout in natural language:
+"$naturalText"
+
+Current User Profile:
+- Goal: ${contextState.profile.goal.name}
+- Coach Tone: ${soul.displayName}
+
+Your task:
+Extract the workout into a structured DailyWorkout format.
+For each exercise mentioned, identify:
+- name: standard exercise name (e.g. "Barbell Bench Press", "Dumbbell Lateral Raise", "Pull-ups", "Treadmill Run")
+- targetMuscle: (e.g. "Chest", "Shoulders", "Back", "Legs", "Full Body", "Cardio")
+- equipmentRequired: (e.g. "barbell", "dumbbell", "bodyweight", "cables", "machine", "cardio")
+- sets: Array of completed sets. Each set must have:
+  - setNumber (1, 2, 3...)
+  - targetReps (integer reps, or estimated)
+  - targetWeightKg (weight used in kg, 0.0 if bodyweight or cardio)
+  - completed: true
+- notes: brief notes if relevant
+
+Return strictly a JSON object matching this schema:
+{
+  "title": "Extracted Workout Title (e.g. Upper Body Push Session)",
+  "focusArea": "Focus (e.g. Chest & Shoulders)",
+  "estimatedDurationMin": 45,
+  "status": "completed",
+  "adaptationNote": "Logged via free-text AI",
+  "exercises": [
+    {
+      "id": "ex_1",
+      "name": "Barbell Bench Press",
+      "targetMuscle": "Chest",
+      "equipmentRequired": "barbell",
+      "sets": [
+        {"setNumber": 1, "targetReps": 10, "targetWeightKg": 60.0, "completed": true},
+        {"setNumber": 2, "targetReps": 10, "targetWeightKg": 60.0, "completed": true},
+        {"setNumber": 3, "targetReps": 8, "targetWeightKg": 65.0, "completed": true}
+      ],
+      "notes": ""
+    }
+  ]
+}
+''';
+
+    try {
+      final json = await _callGeminiJson('parseWorkoutFromNaturalText', prompt);
+      final rawExercises = json['exercises'] as List? ?? [];
+      final exercises = rawExercises.map((e) {
+        final rawSets = e['sets'] as List? ?? [];
+        final sets = rawSets.map((s) {
+          return ExerciseSet(
+            setNumber: (s['setNumber'] as num?)?.toInt() ?? 1,
+            targetReps: (s['targetReps'] as num?)?.toInt() ?? 10,
+            targetWeightKg: (s['targetWeightKg'] as num?)?.toDouble() ?? 0.0,
+            completed: s['completed'] ?? true,
+          );
+        }).toList();
+
+        return Exercise(
+          id: e['id']?.toString() ?? 'ex_${DateTime.now().millisecondsSinceEpoch}',
+          name: e['name']?.toString() ?? 'Exercise',
+          targetMuscle: e['targetMuscle']?.toString() ?? 'Full Body',
+          equipmentRequired: e['equipmentRequired']?.toString() ?? 'bodyweight',
+          sets: sets.isNotEmpty
+              ? sets
+              : [ExerciseSet(setNumber: 1, targetReps: 10, targetWeightKg: 0.0, completed: true)],
+          notes: e['notes']?.toString(),
+        );
+      }).toList();
+
+      return DailyWorkout(
+        id: 'natural_log_${dateStr}_${DateTime.now().millisecondsSinceEpoch}',
+        date: dateStr,
+        title: json['title']?.toString() ?? "Today's Logged Workout",
+        focusArea: json['focusArea']?.toString() ?? "Completed Workout",
+        estimatedDurationMin: (json['estimatedDurationMin'] as num?)?.toInt() ?? 45,
+        status: WorkoutStatus.completed,
+        exercises: exercises,
+        adaptationNote: json['adaptationNote']?.toString() ?? naturalText,
+      );
+    } catch (e) {
+      debugPrint('[AURA AI] parseWorkoutFromNaturalText failed: $e');
+      return DailyWorkout(
+        id: 'natural_log_${dateStr}_${DateTime.now().millisecondsSinceEpoch}',
+        date: dateStr,
+        title: "Logged Workout Session",
+        focusArea: "Custom Workout",
+        estimatedDurationMin: 45,
+        status: WorkoutStatus.completed,
+        exercises: [
+          Exercise(
+            id: 'ex_custom_1',
+            name: naturalText.length > 30 ? naturalText.substring(0, 30) : naturalText,
+            targetMuscle: "Full Body",
+            equipmentRequired: "bodyweight",
+            sets: [
+              ExerciseSet(setNumber: 1, targetReps: 10, targetWeightKg: 0.0, completed: true),
+              ExerciseSet(setNumber: 2, targetReps: 10, targetWeightKg: 0.0, completed: true),
+              ExerciseSet(setNumber: 3, targetReps: 10, targetWeightKg: 0.0, completed: true),
+            ],
+            notes: naturalText,
+          )
+        ],
+        adaptationNote: naturalText,
       );
     }
   }

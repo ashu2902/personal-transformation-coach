@@ -40,21 +40,53 @@
       overflow: hidden;
       overscroll-behavior: none;
       overscroll-behavior-x: none;
+      overscroll-behavior-y: none;
       touch-action: pan-y pinch-zoom;
       -webkit-touch-callout: none;
       -webkit-user-select: none;
       user-select: none;
+      -webkit-overflow-scrolling: touch;
+    }
+    /* Prevent the Flutter canvas from triggering iOS navigation gestures */
+    flt-glass-pane, flutter-view {
+      overscroll-behavior: none;
+      overscroll-behavior-x: none;
+      touch-action: pan-y pinch-zoom;
     }
   </style>
 
   <script>
-    // Ensure PWA history stack prevents accidental black-screen unload on gesture back
-    window.addEventListener('load', function() {
-      window.history.pushState({ page: 'aura_root' }, document.title, window.location.href);
-    });
-    window.addEventListener('popstate', function(event) {
-      window.history.pushState({ page: 'aura_root' }, document.title, window.location.href);
-    });
+    // iOS PWA back-gesture guard: maintain a deep history buffer so
+    // edge swipe never pops out of the PWA into a blank page.
+    (function() {
+      var BUFFER = 3; // number of sentinel entries to keep ahead of the user
+
+      function seedHistory() {
+        for (var i = 0; i < BUFFER; i++) {
+          window.history.pushState({ aura: true, depth: i }, document.title, window.location.href);
+        }
+      }
+
+      // Seed on first load
+      window.addEventListener('load', function() {
+        seedHistory();
+      });
+
+      // Whenever a popstate fires (user swiped back), immediately re-push
+      // so the buffer never drains to zero.
+      window.addEventListener('popstate', function(e) {
+        // Re-push a single sentinel to keep the buffer topped off
+        window.history.pushState({ aura: true, depth: 0 }, document.title, window.location.href);
+      });
+
+      // When the PWA regains visibility (e.g., after a brief black-screen blip),
+      // re-seed the full buffer to recover from any drained state.
+      document.addEventListener('visibilitychange', function() {
+        if (document.visibilityState === 'visible') {
+          seedHistory();
+        }
+      });
+    })();
   </script>
 </head>
 <body>

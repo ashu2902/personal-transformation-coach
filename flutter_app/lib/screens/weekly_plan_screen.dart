@@ -198,8 +198,17 @@ class WeeklyPlanScreen extends ConsumerWidget {
 
   Widget _buildDayCard(BuildContext context, WidgetRef ref, WeeklyDayPlan day, bool isToday, String todayStr) {
     final auraTheme = context.auraTheme;
+    final state = ref.watch(transformationEngineProvider);
     final isPast = day.date.compareTo(todayStr) < 0;
-    final isTracked = ref.watch(transformationEngineProvider).isProgressTrackedForDate(day.date);
+    final isCompleted = state.isWorkoutCompletedForDate(day.date);
+    final isSkipped = state.isWorkoutSkippedForDate(day.date);
+    final actualWorkout = state.getWorkoutForDate(day.date);
+
+    final displayTitle = (isCompleted && actualWorkout != null) ? actualWorkout.title : day.title;
+    final displayFocusArea = (isCompleted && actualWorkout != null) ? actualWorkout.focusArea : day.focusArea;
+    final displayExercises = (isCompleted && actualWorkout != null && actualWorkout.exercises.isNotEmpty)
+        ? actualWorkout.exercises.map((e) => e.name).toList()
+        : day.exerciseNames;
 
     return AuraCard(
       margin: const EdgeInsets.only(bottom: 10),
@@ -236,17 +245,23 @@ class WeeklyPlanScreen extends ConsumerWidget {
                   color: auraTheme.primary,
                   isFilled: true,
                 )
+              else if (isCompleted)
+                const AuraStatBadge(
+                  label: 'COMPLETED',
+                  icon: LucideIcons.check,
+                  color: AuraColors.success,
+                )
+              else if (isSkipped)
+                const AuraStatBadge(
+                  label: 'SKIPPED',
+                  icon: LucideIcons.minus,
+                  color: AuraColors.textTertiary,
+                )
               else if (day.isRestDay)
                 const AuraStatBadge(
                   label: 'REST',
                   icon: LucideIcons.moonStar,
                   color: AuraColors.textTertiary,
-                )
-              else if (isPast && isTracked)
-                const AuraStatBadge(
-                  label: 'COMPLETED',
-                  icon: LucideIcons.check,
-                  color: AuraColors.success,
                 )
               else if (isPast)
                 const AuraStatBadge(
@@ -258,26 +273,26 @@ class WeeklyPlanScreen extends ConsumerWidget {
           const SizedBox(height: 10),
           // Title + focus area
           Text(
-            day.title,
+            displayTitle,
             style: AuraTypography.bodyLarge.copyWith(
               fontWeight: FontWeight.w600,
-              color: day.isRestDay ? AuraColors.textDisabled : AuraColors.textPrimary.withValues(alpha: 0.85),
+              color: (day.isRestDay && !isCompleted) ? AuraColors.textDisabled : AuraColors.textPrimary.withValues(alpha: 0.85),
             ),
           ),
-          if (day.focusArea.isNotEmpty && !day.isRestDay) ...[
+          if (displayFocusArea.isNotEmpty && (!day.isRestDay || isCompleted)) ...[
             const SizedBox(height: 4),
             Text(
-              day.focusArea,
+              displayFocusArea,
               style: AuraTypography.bodySmall.copyWith(color: auraTheme.secondary.withValues(alpha: 0.8)),
             ),
           ],
           // Exercise chips
-          if (day.exerciseNames.isNotEmpty && !day.isRestDay) ...[
+          if (displayExercises.isNotEmpty && (!day.isRestDay || isCompleted)) ...[
             const SizedBox(height: 10),
             Wrap(
               spacing: 6,
               runSpacing: 6,
-              children: day.exerciseNames.map((name) {
+              children: displayExercises.map((name) {
                 return Container(
                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                   decoration: BoxDecoration(

@@ -282,14 +282,28 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                   final isAi = msg.sender == 'ai';
 
                   // Determine in-line cards
+                  final lowerText = msg.text.toLowerCase();
+                  final isAdviceOrSuggestion = lowerText.contains('budget available') ||
+                      lowerText.contains('recommend') ||
+                      lowerText.contains('suggest') ||
+                      lowerText.contains('what should you') ||
+                      lowerText.contains('prioritize') ||
+                      lowerText.contains('combine') ||
+                      lowerText.contains('options');
+
                   final isPlanAdjustment = isAi &&
-                      (msg.text.toLowerCase().contains('adapted') ||
-                          msg.text.toLowerCase().contains('swapped') ||
-                          msg.text.toLowerCase().contains('adjusted today'));
+                      (lowerText.contains('workout adapted') ||
+                          lowerText.contains('revised session') ||
+                          lowerText.contains('swapped exercise') ||
+                          lowerText.contains('adapted today’s workout'));
+
                   final isMealLog = isAi &&
-                      (msg.text.toLowerCase().contains('logged') ||
-                          msg.text.toLowerCase().contains('kcal') ||
-                          msg.text.toLowerCase().contains('protein'));
+                      !isAdviceOrSuggestion &&
+                      (lowerText.contains('logged meal') ||
+                          lowerText.contains('meal recorded') ||
+                          lowerText.contains('recorded your meal') ||
+                          lowerText.contains('added to your food log') ||
+                          lowerText.contains('logged:'));
 
                   if (isAi) {
                     return Padding(
@@ -375,7 +389,7 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                                                     color: AuraColors.actionGreen, size: 15),
                                                 const SizedBox(width: 6),
                                                 Text(
-                                                  'ADAPTED PRESCRIPTION',
+                                                  'ADAPTED WORKOUT',
                                                   style: AuraTypography.sectionHeader.copyWith(
                                                     color: AuraColors.actionGreen,
                                                     fontSize: 10,
@@ -422,7 +436,7 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                                               onPressed: () {
                                                 ScaffoldMessenger.of(context).showSnackBar(
                                                   const SnackBar(
-                                                    content: Text('Revised prescription locked in for today!'),
+                                                    content: Text('Revised workout locked in for today!'),
                                                     backgroundColor: AuraColors.actionGreen,
                                                     duration: Duration(seconds: 2),
                                                   ),

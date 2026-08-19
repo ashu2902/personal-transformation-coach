@@ -8,10 +8,12 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
 
+import 'models/models.dart';
 import 'services/analytics_service.dart';
 import 'providers/analytics_provider.dart';
 import 'providers/transformation_state.dart';
 import 'theme/theme.dart';
+import 'screens/widgets/aura_orb.dart';
 import 'screens/today_screen.dart';
 import 'screens/workout_screen.dart';
 import 'screens/coach_screen.dart';
@@ -35,7 +37,53 @@ void main() async {
     await analytics.setUserId(currentUser.uid);
   }
 
-  runApp(const ProviderScope(child: AuraPwaApp()));
+  runApp(ProviderScope(
+    overrides: [
+      analyticsServiceProvider.overrideWithValue(analytics),
+    ],
+    child: const AuraPwaApp(),
+  ));
+}
+
+class AuraSplashScreen extends StatelessWidget {
+  const AuraSplashScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AuraColors.background,
+      body: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const AuraOrb(
+              soul: CoachSoul.supporter,
+              state: OrbState.adapting,
+              size: 80,
+            ),
+            const SizedBox(height: 24),
+            Text(
+              'AURA',
+              style: AuraTypography.displayMedium.copyWith(
+                letterSpacing: 4.0,
+                fontSize: 24,
+                fontWeight: FontWeight.w800,
+                color: AuraColors.textPrimary,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Synchronizing Transformation Baseline...',
+              style: AuraTypography.bodySmall.copyWith(
+                color: AuraColors.textSecondary,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class AuraPwaApp extends ConsumerWidget {
@@ -49,7 +97,9 @@ class AuraPwaApp extends ConsumerWidget {
       title: 'AURA Transformation Coach',
       debugShowCheckedModeBanner: false,
       theme: getAuraTheme(state.profile.coachSoul),
-      home: state.isOnboardingComplete ? const MainShell() : const OnboardingScreen(),
+      home: state.isInitializing
+          ? const AuraSplashScreen()
+          : (state.isOnboardingComplete ? const MainShell() : const OnboardingScreen()),
     );
   }
 }
@@ -61,9 +111,34 @@ class MainShell extends StatefulWidget {
   State<MainShell> createState() => _MainShellState();
 }
 
-class _MainShellState extends State<MainShell> {
+class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   int _selectedIndex = 0;
   DateTime? _lastBackPressTime;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+  }
+
+  @override
+  void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      debugPrint('[AURA LIFECYCLE] App resumed from background. Checking day status...');
+      try {
+        final container = ProviderScope.containerOf(context, listen: false);
+        container.read(transformationEngineProvider.notifier).checkAndRefreshForNewDay();
+      } catch (e) {
+        debugPrint('[AURA LIFECYCLE] Failed to refresh day on resume: $e');
+      }
+    }
+  }
 
   void _logScreen(WidgetRef ref, int index) {
     final names = ['today', 'coach', 'insights'];
@@ -72,29 +147,21 @@ class _MainShellState extends State<MainShell> {
     }
   }
 
+  void _openWorkoutScreen(WidgetRef ref) {
+    ref.read(analyticsServiceProvider).logScreenView('workout_active');
+    Navigator.of(context).push(
+      MaterialPageRoute(
+        builder: (context) => const WorkoutScreen(),
+      ),
+    );
+  }
+
   void _navigateToTab(WidgetRef ref, int tabIndex, {int subIndex = 0}) {
-    if (tabIndex == 1) {
-      ref.read(analyticsServiceProvider).logScreenView('workout_active');
-      Navigator.of(context).push(
-        MaterialPageRoute(
-          builder: (context) => const WorkoutScreen(),
-        ),
-      );
-    } else if (tabIndex == 2) {
+    if (tabIndex >= 0 && tabIndex <= 2) {
       setState(() {
-        _selectedIndex = 2;
+        _selectedIndex = tabIndex;
       });
-      _logScreen(ref, 2);
-    } else if (tabIndex == 3) {
-      setState(() {
-        _selectedIndex = 1;
-      });
-      _logScreen(ref, 1);
-    } else {
-      setState(() {
-        _selectedIndex = 0;
-      });
-      _logScreen(ref, 0);
+      _logScreen(ref, tabIndex);
     }
   }
 
@@ -117,7 +184,10 @@ class _MainShellState extends State<MainShell> {
         });
 
         final List<Widget> screens = [
-          TodayScreen(onNavigateToTab: (idx, {subIndex = 0}) => _navigateToTab(ref, idx, subIndex: subIndex)),
+          TodayScreen(
+            onNavigateToTab: (idx, {subIndex = 0}) => _navigateToTab(ref, idx, subIndex: subIndex),
+            onOpenWorkout: () => _openWorkoutScreen(ref),
+          ),
           const CoachScreen(),
           const InsightsScreen(),
         ];

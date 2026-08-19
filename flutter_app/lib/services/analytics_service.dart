@@ -26,6 +26,7 @@ class AuraAnalyticsEvents {
 
   // Persona & Profile
   static const String soulSwitched = 'soul_switched';
+  static const String goalUpdated = 'goal_updated';
   static const String screenViewed = 'screen_viewed';
 }
 

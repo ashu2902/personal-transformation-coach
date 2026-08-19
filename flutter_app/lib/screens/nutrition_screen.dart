@@ -18,10 +18,10 @@ class NutritionScreen extends StatelessWidget {
         final nutrition = state.nutrition;
         final auraTheme = context.auraTheme;
 
-        final totalCal = nutrition.meals.fold(0, (total, m) => total + m.calories);
-        final totalProt = nutrition.meals.fold(0, (total, m) => total + m.proteinG);
-        final totalCarbs = nutrition.meals.fold(0, (total, m) => total + m.carbsG);
-        final totalFat = nutrition.meals.fold(0, (total, m) => total + m.fatG);
+        final totalCal = nutrition.meals.fold<num>(0, (total, m) => total + m.calories);
+        final totalProt = nutrition.meals.fold<num>(0, (total, m) => total + m.proteinG);
+        final totalCarbs = nutrition.meals.fold<num>(0, (total, m) => total + m.carbsG);
+        final totalFat = nutrition.meals.fold<num>(0, (total, m) => total + m.fatG);
 
         final targetCal = nutrition.targetCalories > 0 ? nutrition.targetCalories : 2000;
         final targetProt = nutrition.targetProteinG > 0 ? nutrition.targetProteinG : 150;

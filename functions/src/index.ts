@@ -22,19 +22,28 @@ export const callGeminiProxy = onRequest(
     invoker: "public",
   },
   async (req, res) => {
-    // Handle CORS preflight
-    if (req.method === "OPTIONS") {
-      res.set("Access-Control-Allow-Origin", "*");
-      res.set("Access-Control-Allow-Methods", "POST, OPTIONS");
-      res.set("Access-Control-Allow-Headers", "Content-Type, Authorization");
-      res.status(204).send("");
+    if (req.method !== "POST") {
+      res.status(405).json({ error: "Method not allowed. Use POST." });
       return;
     }
 
-    res.set("Access-Control-Allow-Origin", "*");
+    // Verify Firebase Auth ID Token
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      res.status(401).json({ error: "Unauthorized: Missing or invalid Bearer token in Authorization header." });
+      return;
+    }
 
-    if (req.method !== "POST") {
-      res.status(405).json({ error: "Method not allowed. Use POST." });
+    const idToken = authHeader.split("Bearer ")[1]?.trim();
+    if (!idToken) {
+      res.status(401).json({ error: "Unauthorized: Malformed Bearer token." });
+      return;
+    }
+
+    try {
+      await admin.auth().verifyIdToken(idToken);
+    } catch (authError: any) {
+      res.status(401).json({ error: "Unauthorized: Invalid or expired Firebase ID token.", details: authError.message });
       return;
     }
 
@@ -48,6 +57,18 @@ export const callGeminiProxy = onRequest(
 
       if (prompt.length > 50000) {
         res.status(413).json({ error: "Prompt payload exceeds maximum allowed size (50,000 chars)." });
+        return;
+      }
+
+      // Validate model parameter against strict format to prevent SSRF / Path Traversal
+      if (model && (typeof model !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9.\-]*$/.test(model))) {
+        res.status(400).json({ error: "Invalid model identifier format." });
+        return;
+      }
+
+      // Validate image payload size (max ~5MB base64)
+      if (imageBase64 && (typeof imageBase64 !== "string" || imageBase64.length > 5000000)) {
+        res.status(413).json({ error: "Image payload exceeds maximum allowed size (5MB base64)." });
         return;
       }
 

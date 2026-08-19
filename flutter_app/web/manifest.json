@@ -2,6 +2,7 @@
     "name": "AURA Personal Transformation Coach",
     "short_name": "AURA Coach",
     "start_url": ".",
+    "scope": ".",
     "display": "standalone",
     "background_color": "#0B0F17",
     "theme_color": "#0B0F17",

@@ -56,9 +56,9 @@ class LocalTransformationRepository implements ITransformationRepository {
         name: map['name'] ?? '',
         age: map['age'] ?? 25,
         gender: map['gender'] ?? 'male',
-        heightCm: (map['heightCm'] as num).toDouble(),
-        weightKg: (map['weightKg'] as num).toDouble(),
-        targetWeightKg: (map['targetWeightKg'] as num).toDouble(),
+        heightCm: (map['heightCm'] as num?)?.toDouble() ?? 170.0,
+        weightKg: (map['weightKg'] as num?)?.toDouble() ?? 70.0,
+        targetWeightKg: (map['targetWeightKg'] as num?)?.toDouble() ?? 68.0,
         goal: GoalType.values.firstWhere((g) => g.name == map['goal'], orElse: () => GoalType.recomp),
         daysPerWeek: map['daysPerWeek'] ?? 4,
         targetPhysique: map['targetPhysique'] ?? 'Athletic Physique',
@@ -139,7 +139,7 @@ class LocalTransformationRepository implements ITransformationRepository {
               return ExerciseSet(
                 setNumber: s['setNumber'],
                 targetReps: s['targetReps'],
-                targetWeightKg: (s['targetWeightKg'] as num).toDouble(),
+                targetWeightKg: (s['targetWeightKg'] as num?)?.toDouble() ?? 0.0,
                 completed: s['completed'] ?? false,
               );
             }).toList(),
@@ -246,13 +246,13 @@ class LocalTransformationRepository implements ITransformationRepository {
       final map = jsonDecode(jsonStr);
       return RecoveryCheckIn(
         date: map['date'],
-        sleepHours: (map['sleepHours'] as num).toDouble(),
-        sleepQuality: map['sleepQuality'],
-        muscleSoreness: map['muscleSoreness'],
-        energyLevel: map['energyLevel'],
-        stressLevel: map['stressLevel'],
-        recoveryScore: map['recoveryScore'],
-        status: map['status'],
+        sleepHours: (map['sleepHours'] as num?)?.toDouble() ?? 7.0,
+        sleepQuality: map['sleepQuality'] ?? 8,
+        muscleSoreness: map['muscleSoreness'] ?? 2,
+        energyLevel: map['energyLevel'] ?? 8,
+        stressLevel: map['stressLevel'] ?? 3,
+        recoveryScore: map['recoveryScore'] ?? 85,
+        status: map['status'] ?? 'Optimal Adaptation',
       );
     } catch (e) {
       debugPrint('[AURA REPOSITORY] Error loading recovery: $e');
@@ -285,12 +285,28 @@ class LocalTransformationRepository implements ITransformationRepository {
     if (jsonStr == null || jsonStr.isEmpty) return [];
     try {
       final list = jsonDecode(jsonStr) as List;
-      return list.map((p) => ProgressEntry(
-        date: p['date'],
-        weightKg: (p['weightKg'] as num).toDouble(),
-        bodyFatPercent: p['bodyFatPercent'] != null ? (p['bodyFatPercent'] as num).toDouble() : null,
-        notes: p['notes'],
-      )).toList();
+      return list.map((p) {
+        final notesStr = p['notes']?.toString().toLowerCase() ?? '';
+        final fallbackStatus = notesStr.contains('skipped')
+            ? WorkoutStatus.skipped
+            : (notesStr.contains('workout') ? WorkoutStatus.completed : null);
+
+        final rawStatus = p['workoutStatus']?.toString();
+        final status = rawStatus != null
+            ? WorkoutStatus.values.firstWhere(
+                (s) => s.name == rawStatus,
+                orElse: () => fallbackStatus ?? WorkoutStatus.completed,
+              )
+            : fallbackStatus;
+
+        return ProgressEntry(
+          date: p['date'],
+          weightKg: (p['weightKg'] as num?)?.toDouble() ?? 70.0,
+          bodyFatPercent: p['bodyFatPercent'] != null ? (p['bodyFatPercent'] as num?)?.toDouble() : null,
+          notes: p['notes'],
+          workoutStatus: status,
+        );
+      }).toList();
     } catch (e) {
       debugPrint('[AURA REPOSITORY] Error loading progress history: $e');
       return [];
@@ -309,6 +325,7 @@ class LocalTransformationRepository implements ITransformationRepository {
       'weightKg': p.weightKg,
       'bodyFatPercent': p.bodyFatPercent,
       'notes': p.notes,
+      if (p.workoutStatus != null) 'workoutStatus': p.workoutStatus!.name,
     }).toList();
     await prefs.setString(_keyProgress, jsonEncode(mapList));
   }

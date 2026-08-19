@@ -1107,7 +1107,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         stepText = 'Calculating dynamic Mifflin-St Jeor metabolic baseline...';
         break;
       case 3:
-        stepText = 'Designing personalized workout prescription...';
+        stepText = 'Designing personalized workout plan...';
         break;
       case 4:
         stepText = 'Launching AURA Transformation Engine...';
@@ -1452,7 +1452,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     ),
                     const SizedBox(height: 6),
                     Text(
-                      'Sign in with Google to sync your prescriptions, macros, and coaching history.',
+                      'Sign in with Google to sync your workouts, macros, and coaching history.',
                       style: GoogleFonts.plusJakartaSans(
                         color: const Color(0xFFA1A1AA),
                         fontSize: 13,
@@ -1516,7 +1516,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                                 final success = await ref
                                     .read(transformationEngineProvider.notifier)
                                     .signInAndLoadUserProfile(useGoogleAuth: true);
-                                if (!mounted) return;
+                                if (!ctx.mounted) return;
                                 if (success) {
                                   Navigator.of(ctx).pop();
                                 } else {

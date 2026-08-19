@@ -369,7 +369,7 @@ class InsightsScreen extends ConsumerWidget {
                             ),
                             const SizedBox(height: 2),
                             Text(
-                              '7-day prescription schedule',
+                              '7-day workout & training schedule',
                               style: AuraTypography.bodySmall.copyWith(color: AuraColors.textSecondary),
                             ),
                           ],

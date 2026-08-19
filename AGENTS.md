@@ -100,6 +100,7 @@ All Mixpanel events in AURA follow strict conventions:
 | `portion_corrected` | User triggers portion adjustment on food entry | `action` (`edit_requested`) | `lib/screens/coach_screen.dart` |
 | `recovery_logged` | User records sleep duration or muscle soreness | `sleep_hours` / `soreness_score`, `metric_type` | `lib/screens/today_screen.dart` |
 | `soul_switched` | User swaps active coach persona in settings | `soul_name`, `previous_soul`, `surface` | `lib/screens/profile_screen.dart` |
+| `goal_updated` | User recalibrates transformation goal or schedule | `previous_goal`, `new_goal`, `target_physique`, `days_per_week` | `lib/screens/profile_screen.dart` |
 | `screen_viewed` | User navigates tabs or pushes a major screen | `screen_name` (`today`, `coach`, `insights`, `profile`, `workout_active`) | `lib/main.dart` |
 
 ---
