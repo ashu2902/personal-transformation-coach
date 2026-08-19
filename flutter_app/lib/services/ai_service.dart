@@ -211,6 +211,7 @@ AVAILABLE FUNCTIONS / ACTIONS:
    Parameters:
    - "meals": Array of objects [{"name": string, "calories": number, "proteinG": number, "carbsG": number, "fatG": number}]
    - "waterMl": Optional number of ml of water added.
+   - "targetDate": Optional string ("YYYY-MM-DD", "yesterday", or "today"). If the user says "Yesterday I ate...", "For yesterday log...", set targetDate to "yesterday" or the target ISO date string. Defaults to today if unstated.
 
 4. "logRecovery": Call when the user mentions sleep hours/quality, soreness, energy, or stress.
    Parameters:
@@ -238,8 +239,19 @@ AVAILABLE FUNCTIONS / ACTIONS:
 8. "regenerateWeeklyPlan": Call when structural profile parameters are changed (e.g., equipment is updated, injuries are logged/updated, or long-term training goals/preferences are modified) indicating that the user's 7-day schedule/weekly plan should be recalculated and rebuilt.
    Parameters: none.
 
-9. "clearNutrition": Call when the user explicitly asks to clear, reset, remove, or fix falsely logged meals/nutrition for today (e.g., "clear my meals", "fix today's meal tally", "reset today's food log", "yesterday's meal is showing in today's quote - fix it").
-   Parameters: none.
+9. "removeMeal": Call when the user explicitly asks to remove, delete, or drop a specific meal item from a day's food log (e.g., "remove the halwa", "delete the protein shake from yesterday").
+   Parameters:
+   - "mealName": string (e.g. "halwa", "paneer gravy", "protein shake")
+   - "targetDate": Optional string ("YYYY-MM-DD", "yesterday", or "today")
+
+10. "updateMealPortion": Call when the user requests a portion adjustment or macro edit for a specific logged meal item (e.g. "adjust halwa to 50g", "change protein shake to 30g protein").
+   Parameters:
+   - "mealName": string
+   - "calories": number
+   - "proteinG": number
+   - "carbsG": number
+   - "fatG": number
+   - "targetDate": Optional string ("YYYY-MM-DD", "yesterday", or "today")
 
 NATURAL RECOVERY & READINESS DIRECTIVE:
 1. Do NOT read, track, or cite background recovery scores, sleep logs, or soreness numbers.

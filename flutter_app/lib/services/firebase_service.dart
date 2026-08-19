@@ -283,6 +283,33 @@ class FirebaseFirestoreService {
         .snapshots();
   }
 
+  Future<DailyNutrition> getDailyNutrition(String uid, String dateStr) async {
+    try {
+      final doc = await _db
+          .collection('users')
+          .doc(uid)
+          .collection('nutrition')
+          .doc(dateStr)
+          .get()
+          .timeout(const Duration(seconds: 10));
+      if (doc.exists && doc.data() != null) {
+        return nutritionFromMap(doc.data()!);
+      }
+    } catch (e) {
+      debugPrint('[FIRESTORE ERROR] getDailyNutrition failed for $dateStr: $e');
+    }
+    return DailyNutrition(
+      date: dateStr,
+      targetCalories: 2000,
+      targetProteinG: 150,
+      targetCarbsG: 200,
+      targetFatG: 60,
+      targetWaterMl: 2800,
+      waterMl: 0,
+      meals: [],
+    );
+  }
+
   // ─── Recovery (Split Collection) ───
 
   Future<void> saveDailyRecovery(String uid, String dateStr, RecoveryCheckIn recovery) async {

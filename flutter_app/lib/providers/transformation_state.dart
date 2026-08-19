@@ -934,6 +934,138 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
     }
   }
 
+  String _resolveTargetDate(String? rawDate) {
+    final today = DateTime.now();
+    final todayStr = today.toIso8601String().split('T')[0];
+    if (rawDate == null || rawDate.isEmpty || rawDate.toLowerCase() == 'today') {
+      return todayStr;
+    }
+    if (rawDate.toLowerCase() == 'yesterday') {
+      final yesterday = today.subtract(const Duration(days: 1));
+      return yesterday.toIso8601String().split('T')[0];
+    }
+    if (RegExp(r'^\d{4}-\d{2}-\d{2}$').hasMatch(rawDate)) {
+      return rawDate;
+    }
+    return todayStr;
+  }
+
+  Future<void> logNutritionForDate({
+    required List<MealItem> newMeals,
+    int? waterMl,
+    String? rawDate,
+  }) async {
+    final uid = _auth.uid;
+    final targetDate = _resolveTargetDate(rawDate);
+    final todayStr = DateTime.now().toIso8601String().split('T')[0];
+
+    debugPrint('[AURA STATE] Logging nutrition for date: $targetDate (Today: $todayStr)');
+
+    if (targetDate == todayStr) {
+      final combined = List<MealItem>.from(state.nutrition.meals)..addAll(newMeals);
+      var updated = state.nutrition.copyWith(meals: combined);
+      if (waterMl != null && waterMl > 0) {
+        updated = updated.copyWith(waterMl: updated.waterMl + waterMl);
+      }
+      state = state.copyWith(nutrition: updated);
+      if (uid != null) {
+        await _firestore.saveDailyNutrition(uid, todayStr, updated);
+      }
+    } else {
+      if (uid != null) {
+        DailyNutrition existing = await _firestore.getDailyNutrition(uid, targetDate);
+        final combined = List<MealItem>.from(existing.meals)..addAll(newMeals);
+        var updated = existing.copyWith(date: targetDate, meals: combined);
+        if (waterMl != null && waterMl > 0) {
+          updated = updated.copyWith(waterMl: updated.waterMl + waterMl);
+        }
+        await _firestore.saveDailyNutrition(uid, targetDate, updated);
+      }
+    }
+  }
+
+  Future<void> removeMealFromDate({
+    required String mealName,
+    String? rawDate,
+  }) async {
+    final uid = _auth.uid;
+    final targetDate = _resolveTargetDate(rawDate);
+    final todayStr = DateTime.now().toIso8601String().split('T')[0];
+    final search = mealName.toLowerCase();
+
+    debugPrint('[AURA STATE] Removing meal "$mealName" for date: $targetDate');
+
+    if (targetDate == todayStr) {
+      final updatedMeals = state.nutrition.meals.where((m) => !m.name.toLowerCase().contains(search)).toList();
+      final updated = state.nutrition.copyWith(meals: updatedMeals);
+      state = state.copyWith(nutrition: updated);
+      if (uid != null) {
+        await _firestore.saveDailyNutrition(uid, todayStr, updated);
+      }
+    } else {
+      if (uid != null) {
+        DailyNutrition existing = await _firestore.getDailyNutrition(uid, targetDate);
+        final updatedMeals = existing.meals.where((m) => !m.name.toLowerCase().contains(search)).toList();
+        final updated = existing.copyWith(meals: updatedMeals);
+        await _firestore.saveDailyNutrition(uid, targetDate, updated);
+      }
+    }
+  }
+
+  Future<void> updateMealPortionForDate({
+    required String mealName,
+    required num calories,
+    required num proteinG,
+    required num carbsG,
+    required num fatG,
+    String? rawDate,
+  }) async {
+    final uid = _auth.uid;
+    final targetDate = _resolveTargetDate(rawDate);
+    final todayStr = DateTime.now().toIso8601String().split('T')[0];
+    final search = mealName.toLowerCase();
+
+    debugPrint('[AURA STATE] Updating meal portion for "$mealName" on date: $targetDate');
+
+    if (targetDate == todayStr) {
+      final updatedMeals = state.nutrition.meals.map((m) {
+        if (m.name.toLowerCase().contains(search)) {
+          return MealItem(
+            name: m.name,
+            calories: calories.toInt(),
+            proteinG: proteinG.toInt(),
+            carbsG: carbsG.toInt(),
+            fatG: fatG.toInt(),
+          );
+        }
+        return m;
+      }).toList();
+      final updated = state.nutrition.copyWith(meals: updatedMeals);
+      state = state.copyWith(nutrition: updated);
+      if (uid != null) {
+        await _firestore.saveDailyNutrition(uid, todayStr, updated);
+      }
+    } else {
+      if (uid != null) {
+        DailyNutrition existing = await _firestore.getDailyNutrition(uid, targetDate);
+        final updatedMeals = existing.meals.map((m) {
+          if (m.name.toLowerCase().contains(search)) {
+            return MealItem(
+              name: m.name,
+              calories: calories.toInt(),
+              proteinG: proteinG.toInt(),
+              carbsG: carbsG.toInt(),
+              fatG: fatG.toInt(),
+            );
+          }
+          return m;
+        }).toList();
+        final updated = existing.copyWith(meals: updatedMeals);
+        await _firestore.saveDailyNutrition(uid, targetDate, updated);
+      }
+    }
+  }
+
   Future<MealItem> logMealWithAI(String mealDescription) async {
     debugPrint('[AURA STATE] Estimating meal with AI: "$mealDescription"');
     final meal = await _aiService.estimateAIMealNutrition(mealDescription);
@@ -1132,10 +1264,9 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
             break;
 
           case 'logNutrition':
-            DailyNutrition updatedNutrition = state.nutrition;
             final mealsRaw = action.arguments['meals'];
+            final List<MealItem> newMeals = [];
             if (mealsRaw is List && mealsRaw.isNotEmpty) {
-              final List<MealItem> newMeals = [];
               for (var m in mealsRaw) {
                 newMeals.add(MealItem(
                   name: m['name']?.toString() ?? 'Logged Meal',
@@ -1145,15 +1276,37 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
                   fatG: (m['fatG'] as num?)?.toInt() ?? 10,
                 ));
               }
-              final combined = List<MealItem>.from(updatedNutrition.meals)..addAll(newMeals);
-              updatedNutrition = updatedNutrition.copyWith(meals: combined);
             }
             final waterNum = (action.arguments['waterMl'] as num?)?.toInt();
-            if (waterNum != null && waterNum > 0) {
-              updatedNutrition = updatedNutrition.copyWith(waterMl: updatedNutrition.waterMl + waterNum);
+            final targetDateRaw = action.arguments['targetDate']?.toString();
+            await logNutritionForDate(newMeals: newMeals, waterMl: waterNum, rawDate: targetDateRaw);
+            break;
+
+          case 'removeMeal':
+            final mealName = action.arguments['mealName']?.toString() ?? '';
+            final targetDateRaw = action.arguments['targetDate']?.toString();
+            if (mealName.isNotEmpty) {
+              await removeMealFromDate(mealName: mealName, rawDate: targetDateRaw);
             }
-            state = state.copyWith(nutrition: updatedNutrition);
-            await _firestore.saveDailyNutrition(uid, state.nutrition.date, updatedNutrition);
+            break;
+
+          case 'updateMealPortion':
+            final mealName = action.arguments['mealName']?.toString() ?? '';
+            final cals = (action.arguments['calories'] as num?) ?? 300;
+            final p = (action.arguments['proteinG'] as num?) ?? 20;
+            final c = (action.arguments['carbsG'] as num?) ?? 30;
+            final f = (action.arguments['fatG'] as num?) ?? 10;
+            final targetDateRaw = action.arguments['targetDate']?.toString();
+            if (mealName.isNotEmpty) {
+              await updateMealPortionForDate(
+                mealName: mealName,
+                calories: cals,
+                proteinG: p,
+                carbsG: c,
+                fatG: f,
+                rawDate: targetDateRaw,
+              );
+            }
             break;
 
           case 'clearNutrition':

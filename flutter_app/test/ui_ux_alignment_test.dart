@@ -197,5 +197,40 @@ void main() {
       expect(muscleGainProfile.targetPhysique, 'Maximum Mass');
       expect(muscleGainProfile.daysPerWeek, 5);
     });
+
+    test('MealItem supports item level modifications', () {
+      final meal = MealItem(name: 'Paneer Curry', calories: 350, proteinG: 22, carbsG: 15, fatG: 18);
+      final updated = MealItem(name: meal.name, calories: 300, proteinG: 25, carbsG: meal.carbsG, fatG: meal.fatG);
+
+      expect(updated.name, 'Paneer Curry');
+      expect(updated.calories, 300);
+      expect(updated.proteinG, 25);
+      expect(updated.carbsG, 15);
+      expect(updated.fatG, 18);
+    });
+
+    test('DailyNutrition supports targeted meal filtering and removal', () {
+      final initial = DailyNutrition(
+        date: '2026-08-19',
+        targetCalories: 2000,
+        targetProteinG: 150,
+        targetCarbsG: 200,
+        targetFatG: 60,
+        waterMl: 0,
+        targetWaterMl: 2800,
+        meals: [
+          MealItem(name: 'Moong Dal Halwa', calories: 400, proteinG: 8, carbsG: 50, fatG: 18),
+          MealItem(name: 'Roti & Paneer', calories: 450, proteinG: 25, carbsG: 40, fatG: 15),
+        ],
+      );
+
+      final filteredMeals = initial.meals.where((m) => !m.name.toLowerCase().contains('halwa')).toList();
+      final updated = initial.copyWith(meals: filteredMeals);
+
+      expect(updated.meals.length, 1);
+      expect(updated.meals.first.name, 'Roti & Paneer');
+      expect(updated.meals.fold(0, (sum, m) => sum + m.calories), 450);
+      expect(updated.meals.fold(0, (sum, m) => sum + m.proteinG), 25);
+    });
   });
 }
