@@ -45,38 +45,45 @@ void main() async {
   ));
 }
 
-class AuraSplashScreen extends StatelessWidget {
+class AuraSplashScreen extends ConsumerWidget {
   const AuraSplashScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final state = ref.watch(transformationEngineProvider);
+    final soul = state.profile.coachSoul;
+
     return Scaffold(
       backgroundColor: AuraColors.background,
       body: Center(
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const AuraOrb(
-              soul: CoachSoul.supporter,
-              state: OrbState.adapting,
-              size: 80,
+            Hero(
+              tag: 'aura_orb_hero',
+              child: AuraOrb(
+                soul: soul,
+                state: OrbState.pulsing,
+                size: 110,
+              ),
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 28),
             Text(
               'AURA',
               style: AuraTypography.displayMedium.copyWith(
                 letterSpacing: 4.0,
-                fontSize: 24,
+                fontSize: 26,
                 fontWeight: FontWeight.w800,
                 color: AuraColors.textPrimary,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
             Text(
-              'Synchronizing Transformation Baseline...',
+              'Calibrating Transformation Baseline...',
               style: AuraTypography.bodySmall.copyWith(
                 color: AuraColors.textSecondary,
-                fontSize: 12,
+                fontSize: 13,
+                letterSpacing: 0.5,
               ),
             ),
           ],
