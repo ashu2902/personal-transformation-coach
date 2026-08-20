@@ -63,24 +63,29 @@ class TodayScreen extends ConsumerWidget {
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        todayStr.toUpperCase(),
-                        style: AuraTypography.sectionHeader.copyWith(
-                          color: auraTheme.primary,
-                          fontSize: 11,
-                          letterSpacing: 1.2,
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          todayStr.toUpperCase(),
+                          style: AuraTypography.sectionHeader.copyWith(
+                            color: auraTheme.primary,
+                            fontSize: 11,
+                            letterSpacing: 1.2,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        'Good ${now.hour < 12 ? 'morning' : now.hour < 17 ? 'afternoon' : 'evening'}, ${state.profile.name}',
-                        style: AuraTypography.displayMedium.copyWith(fontSize: 22),
-                      ),
-                    ],
+                        const SizedBox(height: 4),
+                        Text(
+                          'Good ${now.hour < 12 ? 'morning' : now.hour < 17 ? 'afternoon' : 'evening'}, ${state.profile.name}',
+                          style: AuraTypography.displayMedium.copyWith(fontSize: 22),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                        ),
+                      ],
+                    ),
                   ),
+                  const SizedBox(width: 12),
                   GestureDetector(
                     onTap: () => onNavigateToTab?.call(1), // Navigate to Coach chat tab
                     child: Hero(
@@ -134,27 +139,32 @@ class TodayScreen extends ConsumerWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
-                          children: [
-                            Container(
-                              width: 8,
-                              height: 8,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                color: isAdapted ? AuraColors.actionGreen : auraTheme.primary,
+                        Flexible(
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 8,
+                                height: 8,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  color: isAdapted ? AuraColors.actionGreen : auraTheme.primary,
+                                ),
                               ),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              isAdapted ? "AURA'S ADAPTED WORKOUT" : "TODAY'S WORKOUT",
-                              style: AuraTypography.sectionHeader.copyWith(
-                                color: isAdapted ? AuraColors.actionGreen : auraTheme.primary,
-                                fontSize: 11,
-                                letterSpacing: 1.2,
-                                fontWeight: FontWeight.bold,
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: Text(
+                                  isAdapted ? "AURA'S ADAPTED WORKOUT" : "TODAY'S WORKOUT",
+                                  style: AuraTypography.sectionHeader.copyWith(
+                                    color: isAdapted ? AuraColors.actionGreen : auraTheme.primary,
+                                    fontSize: 11,
+                                    letterSpacing: 1.2,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                         if (isAdapted)
                           Container(
@@ -187,32 +197,47 @@ class TodayScreen extends ConsumerWidget {
                       ),
                     ),
                     const SizedBox(height: 6),
-                    Row(
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 6,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        Icon(LucideIcons.dumbbell, size: 14, color: auraTheme.primary),
-                        const SizedBox(width: 6),
-                        Text(
-                          workout.focusArea,
-                          style: AuraTypography.bodyMedium.copyWith(
-                            color: AuraColors.textSecondary,
-                            fontWeight: FontWeight.w500,
-                          ),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(LucideIcons.dumbbell, size: 14, color: auraTheme.primary),
+                            const SizedBox(width: 6),
+                            Flexible(
+                              child: Text(
+                                workout.focusArea,
+                                style: AuraTypography.bodyMedium.copyWith(
+                                  color: AuraColors.textSecondary,
+                                  fontWeight: FontWeight.w500,
+                                ),
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                          ],
                         ),
-                        const SizedBox(width: 12),
-                        Container(
-                          width: 4,
-                          height: 4,
-                          decoration: const BoxDecoration(
-                            shape: BoxShape.circle,
-                            color: AuraColors.textTertiary,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        const Icon(LucideIcons.clock, size: 14, color: AuraColors.textTertiary),
-                        const SizedBox(width: 6),
-                        Text(
-                          '${workout.estimatedDurationMin} min • ${workout.exercises.length} Exercises',
-                          style: AuraTypography.bodySmall.copyWith(color: AuraColors.textTertiary),
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Container(
+                              width: 4,
+                              height: 4,
+                              decoration: const BoxDecoration(
+                                shape: BoxShape.circle,
+                                color: AuraColors.textTertiary,
+                              ),
+                            ),
+                            const SizedBox(width: 8),
+                            const Icon(LucideIcons.clock, size: 14, color: AuraColors.textTertiary),
+                            const SizedBox(width: 6),
+                            Text(
+                              '${workout.estimatedDurationMin} min • ${workout.exercises.length} Exercises',
+                              style: AuraTypography.bodySmall.copyWith(color: AuraColors.textTertiary),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -282,30 +307,35 @@ class TodayScreen extends ConsumerWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
-                          children: [
-                            Container(
-                              width: 24,
-                              height: 24,
-                              decoration: BoxDecoration(
-                                shape: BoxShape.circle,
-                                gradient: LinearGradient(
-                                  colors: [auraTheme.primary, auraTheme.secondary],
+                        Flexible(
+                          child: Row(
+                            children: [
+                              Container(
+                                width: 24,
+                                height: 24,
+                                decoration: BoxDecoration(
+                                  shape: BoxShape.circle,
+                                  gradient: LinearGradient(
+                                    colors: [auraTheme.primary, auraTheme.secondary],
+                                  ),
+                                ),
+                                child: const Icon(LucideIcons.bot, size: 13, color: Colors.black),
+                              ),
+                              const SizedBox(width: 8),
+                              Flexible(
+                                child: Text(
+                                  'HEY COACH...',
+                                  style: AuraTypography.sectionHeader.copyWith(
+                                    fontSize: 11,
+                                    letterSpacing: 1.2,
+                                    color: auraTheme.primary,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
                                 ),
                               ),
-                              child: const Icon(LucideIcons.bot, size: 13, color: Colors.black),
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              'HEY COACH...',
-                              style: AuraTypography.sectionHeader.copyWith(
-                                fontSize: 11,
-                                letterSpacing: 1.2,
-                                color: auraTheme.primary,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -441,20 +471,25 @@ class TodayScreen extends ConsumerWidget {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Row(
-                          children: [
-                            Icon(LucideIcons.utensils, size: 14, color: auraTheme.primary),
-                            const SizedBox(width: 6),
-                            Text(
-                              "TODAY'S FUEL & NUTRITION",
-                              style: AuraTypography.sectionHeader.copyWith(
-                                fontSize: 11,
-                                letterSpacing: 1.1,
-                                color: auraTheme.primary,
-                                fontWeight: FontWeight.bold,
+                        Flexible(
+                          child: Row(
+                            children: [
+                              Icon(LucideIcons.utensils, size: 14, color: auraTheme.primary),
+                              const SizedBox(width: 6),
+                              Flexible(
+                                child: Text(
+                                  "TODAY'S FUEL & NUTRITION",
+                                  style: AuraTypography.sectionHeader.copyWith(
+                                    fontSize: 11,
+                                    letterSpacing: 1.1,
+                                    color: auraTheme.primary,
+                                    fontWeight: FontWeight.bold,
+                                  ),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
                               ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                         Container(
                           padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -1071,14 +1106,18 @@ class TodayScreen extends ConsumerWidget {
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      dayLabel,
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: AuraColors.textPrimary,
+                    Expanded(
+                      child: Text(
+                        dayLabel,
+                        style: const TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                          color: AuraColors.textPrimary,
+                        ),
+                        overflow: TextOverflow.ellipsis,
                       ),
                     ),
+                    const SizedBox(width: 8),
                     Row(
                       children: [
                         InkWell(
