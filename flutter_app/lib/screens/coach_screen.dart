@@ -432,7 +432,7 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                                             AuraButton(
                                               text: 'Accept Revised Plan',
                                               variant: AuraButtonVariant.primary,
-                                              backgroundColor: AuraColors.actionGreen,
+                                              backgroundColor: auraTheme.primary,
                                               textColor: Colors.black,
                                               width: double.infinity,
                                               onPressed: () {
@@ -678,8 +678,8 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                     onTap: () => _sendMessage(_inputController.text),
                     child: Container(
                       padding: const EdgeInsets.all(11),
-                      decoration: const BoxDecoration(
-                        color: AuraColors.actionGreen,
+                      decoration: BoxDecoration(
+                        color: auraTheme.primary,
                         shape: BoxShape.circle,
                       ),
                       child: const Icon(LucideIcons.arrowUp, color: Colors.black, size: 18),

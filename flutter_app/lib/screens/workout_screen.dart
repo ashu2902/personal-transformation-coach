@@ -102,7 +102,7 @@ class WorkoutScreen extends ConsumerWidget {
                     ? 'Workout Completed ✓'
                     : 'Finish & Complete Workout ($completedSets/$totalSets Sets)',
                 icon: isCompleted ? LucideIcons.checkCheck : LucideIcons.trophy,
-                backgroundColor: isCompleted ? AuraColors.surface2 : AuraColors.actionGreen,
+                backgroundColor: isCompleted ? AuraColors.surface2 : auraTheme.primary,
                 textColor: isCompleted ? AuraColors.textSecondary : Colors.black,
                 variant: isCompleted ? AuraButtonVariant.secondary : AuraButtonVariant.primary,
                 width: double.infinity,
@@ -460,7 +460,7 @@ class WorkoutScreen extends ConsumerWidget {
               const SizedBox(height: 20),
               AuraButton(
                 text: 'Done',
-                backgroundColor: AuraColors.actionGreen,
+                backgroundColor: auraTheme.primary,
                 textColor: Colors.black,
                 width: double.infinity,
                 onPressed: () {

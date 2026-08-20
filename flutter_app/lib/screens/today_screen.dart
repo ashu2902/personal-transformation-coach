@@ -281,7 +281,7 @@ class TodayScreen extends ConsumerWidget {
                       text: isWorkoutDone ? "Workout Completed!" : "Start Today's Session",
                       icon: isWorkoutDone ? LucideIcons.checkCheck : LucideIcons.play,
                       variant: isWorkoutDone ? AuraButtonVariant.secondary : AuraButtonVariant.primary,
-                      backgroundColor: isWorkoutDone ? AuraColors.surface2 : AuraColors.actionGreen,
+                      backgroundColor: isWorkoutDone ? AuraColors.surface2 : auraTheme.primary,
                       textColor: isWorkoutDone ? AuraColors.textSecondary : Colors.black,
                       width: double.infinity,
                       height: 52,
@@ -1159,20 +1159,20 @@ class TodayScreen extends ConsumerWidget {
                           child: Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                             decoration: BoxDecoration(
-                              color: AuraColors.actionGreen.withValues(alpha: 0.15),
+                              color: auraTheme.primary.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: AuraColors.actionGreen.withValues(alpha: 0.3)),
+                              border: Border.all(color: auraTheme.primary.withValues(alpha: 0.3)),
                             ),
-                            child: const Row(
+                            child: Row(
                               children: [
-                                Icon(LucideIcons.sparkles, size: 10, color: AuraColors.actionGreen),
-                                SizedBox(width: 4),
+                                Icon(LucideIcons.sparkles, size: 10, color: auraTheme.primary),
+                                const SizedBox(width: 4),
                                 Text(
                                   'Log Workout',
                                   style: TextStyle(
                                     fontSize: 11,
                                     fontWeight: FontWeight.bold,
-                                    color: AuraColors.actionGreen,
+                                    color: auraTheme.primary,
                                   ),
                                 ),
                               ],
@@ -1229,10 +1229,10 @@ class TodayScreen extends ConsumerWidget {
                           Container(
                             padding: const EdgeInsets.all(6),
                             decoration: BoxDecoration(
-                              color: AuraColors.actionGreen.withValues(alpha: 0.15),
+                              color: auraTheme.primary.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: const Icon(LucideIcons.sparkles, size: 16, color: AuraColors.actionGreen),
+                            child: Icon(LucideIcons.sparkles, size: 16, color: auraTheme.primary),
                           ),
                           const SizedBox(width: 8),
                           Text(
@@ -1240,7 +1240,7 @@ class TodayScreen extends ConsumerWidget {
                                 ? 'LOG WORKOUT FOR $initialDayName'
                                 : 'EXPRESS AI WORKOUT LOG',
                             style: AuraTypography.sectionHeader.copyWith(
-                              color: AuraColors.actionGreen,
+                              color: auraTheme.primary,
                               letterSpacing: 1.1,
                               fontSize: 11,
                             ),
@@ -1275,7 +1275,7 @@ class TodayScreen extends ConsumerWidget {
                       ),
                       focusedBorder: OutlineInputBorder(
                         borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AuraColors.actionGreen),
+                        borderSide: BorderSide(color: auraTheme.primary),
                       ),
                     ),
                   ),
@@ -1284,7 +1284,7 @@ class TodayScreen extends ConsumerWidget {
                     text: isParsing ? 'Analyzing with AI...' : 'Parse & Review',
                     icon: isParsing ? null : LucideIcons.arrowRight,
                     variant: AuraButtonVariant.primary,
-                    backgroundColor: AuraColors.actionGreen,
+                    backgroundColor: auraTheme.primary,
                     textColor: Colors.black,
                     width: double.infinity,
                     onPressed: isParsing
@@ -1363,16 +1363,16 @@ class TodayScreen extends ConsumerWidget {
                           Container(
                             padding: const EdgeInsets.all(6),
                             decoration: BoxDecoration(
-                              color: AuraColors.actionGreen.withValues(alpha: 0.15),
+                              color: auraTheme.primary.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(8),
                             ),
-                            child: const Icon(LucideIcons.sparkles, size: 16, color: AuraColors.actionGreen),
+                            child: Icon(LucideIcons.sparkles, size: 16, color: auraTheme.primary),
                           ),
                           const SizedBox(width: 8),
                           Text(
                             'CONFIRM & COMMIT WORKOUT',
                             style: AuraTypography.sectionHeader.copyWith(
-                              color: AuraColors.actionGreen,
+                              color: auraTheme.primary,
                               letterSpacing: 1.1,
                               fontSize: 11,
                             ),
@@ -1450,16 +1450,16 @@ class TodayScreen extends ConsumerWidget {
                                   return Container(
                                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                     decoration: BoxDecoration(
-                                      color: AuraColors.actionGreen.withValues(alpha: 0.12),
+                                      color: auraTheme.primary.withValues(alpha: 0.12),
                                       borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(color: AuraColors.actionGreen.withValues(alpha: 0.3)),
+                                      border: Border.all(color: auraTheme.primary.withValues(alpha: 0.3)),
                                     ),
                                     child: Text(
                                       'Set ${s.setNumber}: $weightStr${s.targetReps} reps',
-                                      style: const TextStyle(
+                                      style: TextStyle(
                                         fontSize: 11,
                                         fontWeight: FontWeight.w600,
-                                        color: AuraColors.actionGreen,
+                                        color: auraTheme.primary,
                                       ),
                                     ),
                                   );
@@ -1476,7 +1476,7 @@ class TodayScreen extends ConsumerWidget {
                     text: 'Confirm & Save Workout',
                     icon: LucideIcons.checkCheck,
                     variant: AuraButtonVariant.primary,
-                    backgroundColor: AuraColors.actionGreen,
+                    backgroundColor: auraTheme.primary,
                     textColor: Colors.black,
                     width: double.infinity,
                     height: 50,
