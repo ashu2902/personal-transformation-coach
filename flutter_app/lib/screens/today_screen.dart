@@ -1197,6 +1197,7 @@ class TodayScreen extends ConsumerWidget {
     String? targetDate,
     String? initialDayName,
   }) {
+    final auraTheme = context.auraTheme;
     final controller = TextEditingController();
     bool isParsing = false;
 
