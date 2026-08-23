@@ -58,7 +58,14 @@ class EquipmentItem {
     } else if (lower.contains('machine')) {
       cat = 'machine';
     }
-    return EquipmentItem(name: name, category: cat, weightKg: weightKg, notes: notes);
+    double? detectedWeight = weightKg;
+    if (detectedWeight == null) {
+      final match = RegExp(r'(\d+(?:\.\d+)?)\s*(?:kg|lbs|kilos)', caseSensitive: false).firstMatch(name);
+      if (match != null) {
+        detectedWeight = double.tryParse(match.group(1)!);
+      }
+    }
+    return EquipmentItem(name: name, category: cat, weightKg: detectedWeight, notes: notes);
   }
 
   EquipmentItem copyWith({

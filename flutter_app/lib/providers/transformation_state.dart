@@ -10,6 +10,9 @@ import '../engine/exercise_database.dart';
 import '../engine/transformation_orchestrator.dart';
 import '../services/ai_service.dart';
 import '../services/firebase_service.dart';
+import 'mutations/workout_mutations.dart';
+import 'mutations/nutrition_mutations.dart';
+import 'mutations/recovery_mutations.dart';
 
 class DayTrackingStatus {
   final String date;
@@ -261,11 +264,12 @@ class TransformationEngineState {
   }
 }
 
-class TransformationEngineNotifier extends StateNotifier<TransformationEngineState> {
+class TransformationEngineNotifier extends StateNotifier<TransformationEngineState>
+    with WorkoutMutations, NutritionMutations, RecoveryMutations {
   final ITransformationRepository _repository;
-  final FirebaseFirestoreService _firestore = FirebaseFirestoreService();
-  final FirebaseAuthService _auth = FirebaseAuthService();
-  final AIService _aiService = GeminiAIProvider();
+  final FirebaseFirestoreService _firestore;
+  final FirebaseAuthService _auth;
+  final AIService _aiService;
   AIService get aiService => _aiService;
 
   StreamSubscription<DocumentSnapshot>? _workoutSubscription;
@@ -273,10 +277,75 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
   StreamSubscription<DocumentSnapshot>? _recoverySubscription;
   StreamSubscription<QuerySnapshot>? _chatMessagesSubscription;
 
-  TransformationEngineNotifier({ITransformationRepository? repository})
-      : _repository = repository ?? LocalTransformationRepository(),
+  TransformationEngineNotifier({
+    ITransformationRepository? repository,
+    FirebaseFirestoreService? firestore,
+    FirebaseAuthService? auth,
+    AIService? aiService,
+    bool autoInit = true,
+  })  : _repository = repository ?? LocalTransformationRepository(),
+        _firestore = firestore ?? FirebaseFirestoreService(),
+        _auth = auth ?? FirebaseAuthService(),
+        _aiService = aiService ?? GeminiAIProvider(),
         super(_initialState()) {
-    initFromRepository();
+    if (autoInit) {
+      initFromRepository();
+    }
+  }
+
+  @override
+  void saveWorkoutToRemote(DailyWorkout workout) {
+    final uid = _auth.uid;
+    if (uid != null) {
+      _firestore.saveDailyWorkout(uid, state.workout.date, workout);
+    }
+  }
+
+  @override
+  Future<void> saveNutritionToRemote(String date, DailyNutrition nutrition) async {
+    final uid = _auth.uid;
+    if (uid != null) {
+      await _firestore.saveDailyNutrition(uid, date, nutrition);
+    }
+  }
+
+  @override
+  Future<DailyNutrition> getRemoteNutrition(String date) async {
+    final uid = _auth.uid;
+    if (uid != null) {
+      return await _firestore.getDailyNutrition(uid, date);
+    }
+    return state.nutrition;
+  }
+
+  @override
+  void saveRecoveryToRemote(String date, RecoveryCheckIn recovery) {
+    final uid = _auth.uid;
+    if (uid != null) {
+      _firestore.saveDailyRecovery(uid, date, recovery);
+    }
+  }
+
+  @override
+  void handleFatigueDeload(int score) {
+    final todayStr = DateTime.now().toIso8601String().split('T')[0];
+    final uid = _auth.uid;
+    _aiService.generateAIAdaptedWorkout(
+      state,
+      'High fatigue detected (Score: $score%). Deload the workout for active recovery.',
+    ).then((adaptedWorkout) {
+      if (!mounted) return;
+      state = state.copyWith(
+        workout: adaptedWorkout,
+        adaptationNotice: 'High fatigue detected. AI adjusted your workout to an active recovery session.',
+      );
+      if (uid != null) {
+        _firestore.saveDailyWorkout(uid, todayStr, adaptedWorkout);
+      }
+      debugPrint('[AURA STATE] AI adapted workout for high fatigue recovery.');
+    }).catchError((e) {
+      debugPrint('[AURA STATE] AI workout adaptation failed: $e');
+    });
   }
 
   Future<void> initFromRepository() async {
@@ -580,6 +649,43 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
     );
   }
 
+  Future<void> deleteAccount() async {
+    debugPrint('[AURA STATE] Deleting user account and archiving data...');
+
+    final uid = _auth.uid;
+    if (uid != null && uid.isNotEmpty) {
+      try {
+        await _firestore.archiveAndDeleteUserData(uid);
+      } catch (e) {
+        debugPrint('[AURA STATE] Error archiving Firestore user data: $e');
+      }
+    }
+
+    try {
+      await _auth.deleteAccount();
+    } catch (e) {
+      debugPrint('[AURA STATE] Error deleting Firebase Auth user: $e');
+      rethrow; // Abort here, don't clear local state!
+    }
+
+    // Only clean up state if auth deletion succeeds
+    _workoutSubscription?.cancel();
+    _nutritionSubscription?.cancel();
+    _recoverySubscription?.cancel();
+    _chatMessagesSubscription?.cancel();
+
+    try {
+      await _repository.clearAll();
+    } catch (e) {
+      debugPrint('[AURA STATE] Error clearing local repository: $e');
+    }
+
+    state = _initialState().copyWith(
+      isOnboardingComplete: false,
+      isInitializing: false,
+    );
+  }
+
   static TransformationEngineState _initialState() {
     final todayStr = DateTime.now().toIso8601String().split('T')[0];
 
@@ -643,14 +749,7 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
         ProgressEntry(date: '2026-08-09', weightKg: 78.9, bodyFatPercent: 18.0),
         ProgressEntry(date: '2026-08-10', weightKg: 78.6, bodyFatPercent: 17.9),
       ],
-      chatMessages: [
-        ChatMessage(
-          id: 'm1',
-          sender: 'ai',
-          text: "Welcome back, Vance. Transformation baseline active. Ready for today's workout?",
-          timestamp: '09:00 AM',
-        )
-      ],
+      chatMessages: [],
       isOnboardingComplete: true,
       adaptationNotice: "Welcome to AURA! Tap 'Sleep' or 'Aches' below to log your state, or message me in the Coach tab to begin.",
     );
@@ -666,14 +765,46 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
   Future<void> completeOnboardingWithPlan(UserProfile newProfile, DailyNutrition nutrition, DailyWorkout workout) async {
     debugPrint('[AURA STATE] Completing onboarding with synthesized plan for ${newProfile.name}...');
     debugPrint('[AURA STATE] Baseline setup: Target Calories ${nutrition.targetCalories} kcal, Target Protein ${nutrition.targetProteinG}g');
-    final todayStr = DateTime.now().toIso8601String().split('T')[0];
+    final now = DateTime.now();
+    final todayStr = now.toIso8601String().split('T')[0];
     final initProgress = ProgressEntry(date: todayStr, weightKg: newProfile.weightKg, notes: 'Initial baseline setup');
+
+    DailyWorkout initialWorkout = workout;
+    DailyWorkout? tomorrowWorkout;
+    
+    // If it's late, schedule the workout for tomorrow instead
+    if (now.hour >= 18) {
+      final tomorrowStr = now.add(const Duration(days: 1)).toIso8601String().split('T')[0];
+      tomorrowWorkout = workout.copyWith(
+        id: workout.id.replaceAll(todayStr, tomorrowStr),
+        date: tomorrowStr,
+      );
+      initialWorkout = DailyWorkout(
+        id: 'rest_$todayStr',
+        date: todayStr,
+        title: 'Rest & Recover',
+        focusArea: 'Active Recovery',
+        estimatedDurationMin: 0,
+        status: WorkoutStatus.scheduled,
+        exercises: [],
+        adaptationNote: "It's late, so your first workout is scheduled for tomorrow. Rest up!",
+      );
+    }
 
     state = state.copyWith(
       profile: newProfile,
       nutrition: nutrition,
-      workout: workout,
+      workout: initialWorkout,
       progressHistory: [initProgress],
+      chatMessages: [
+        ChatMessage(
+          id: 'welcome_1',
+          sender: 'ai',
+          text: "Welcome to AURA, ${newProfile.name}! I've generated your baseline plan. Ready to get started?",
+          timestamp: 'Just now',
+          createdAt: DateTime.now(),
+        )
+      ],
       isOnboardingComplete: true,
       adaptationNotice: "Welcome to AURA, ${newProfile.name}! Tap 'Sleep' or 'Aches' below to log your state, or message me in the Coach tab to begin.",
     );
@@ -684,7 +815,10 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
       return;
     }
     await _firestore.saveUserProfile(uid, newProfile);
-    await _firestore.saveDailyWorkout(uid, todayStr, workout);
+    await _firestore.saveDailyWorkout(uid, todayStr, initialWorkout);
+    if (tomorrowWorkout != null) {
+      await _firestore.saveDailyWorkout(uid, tomorrowWorkout.date, tomorrowWorkout);
+    }
     await _firestore.saveDailyNutrition(uid, todayStr, nutrition);
     await _repository.saveProgressEntry(initProgress);
     
@@ -693,8 +827,8 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
     // Load master context
     _loadMasterContext(uid);
 
-    // Load weekly plan for current week
-    _loadCurrentWeeklyPlan(uid);
+    // Generate weekly plan in the background so it's ready
+    generateWeeklyPlan();
 
     debugPrint('[AURA STATE] Onboarding completed & baseline saved online!');
   }
@@ -1472,83 +1606,6 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
     if (!mounted) return;
     state = state.copyWith(
       isAiThinking: false,
-    );
-  }
-
-  void updateRecoveryCheckIn({
-    required double sleepHours,
-    required int sleepQuality,
-    required int muscleSoreness,
-    required int energyLevel,
-    required int stressLevel,
-  }) {
-    final sleepScore = ((sleepHours / 8.0).clamp(0.0, 1.2)) * 10 * (sleepQuality / 10.0);
-    final score = ((sleepScore * 3.5) + (energyLevel * 3.5) + ((10 - muscleSoreness) * 2.0) + ((10 - stressLevel) * 1.0)).round().clamp(20, 100);
-
-    String statusText = 'Optimal Adaptation';
-    if (score < 50) {
-      statusText = 'High Fatigue (Deload Advised)';
-    } else if (score < 70) {
-      statusText = 'Moderate Readiness';
-    }
-
-    debugPrint('[AURA STATE] Recovery Check-in updated: Score $score% ($statusText)');
-    final todayStr = DateTime.now().toIso8601String().split('T')[0];
-
-    final updatedRecovery = RecoveryCheckIn(
-      date: todayStr,
-      sleepHours: sleepHours,
-      sleepQuality: sleepQuality,
-      muscleSoreness: muscleSoreness,
-      energyLevel: energyLevel,
-      stressLevel: stressLevel,
-      recoveryScore: score,
-      status: statusText,
-    );
-
-    final uid = _auth.uid;
-    if (uid != null) {
-      _firestore.saveDailyRecovery(uid, todayStr, updatedRecovery);
-    }
-
-    // If high fatigue, ask AI to adapt workout asynchronously
-    if (score < 50) {
-      _aiService.generateAIAdaptedWorkout(
-        state,
-        'High fatigue detected (Score: $score%). Deload the workout for active recovery.',
-      ).then((adaptedWorkout) {
-        if (!mounted) return;
-        state = state.copyWith(
-          workout: adaptedWorkout,
-          adaptationNotice: 'High fatigue detected. AI adjusted your workout to an active recovery session.',
-        );
-        if (uid != null) {
-          _firestore.saveDailyWorkout(uid, todayStr, adaptedWorkout);
-        }
-        debugPrint('[AURA STATE] AI adapted workout for high fatigue recovery.');
-      }).catchError((e) {
-        debugPrint('[AURA STATE] AI workout adaptation failed: $e');
-      });
-    }
-  }
-
-  void updateSleep(double sleepHours) {
-    updateRecoveryCheckIn(
-      sleepHours: sleepHours,
-      sleepQuality: state.recovery.sleepQuality,
-      muscleSoreness: state.recovery.muscleSoreness,
-      energyLevel: state.recovery.energyLevel,
-      stressLevel: state.recovery.stressLevel,
-    );
-  }
-
-  void updateSoreness(int soreness) {
-    updateRecoveryCheckIn(
-      sleepHours: state.recovery.sleepHours,
-      sleepQuality: state.recovery.sleepQuality,
-      muscleSoreness: soreness,
-      energyLevel: state.recovery.energyLevel,
-      stressLevel: state.recovery.stressLevel,
     );
   }
 

@@ -28,6 +28,7 @@ class AuraAnalyticsEvents {
   static const String soulSwitched = 'soul_switched';
   static const String goalUpdated = 'goal_updated';
   static const String screenViewed = 'screen_viewed';
+  static const String accountDeleted = 'account_deleted';
 }
 
 /// Abstract Analytics Service interface for clean separation of concerns
@@ -44,6 +45,11 @@ abstract class IAnalyticsService {
 /// Mixpanel Analytics Service implementation using mixpanel_flutter
 class MixpanelAnalyticsService implements IAnalyticsService {
   static const String _projectToken = '0285e0bfe983b61f50aa622f570535af';
+  static final MixpanelAnalyticsService _instance = MixpanelAnalyticsService._internal();
+
+  factory MixpanelAnalyticsService() => _instance;
+
+  MixpanelAnalyticsService._internal();
 
   Mixpanel? _mixpanel;
   bool _isInitialized = false;

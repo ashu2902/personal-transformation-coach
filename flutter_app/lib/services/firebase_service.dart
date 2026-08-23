@@ -8,17 +8,27 @@ import 'transformation_repository.dart';
 import 'analytics_service.dart';
 
 class FirebaseAuthService {
-  final FirebaseAuth _auth = FirebaseAuth.instance;
-  final IAnalyticsService _analytics = MixpanelAnalyticsService();
+  final FirebaseAuth? _auth;
+  final IAnalyticsService _analytics;
 
-  String? get uid => _auth.currentUser?.uid;
-  String? get email => _auth.currentUser?.email;
-  String? get displayName => _auth.currentUser?.displayName;
-  bool get isAuthenticated => _auth.currentUser != null;
+  FirebaseAuthService({
+    FirebaseAuth? auth,
+    IAnalyticsService? analytics,
+  })  : _auth = auth ??
+            (Firebase.apps.isNotEmpty
+                ? FirebaseAuth.instanceFor(app: Firebase.app())
+                : null),
+        _analytics = analytics ?? MixpanelAnalyticsService();
+
+  String? get uid => _auth?.currentUser?.uid;
+  String? get email => _auth?.currentUser?.email;
+  String? get displayName => _auth?.currentUser?.displayName;
+  bool get isAuthenticated => _auth?.currentUser != null;
 
   Future<UserCredential?> signInWithGoogle() async {
     try {
-      final cred = await _auth.signInWithPopup(GoogleAuthProvider());
+      if (_auth == null) return null;
+      final cred = await _auth!.signInWithPopup(GoogleAuthProvider());
       final user = cred.user;
       if (user != null) {
         await _analytics.setUserId(user.uid);
@@ -37,7 +47,8 @@ class FirebaseAuthService {
 
   Future<UserCredential?> signUpWithEmailAndPassword(String email, String password) async {
     try {
-      final cred = await _auth.createUserWithEmailAndPassword(email: email, password: password);
+      if (_auth == null) return null;
+      final cred = await _auth!.createUserWithEmailAndPassword(email: email, password: password);
       final user = cred.user;
       if (user != null) {
         await _analytics.setUserId(user.uid);
@@ -48,29 +59,30 @@ class FirebaseAuthService {
       }
       return cred;
     } catch (e) {
-      debugPrint('[FIREBASE AUTH] Email sign-up error: $e');
-      // If account exists, try signing in instead
-      try {
-        final cred = await _auth.signInWithEmailAndPassword(email: email, password: password);
-        final user = cred.user;
-        if (user != null) {
-          await _analytics.setUserId(user.uid);
-          await _analytics.setUserProperties({
-            r'$email': email,
-            'sign_up_method': 'email',
-          });
-        }
-        return cred;
-      } catch (e2) {
-        debugPrint('[FIREBASE AUTH] Email sign-in fallback error: $e2');
-        return null;
+      debugPrint('[FIREBASE AUTH] Sign-Up error: $e');
+      return null;
+    }
+  }
+
+  Future<UserCredential?> signInWithEmailAndPassword(String email, String password) async {
+    try {
+      if (_auth == null) return null;
+      final cred = await _auth!.signInWithEmailAndPassword(email: email, password: password);
+      final user = cred.user;
+      if (user != null) {
+        await _analytics.setUserId(user.uid);
       }
+      return cred;
+    } catch (e) {
+      debugPrint('[FIREBASE AUTH] Sign-In error: $e');
+      return null;
     }
   }
 
   Future<UserCredential?> signInAnonymously() async {
     try {
-      final cred = await _auth.signInAnonymously();
+      if (_auth == null) return null;
+      final cred = await _auth!.signInAnonymously();
       final user = cred.user;
       if (user != null) {
         await _analytics.setUserId(user.uid);
@@ -80,20 +92,46 @@ class FirebaseAuthService {
       }
       return cred;
     } catch (e) {
-      debugPrint('[FIREBASE AUTH] Anonymous sign-in error: $e');
+      debugPrint('[FIREBASE AUTH] Anonymous Sign-In error: $e');
       return null;
     }
   }
 
   Future<void> signOut() async {
     await _analytics.reset();
-    await _auth.signOut();
+    if (_auth != null) {
+      await _auth!.signOut();
+    }
+  }
+
+  Future<void> deleteAccount() async {
+    try {
+      await _analytics.logEvent(AuraAnalyticsEvents.accountDeleted, properties: {'reason': 'user_requested'});
+    } catch (e) {
+      debugPrint('[FIREBASE AUTH] Analytics log error on delete: $e');
+    }
+    await _analytics.reset();
+    final user = _auth?.currentUser;
+    if (user != null) {
+      await user.delete();
+    }
   }
 }
 
 class FirebaseFirestoreService {
-  final FirebaseFirestore _db = FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default');
-  final ITransformationRepository _localRepo = LocalTransformationRepository();
+  final FirebaseFirestore? _firestoreInstance;
+  final ITransformationRepository _localRepo;
+
+  FirebaseFirestoreService({
+    FirebaseFirestore? firestore,
+    ITransformationRepository? localRepo,
+  })  : _firestoreInstance = firestore ??
+            (Firebase.apps.isNotEmpty
+                ? FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
+                : null),
+        _localRepo = localRepo ?? LocalTransformationRepository();
+
+  FirebaseFirestore? get _db => _firestoreInstance;
 
   // ─── User Profile ───
 
@@ -123,11 +161,13 @@ class FirebaseFirestoreService {
       'updatedAt': FieldValue.serverTimestamp(),
     };
     try {
-      await _db
-          .collection('users')
-          .doc(uid)
-          .set(map, SetOptions(merge: true))
-          .timeout(const Duration(seconds: 15));
+      if (_db != null) {
+        await _db!
+            .collection('users')
+            .doc(uid)
+            .set(map, SetOptions(merge: true))
+            .timeout(const Duration(seconds: 15));
+      }
     } catch (e) {
       debugPrint('[FIRESTORE ERROR] saveUserProfile failed: $e');
     }
@@ -136,50 +176,52 @@ class FirebaseFirestoreService {
 
   Future<UserProfile?> getUserProfile(String uid) async {
     try {
-      final doc = await _db
-          .collection('users')
-          .doc(uid)
-          .get()
-          .timeout(const Duration(seconds: 15));
-      if (doc.exists && doc.data() != null) {
-        final map = doc.data()!;
-        List<EquipmentItem> equipItems = [];
-        if (map['equipmentList'] is List) {
-          equipItems = (map['equipmentList'] as List)
-              .map((e) => EquipmentItem.fromMap(Map<String, dynamic>.from(e as Map)))
-              .toList();
-        } else if (map['availableEquipment'] is List) {
-          equipItems = (map['availableEquipment'] as List)
-              .map((e) => EquipmentItem.fromString(e.toString()))
-              .toList();
-        }
-        if (equipItems.isEmpty) {
-          equipItems = [const EquipmentItem(name: 'Bodyweight', category: 'bodyweight')];
-        }
+      if (_db != null) {
+        final doc = await _db!
+            .collection('users')
+            .doc(uid)
+            .get()
+            .timeout(const Duration(seconds: 15));
+        if (doc.exists && doc.data() != null) {
+          final map = doc.data()!;
+          List<EquipmentItem> equipItems = [];
+          if (map['equipmentList'] is List) {
+            equipItems = (map['equipmentList'] as List)
+                .map((e) => EquipmentItem.fromMap(Map<String, dynamic>.from(e as Map)))
+                .toList();
+          } else if (map['availableEquipment'] is List) {
+            equipItems = (map['availableEquipment'] as List)
+                .map((e) => EquipmentItem.fromString(e.toString()))
+                .toList();
+          }
+          if (equipItems.isEmpty) {
+            equipItems = [const EquipmentItem(name: 'Bodyweight', category: 'bodyweight')];
+          }
 
-        final profile = UserProfile(
-          name: map['name'] ?? '',
-          age: map['age'] ?? 25,
-          gender: map['gender'] ?? 'male',
-          heightCm: (map['heightCm'] as num?)?.toDouble() ?? 170.0,
-          weightKg: (map['weightKg'] as num?)?.toDouble() ?? 70.0,
-          targetWeightKg: (map['targetWeightKg'] as num?)?.toDouble() ?? 68.0,
-          goal: GoalType.values.firstWhere((g) => g.name == map['goal'], orElse: () => GoalType.recomp),
-          daysPerWeek: map['daysPerWeek'] ?? 4,
-          targetPhysique: map['targetPhysique'] ?? 'Athletic Physique',
-          equipmentList: equipItems,
-          experienceLevel: ExperienceLevel.values.firstWhere((exp) => exp.name == map['experienceLevel'], orElse: () => ExperienceLevel.intermediate),
-          benchPress1RMKg: (map['benchPress1RMKg'] as num?)?.toDouble(),
-          squat1RMKg: (map['squat1RMKg'] as num?)?.toDouble(),
-          deadlift1RMKg: (map['deadlift1RMKg'] as num?)?.toDouble(),
-          activeInjuries: (map['activeInjuries'] as List? ?? []).map((e) => e.toString()).toList(),
-          dislikedExercises: (map['dislikedExercises'] as List? ?? []).map((e) => e.toString()).toList(),
-          personalNotes: (map['personalNotes'] as List? ?? []).map((e) => e.toString()).toList(),
-          coachSoul: CoachSoul.values.firstWhere((c) => c.name == map['coachSoul'], orElse: () => CoachSoul.supporter),
-          dietaryPreference: map['dietaryPreference'] ?? 'nonVeg',
-          createdAtDateStr: map['createdAtDateStr']?.toString(),
-        );
-        return profile;
+          final profile = UserProfile(
+            name: map['name'] ?? '',
+            age: map['age'] ?? 25,
+            gender: map['gender'] ?? 'male',
+            heightCm: (map['heightCm'] as num?)?.toDouble() ?? 170.0,
+            weightKg: (map['weightKg'] as num?)?.toDouble() ?? 70.0,
+            targetWeightKg: (map['targetWeightKg'] as num?)?.toDouble() ?? 68.0,
+            goal: GoalType.values.firstWhere((g) => g.name == map['goal'], orElse: () => GoalType.recomp),
+            daysPerWeek: map['daysPerWeek'] ?? 4,
+            targetPhysique: map['targetPhysique'] ?? 'Athletic Physique',
+            equipmentList: equipItems,
+            experienceLevel: ExperienceLevel.values.firstWhere((exp) => exp.name == map['experienceLevel'], orElse: () => ExperienceLevel.intermediate),
+            benchPress1RMKg: (map['benchPress1RMKg'] as num?)?.toDouble(),
+            squat1RMKg: (map['squat1RMKg'] as num?)?.toDouble(),
+            deadlift1RMKg: (map['deadlift1RMKg'] as num?)?.toDouble(),
+            activeInjuries: (map['activeInjuries'] as List? ?? []).map((e) => e.toString()).toList(),
+            dislikedExercises: (map['dislikedExercises'] as List? ?? []).map((e) => e.toString()).toList(),
+            personalNotes: (map['personalNotes'] as List? ?? []).map((e) => e.toString()).toList(),
+            coachSoul: CoachSoul.values.firstWhere((c) => c.name == map['coachSoul'], orElse: () => CoachSoul.supporter),
+            dietaryPreference: map['dietaryPreference'] ?? 'nonVeg',
+            createdAtDateStr: map['createdAtDateStr']?.toString(),
+          );
+          return profile;
+        }
       }
     } catch (e) {
       debugPrint('[FIRESTORE ERROR] getUserProfile failed: $e');
@@ -191,23 +233,26 @@ class FirebaseFirestoreService {
 
   Future<void> saveDailyWorkout(String uid, String dateStr, DailyWorkout workout) async {
     try {
-      await _db
-          .collection('users')
-          .doc(uid)
-          .collection('workouts')
-          .doc(dateStr)
-          .set({
-            ...workoutToMap(workout),
-            'updatedAt': FieldValue.serverTimestamp(),
-          })
-          .timeout(const Duration(seconds: 15));
+      if (_db != null) {
+        await _db!
+            .collection('users')
+            .doc(uid)
+            .collection('workouts')
+            .doc(dateStr)
+            .set({
+              ...workoutToMap(workout),
+              'updatedAt': FieldValue.serverTimestamp(),
+            })
+            .timeout(const Duration(seconds: 15));
+      }
     } catch (e) {
       debugPrint('[FIRESTORE ERROR] saveDailyWorkout failed: $e');
     }
   }
 
   Stream<DocumentSnapshot> getWorkoutStream(String uid, String dateStr) {
-    return _db
+    if (_db == null) return const Stream.empty();
+    return _db!
         .collection('users')
         .doc(uid)
         .collection('workouts')
@@ -217,15 +262,17 @@ class FirebaseFirestoreService {
 
   Future<DailyWorkout?> getDailyWorkout(String uid, String dateStr) async {
     try {
-      final doc = await _db
-          .collection('users')
-          .doc(uid)
-          .collection('workouts')
-          .doc(dateStr)
-          .get()
-          .timeout(const Duration(seconds: 15));
-      if (doc.exists && doc.data() != null) {
-        return workoutFromMap(doc.data()!);
+      if (_db != null) {
+        final doc = await _db!
+            .collection('users')
+            .doc(uid)
+            .collection('workouts')
+            .doc(dateStr)
+            .get()
+            .timeout(const Duration(seconds: 15));
+        if (doc.exists && doc.data() != null) {
+          return workoutFromMap(doc.data()!);
+        }
       }
       return null;
     } catch (e) {
@@ -236,21 +283,24 @@ class FirebaseFirestoreService {
 
   Future<Map<String, DailyWorkout>> getRecentWorkouts(String uid, {int limit = 14}) async {
     try {
-      final snapshot = await _db
-          .collection('users')
-          .doc(uid)
-          .collection('workouts')
-          .orderBy('date', descending: true)
-          .limit(limit)
-          .get()
-          .timeout(const Duration(seconds: 15));
-      final map = <String, DailyWorkout>{};
-      for (final doc in snapshot.docs) {
-        final data = doc.data();
-        final w = workoutFromMap(data);
-        map[w.date] = w;
+      if (_db != null) {
+        final snapshot = await _db!
+            .collection('users')
+            .doc(uid)
+            .collection('workouts')
+            .orderBy('date', descending: true)
+            .limit(limit)
+            .get()
+            .timeout(const Duration(seconds: 15));
+        final map = <String, DailyWorkout>{};
+        for (final doc in snapshot.docs) {
+          final data = doc.data();
+          final w = workoutFromMap(data);
+          map[w.date] = w;
+        }
+        return map;
       }
-      return map;
+      return {};
     } catch (e) {
       debugPrint('[FIRESTORE ERROR] getRecentWorkouts failed: $e');
       return {};
@@ -261,23 +311,26 @@ class FirebaseFirestoreService {
 
   Future<void> saveDailyNutrition(String uid, String dateStr, DailyNutrition nutrition) async {
     try {
-      await _db
-          .collection('users')
-          .doc(uid)
-          .collection('nutrition')
-          .doc(dateStr)
-          .set({
-            ...nutritionToMap(nutrition),
-            'updatedAt': FieldValue.serverTimestamp(),
-          })
-          .timeout(const Duration(seconds: 15));
+      if (_db != null) {
+        await _db!
+            .collection('users')
+            .doc(uid)
+            .collection('nutrition')
+            .doc(dateStr)
+            .set({
+              ...nutritionToMap(nutrition),
+              'updatedAt': FieldValue.serverTimestamp(),
+            })
+            .timeout(const Duration(seconds: 15));
+      }
     } catch (e) {
       debugPrint('[FIRESTORE ERROR] saveDailyNutrition failed: $e');
     }
   }
 
   Stream<DocumentSnapshot> getNutritionStream(String uid, String dateStr) {
-    return _db
+    if (_db == null) return const Stream.empty();
+    return _db!
         .collection('users')
         .doc(uid)
         .collection('nutrition')
@@ -287,15 +340,17 @@ class FirebaseFirestoreService {
 
   Future<DailyNutrition> getDailyNutrition(String uid, String dateStr) async {
     try {
-      final doc = await _db
-          .collection('users')
-          .doc(uid)
-          .collection('nutrition')
-          .doc(dateStr)
-          .get()
-          .timeout(const Duration(seconds: 10));
-      if (doc.exists && doc.data() != null) {
-        return nutritionFromMap(doc.data()!);
+      if (_db != null) {
+        final doc = await _db!
+            .collection('users')
+            .doc(uid)
+            .collection('nutrition')
+            .doc(dateStr)
+            .get()
+            .timeout(const Duration(seconds: 10));
+        if (doc.exists && doc.data() != null) {
+          return nutritionFromMap(doc.data()!);
+        }
       }
     } catch (e) {
       debugPrint('[FIRESTORE ERROR] getDailyNutrition failed for $dateStr: $e');
@@ -316,23 +371,26 @@ class FirebaseFirestoreService {
 
   Future<void> saveDailyRecovery(String uid, String dateStr, RecoveryCheckIn recovery) async {
     try {
-      await _db
-          .collection('users')
-          .doc(uid)
-          .collection('recovery')
-          .doc(dateStr)
-          .set({
-            ...recoveryToMap(recovery),
-            'updatedAt': FieldValue.serverTimestamp(),
-          })
-          .timeout(const Duration(seconds: 15));
+      if (_db != null) {
+        await _db!
+            .collection('users')
+            .doc(uid)
+            .collection('recovery')
+            .doc(dateStr)
+            .set({
+              ...recoveryToMap(recovery),
+              'updatedAt': FieldValue.serverTimestamp(),
+            })
+            .timeout(const Duration(seconds: 15));
+      }
     } catch (e) {
       debugPrint('[FIRESTORE ERROR] saveDailyRecovery failed: $e');
     }
   }
 
   Stream<DocumentSnapshot> getRecoveryStream(String uid, String dateStr) {
-    return _db
+    if (_db == null) return const Stream.empty();
+    return _db!
         .collection('users')
         .doc(uid)
         .collection('recovery')
@@ -344,21 +402,23 @@ class FirebaseFirestoreService {
 
   Future<void> saveProgress(String uid, String dateStr, ProgressEntry entry) async {
     try {
-      await _db
-          .collection('users')
-          .doc(uid)
-          .collection('progress')
-          .doc(dateStr)
-          .set({
-            'date': entry.date,
-            'weightKg': entry.weightKg,
-            'bodyFatPercent': entry.bodyFatPercent,
-            'waistCm': entry.waistCm,
-            'notes': entry.notes,
-            if (entry.workoutStatus != null) 'workoutStatus': entry.workoutStatus!.name,
-            'updatedAt': FieldValue.serverTimestamp(),
-          })
-          .timeout(const Duration(seconds: 15));
+      if (_db != null) {
+        await _db!
+            .collection('users')
+            .doc(uid)
+            .collection('progress')
+            .doc(dateStr)
+            .set({
+              'date': entry.date,
+              'weightKg': entry.weightKg,
+              'bodyFatPercent': entry.bodyFatPercent,
+              'waistCm': entry.waistCm,
+              'notes': entry.notes,
+              if (entry.workoutStatus != null) 'workoutStatus': entry.workoutStatus!.name,
+              'updatedAt': FieldValue.serverTimestamp(),
+            })
+            .timeout(const Duration(seconds: 15));
+      }
     } catch (e) {
       debugPrint('[FIRESTORE ERROR] saveProgress failed: $e');
     }
@@ -366,74 +426,79 @@ class FirebaseFirestoreService {
 
   Future<List<ProgressEntry>> getProgressHistory(String uid, {int limit = 30}) async {
     try {
-      final snapshot = await _db
-          .collection('users')
-          .doc(uid)
-          .collection('progress')
-          .orderBy('date', descending: true)
-          .limit(limit)
-          .get()
-          .timeout(const Duration(seconds: 15));
-      return snapshot.docs.map((doc) {
-        final map = doc.data();
-        final notesStr = map['notes']?.toString().toLowerCase() ?? '';
-        final fallbackStatus = notesStr.contains('skipped')
-            ? WorkoutStatus.skipped
-            : (notesStr.contains('workout') ? WorkoutStatus.completed : null);
+      if (_db != null) {
+        final snapshot = await _db!
+            .collection('users')
+            .doc(uid)
+            .collection('progress')
+            .orderBy('date', descending: true)
+            .limit(limit)
+            .get()
+            .timeout(const Duration(seconds: 15));
+        return snapshot.docs.map((doc) {
+          final map = doc.data();
+          final notesStr = map['notes']?.toString().toLowerCase() ?? '';
+          final fallbackStatus = notesStr.contains('skipped')
+              ? WorkoutStatus.skipped
+              : (notesStr.contains('workout') ? WorkoutStatus.completed : null);
 
-        final rawStatus = map['workoutStatus']?.toString();
-        final status = rawStatus != null
-            ? WorkoutStatus.values.firstWhere(
-                (s) => s.name == rawStatus,
-                orElse: () => fallbackStatus ?? WorkoutStatus.completed,
-              )
-            : fallbackStatus;
+          final rawStatus = map['workoutStatus']?.toString();
+          final status = rawStatus != null
+              ? WorkoutStatus.values.firstWhere(
+                  (s) => s.name == rawStatus,
+                  orElse: () => fallbackStatus ?? WorkoutStatus.completed,
+                )
+              : fallbackStatus;
 
-        return ProgressEntry(
-          date: map['date'] ?? doc.id,
-          weightKg: (map['weightKg'] as num?)?.toDouble() ?? 0.0,
-          bodyFatPercent: (map['bodyFatPercent'] as num?)?.toDouble(),
-          waistCm: (map['waistCm'] as num?)?.toDouble(),
-          notes: map['notes'],
-          workoutStatus: status,
-        );
-      }).toList();
+          return ProgressEntry(
+            date: map['date'] ?? doc.id,
+            weightKg: (map['weightKg'] as num?)?.toDouble() ?? 0.0,
+            bodyFatPercent: (map['bodyFatPercent'] as num?)?.toDouble(),
+            waistCm: (map['waistCm'] as num?)?.toDouble(),
+            notes: map['notes'],
+            workoutStatus: status,
+          );
+        }).toList();
+      }
     } catch (e) {
       debugPrint('[FIRESTORE ERROR] getProgressHistory failed: $e');
-      return [];
     }
+    return [];
   }
 
   // ─── Chat Messages (Paginated) ───
 
   Future<void> saveChatMessage(String uid, ChatMessage message) async {
     try {
-      final docData = <String, dynamic>{
-        'id': message.id,
-        'sender': message.sender,
-        'text': message.text,
-        'timestamp': message.timestamp,
-        'serverTimestamp': FieldValue.serverTimestamp(),
-      };
-      if (message.imageBytes != null && message.imageBytes!.isNotEmpty) {
-        docData['imageBase64'] = base64Encode(message.imageBytes!);
+      if (_db != null) {
+        final docData = <String, dynamic>{
+          'id': message.id,
+          'sender': message.sender,
+          'text': message.text,
+          'timestamp': message.timestamp,
+          'serverTimestamp': FieldValue.serverTimestamp(),
+        };
+        if (message.imageBytes != null && message.imageBytes!.isNotEmpty) {
+          docData['imageBase64'] = base64Encode(message.imageBytes!);
+        }
+        await _db!
+            .collection('users')
+            .doc(uid)
+            .collection('chats')
+            .doc('default_chat')
+            .collection('messages')
+            .doc(message.id)
+            .set(docData)
+            .timeout(const Duration(seconds: 15));
       }
-      await _db
-          .collection('users')
-          .doc(uid)
-          .collection('chats')
-          .doc('default_chat')
-          .collection('messages')
-          .doc(message.id)
-          .set(docData)
-          .timeout(const Duration(seconds: 15));
     } catch (e) {
       debugPrint('[FIRESTORE ERROR] saveChatMessage failed: $e');
     }
   }
 
   Stream<QuerySnapshot> getChatMessagesStream(String uid, {int limit = 50}) {
-    return _db
+    if (_db == null) return const Stream.empty();
+    return _db!
         .collection('users')
         .doc(uid)
         .collection('chats')
@@ -448,16 +513,18 @@ class FirebaseFirestoreService {
 
   Future<void> saveWeeklyPlan(String uid, WeeklyPlan plan) async {
     try {
-      await _db
-          .collection('users')
-          .doc(uid)
-          .collection('weekly_plans')
-          .doc(plan.weekId)
-          .set({
-            ...weeklyPlanToMap(plan),
-            'updatedAt': FieldValue.serverTimestamp(),
-          })
-          .timeout(const Duration(seconds: 15));
+      if (_db != null) {
+        await _db!
+            .collection('users')
+            .doc(uid)
+            .collection('weekly_plans')
+            .doc(plan.weekId)
+            .set({
+              ...weeklyPlanToMap(plan),
+              'updatedAt': FieldValue.serverTimestamp(),
+            })
+            .timeout(const Duration(seconds: 15));
+      }
     } catch (e) {
       debugPrint('[FIRESTORE ERROR] saveWeeklyPlan failed: $e');
     }
@@ -465,15 +532,17 @@ class FirebaseFirestoreService {
 
   Future<WeeklyPlan?> getWeeklyPlan(String uid, String weekId) async {
     try {
-      final doc = await _db
-          .collection('users')
-          .doc(uid)
-          .collection('weekly_plans')
-          .doc(weekId)
-          .get()
-          .timeout(const Duration(seconds: 15));
-      if (doc.exists && doc.data() != null) {
-        return weeklyPlanFromMap(doc.data()!);
+      if (_db != null) {
+        final doc = await _db!
+            .collection('users')
+            .doc(uid)
+            .collection('weekly_plans')
+            .doc(weekId)
+            .get()
+            .timeout(const Duration(seconds: 15));
+        if (doc.exists && doc.data() != null) {
+          return weeklyPlanFromMap(doc.data()!);
+        }
       }
     } catch (e) {
       debugPrint('[FIRESTORE ERROR] getWeeklyPlan failed: $e');
@@ -482,7 +551,8 @@ class FirebaseFirestoreService {
   }
 
   Stream<DocumentSnapshot> getWeeklyPlanStream(String uid, String weekId) {
-    return _db
+    if (_db == null) return const Stream.empty();
+    return _db!
         .collection('users')
         .doc(uid)
         .collection('weekly_plans')
@@ -494,16 +564,18 @@ class FirebaseFirestoreService {
 
   Future<void> saveMasterContext(String uid, MasterContext ctx) async {
     try {
-      await _db
-          .collection('users')
-          .doc(uid)
-          .collection('master_context')
-          .doc('current')
-          .set({
-            ...masterContextToMap(ctx),
-            'updatedAt': FieldValue.serverTimestamp(),
-          })
-          .timeout(const Duration(seconds: 15));
+      if (_db != null) {
+        await _db!
+            .collection('users')
+            .doc(uid)
+            .collection('master_context')
+            .doc('current')
+            .set({
+              ...masterContextToMap(ctx),
+              'updatedAt': FieldValue.serverTimestamp(),
+            })
+            .timeout(const Duration(seconds: 15));
+      }
     } catch (e) {
       debugPrint('[FIRESTORE ERROR] saveMasterContext failed: $e');
     }
@@ -511,15 +583,17 @@ class FirebaseFirestoreService {
 
   Future<MasterContext?> getMasterContext(String uid) async {
     try {
-      final doc = await _db
-          .collection('users')
-          .doc(uid)
-          .collection('master_context')
-          .doc('current')
-          .get()
-          .timeout(const Duration(seconds: 15));
-      if (doc.exists && doc.data() != null) {
-        return masterContextFromMap(doc.data()!);
+      if (_db != null) {
+        final doc = await _db!
+            .collection('users')
+            .doc(uid)
+            .collection('master_context')
+            .doc('current')
+            .get()
+            .timeout(const Duration(seconds: 15));
+        if (doc.exists && doc.data() != null) {
+          return masterContextFromMap(doc.data()!);
+        }
       }
     } catch (e) {
       debugPrint('[FIRESTORE ERROR] getMasterContext failed: $e');
@@ -528,12 +602,84 @@ class FirebaseFirestoreService {
   }
 
   Stream<DocumentSnapshot> getMasterContextStream(String uid) {
-    return _db
+    if (_db == null) return const Stream.empty();
+    return _db!
         .collection('users')
         .doc(uid)
         .collection('master_context')
         .doc('current')
         .snapshots();
+  }
+
+  // ─── Account Archiving & Deletion ───
+
+  Future<void> archiveAndDeleteUserData(String uid) async {
+    final db = _db;
+    if (db == null) return;
+    debugPrint('[FIRESTORE ARCHIVE] Archiving and deleting data for UID: $uid');
+    try {
+      final userDocRef = db.collection('users').doc(uid);
+      final deletedUserDocRef = db.collection('deleted_users').doc(uid);
+
+      // 1. Fetch & archive the main user profile doc
+      final userSnap = await userDocRef.get().timeout(const Duration(seconds: 15));
+      if (userSnap.exists && userSnap.data() != null) {
+        final userData = Map<String, dynamic>.from(userSnap.data()!);
+        userData['archivedAt'] = FieldValue.serverTimestamp();
+        await deletedUserDocRef.set(userData, SetOptions(merge: true));
+      } else {
+        await deletedUserDocRef.set({
+          'uid': uid,
+          'archivedAt': FieldValue.serverTimestamp(),
+          'note': 'User profile document was empty or missing at time of deletion.',
+        });
+      }
+
+      // 2. Subcollections to migrate:
+      final simpleSubcollections = ['workouts', 'nutrition', 'recovery', 'progress', 'weekly_plans', 'master_context'];
+      for (final sub in simpleSubcollections) {
+        try {
+          final querySnap = await userDocRef.collection(sub).get().timeout(const Duration(seconds: 15));
+          for (final doc in querySnap.docs) {
+            final data = doc.data();
+            await deletedUserDocRef.collection(sub).doc(doc.id).set(data);
+            await doc.reference.delete();
+          }
+        } catch (subErr) {
+          debugPrint('[FIRESTORE ARCHIVE] Error migrating subcollection $sub: $subErr');
+        }
+      }
+
+      // 3. Migrate chats subcollection: chats/default_chat/messages
+      try {
+        final messagesSnap = await userDocRef
+            .collection('chats')
+            .doc('default_chat')
+            .collection('messages')
+            .get()
+            .timeout(const Duration(seconds: 15));
+        for (final msgDoc in messagesSnap.docs) {
+          final data = msgDoc.data();
+          await deletedUserDocRef
+              .collection('chats')
+              .doc('default_chat')
+              .collection('messages')
+              .doc(msgDoc.id)
+              .set(data);
+          await msgDoc.reference.delete();
+        }
+        await userDocRef.collection('chats').doc('default_chat').delete();
+      } catch (chatErr) {
+        debugPrint('[FIRESTORE ARCHIVE] Error migrating chat messages: $chatErr');
+      }
+
+      // 4. Delete root user profile doc
+      await userDocRef.delete().timeout(const Duration(seconds: 15));
+      debugPrint('[FIRESTORE ARCHIVE] Successfully archived user data to deleted_users/$uid and removed source.');
+    } catch (e) {
+      debugPrint('[FIRESTORE ARCHIVE ERROR] Failed to complete archive and delete: $e');
+      rethrow;
+    }
   }
 
   // ─── Serializers: Workout ───

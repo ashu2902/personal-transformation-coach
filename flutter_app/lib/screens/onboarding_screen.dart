@@ -22,12 +22,11 @@ class OnboardingScreen extends ConsumerStatefulWidget {
 class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   int _currentStep = 0;
   // 0: Spark (Welcome)
-  // 1: Identity & Body (Name, Age, Gender, Height, Weight)
-  // 2: Goals & Frequency (Goal, Days/Week, Diet)
-  // 3: Equipment (Bodyweight, Dumbbells, Full Gym, Custom)
-  // 4: Coach Soul Selection (Supporter, Pro, Teacher)
-  // 5: Plan Summary & Calibration Launch
-  // 6: Calibration Loading
+  // 1: Step A: Hard Constants (Identity, Body, Goal, Diet)
+  // 2: Step B: State-Driven Interview (AI Chat with Orb: Schedule & Equipment)
+  // 3: Coach Soul Selection (Supporter, Pro, Teacher)
+  // 4: Plan Summary & Auth Gate
+  // 5: Calibration Loading
 
   // User Parameters
   String _name = 'Athlete';
@@ -41,8 +40,27 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   String _dietaryPreference = 'nonVeg'; // 'nonVeg', 'vegetarian', 'vegan', 'eggetarian'
 
   // Equipment setup
-  String _equipmentPreset = 'dumbbells'; // 'bodyweight', 'dumbbells', 'full_gym', 'custom'
-  String _customEquipmentNote = '';
+  List<EquipmentItem> _interviewEquipmentList = [
+    const EquipmentItem(name: 'Bodyweight', category: 'bodyweight'),
+    const EquipmentItem(name: 'Dumbbells', category: 'free_weight'),
+    const EquipmentItem(name: 'Resistance Bands', category: 'bands'),
+  ];
+
+  // AI Interview State
+  final List<Map<String, String>> _interviewMessages = [
+    {
+      'sender': 'ai',
+      'text': "Welcome! Let's dial in your routine. Tell me about your weekly schedule and what workout equipment you have access to.",
+    }
+  ];
+  late TextEditingController _interviewInputController;
+  bool _isInterviewThinking = false;
+  bool _isLifestyleIntakeComplete = false;
+  List<String> _dynamicQuickReplies = [
+    '3 days, full commercial gym',
+    '4 days, dumbbells & bands at home',
+    '5 days, bodyweight & park',
+  ];
 
   // Coach Soul
   CoachSoul _selectedSoul = CoachSoul.supporter;
@@ -56,7 +74,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   late TextEditingController _ageController;
   late TextEditingController _heightController;
   late TextEditingController _weightController;
-  late TextEditingController _customEquipmentController;
 
   @override
   void initState() {
@@ -65,7 +82,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     _ageController = TextEditingController(text: _age.toString());
     _heightController = TextEditingController(text: _heightCm.round().toString());
     _weightController = TextEditingController(text: _weightKg.round().toString());
-    _customEquipmentController = TextEditingController();
+    _interviewInputController = TextEditingController();
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       ref.read(analyticsServiceProvider).logEvent(
@@ -80,9 +97,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   void _goToStep(int nextStep) {
     const stepNames = [
       'welcome',
-      'identity_and_body',
-      'goals_and_frequency',
-      'equipment',
+      'hard_constants',
+      'lifestyle_interview',
       'coach_soul',
       'plan_summary',
       'calibration_loading',
@@ -107,47 +123,86 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     _ageController.dispose();
     _heightController.dispose();
     _weightController.dispose();
-    _customEquipmentController.dispose();
+    _interviewInputController.dispose();
     super.dispose();
   }
 
   List<EquipmentItem> _buildFinalEquipmentList() {
-    switch (_equipmentPreset) {
-      case 'bodyweight':
-        return [
-          const EquipmentItem(name: 'Bodyweight', category: 'bodyweight'),
-        ];
-      case 'dumbbells':
-        return [
-          const EquipmentItem(name: 'Bodyweight', category: 'bodyweight'),
-          const EquipmentItem(name: 'Dumbbells', category: 'free_weight'),
-          const EquipmentItem(name: 'Resistance Bands', category: 'bands'),
-        ];
-      case 'full_gym':
-        return [
-          const EquipmentItem(name: 'Bodyweight', category: 'bodyweight'),
-          const EquipmentItem(name: 'Dumbbells', category: 'free_weight'),
-          const EquipmentItem(name: 'Barbell', category: 'free_weight'),
-          const EquipmentItem(name: 'Cables', category: 'cables'),
-          const EquipmentItem(name: 'Machines', category: 'machine'),
-        ];
-      case 'custom':
-        final note = _customEquipmentNote.trim();
-        if (note.isNotEmpty) {
-          return [
-            const EquipmentItem(name: 'Bodyweight', category: 'bodyweight'),
-            EquipmentItem.fromString(note),
+    if (_interviewEquipmentList.isNotEmpty) {
+      return _interviewEquipmentList;
+    }
+    return [
+      const EquipmentItem(name: 'Bodyweight', category: 'bodyweight'),
+      const EquipmentItem(name: 'Dumbbells', category: 'free_weight'),
+    ];
+  }
+
+  void _sendInterviewMessage(String text) async {
+    if (text.trim().isEmpty || _isInterviewThinking) return;
+    final userText = text.trim();
+    _interviewInputController.clear();
+    setState(() {
+      _interviewMessages.add({'sender': 'user', 'text': userText});
+      _isInterviewThinking = true;
+    });
+
+    final currentProfile = UserProfile(
+      name: _name.trim().isNotEmpty ? _name.trim() : 'Athlete',
+      age: _age,
+      gender: _gender,
+      heightCm: _heightCm,
+      weightKg: _weightKg,
+      targetWeightKg: _getTargetWeight(),
+      goal: _selectedGoal,
+      daysPerWeek: _daysPerWeek,
+      targetPhysique: _getTargetPhysique(),
+      equipmentList: _interviewEquipmentList,
+      experienceLevel: ExperienceLevel.beginner,
+      coachSoul: _selectedSoul,
+      dietaryPreference: _dietaryPreference,
+    );
+
+    try {
+      final res = await ref.read(transformationEngineProvider.notifier).aiService.parseLifestyleIntake(
+        userText,
+        currentProfile,
+        conversationHistory: _interviewMessages,
+      );
+      final List<EquipmentItem> parsedEq = res.equipment.map((e) => EquipmentItem.fromString(e)).toList();
+      if (parsedEq.isEmpty) {
+        parsedEq.add(const EquipmentItem(name: 'Bodyweight', category: 'bodyweight'));
+      }
+
+      setState(() {
+        _daysPerWeek = res.daysPerWeek;
+        _interviewEquipmentList = parsedEq;
+        _isLifestyleIntakeComplete = res.isComplete && res.daysPerWeek >= 2 && parsedEq.isNotEmpty;
+        if (res.dynamicQuickReplies.isNotEmpty) {
+          _dynamicQuickReplies = res.dynamicQuickReplies;
+        }
+        _isInterviewThinking = false;
+        _interviewMessages.add({
+          'sender': 'ai',
+          'text': res.followUpQuestion,
+        });
+      });
+    } catch (e) {
+      final isComplete = _daysPerWeek >= 2 && _interviewEquipmentList.isNotEmpty;
+      setState(() {
+        _isInterviewThinking = false;
+        _isLifestyleIntakeComplete = isComplete;
+        if (isComplete) {
+          _dynamicQuickReplies = [
+            "Ready to select my coach!",
+            "I also want to focus on upper body",
+            "I prefer 45-minute sessions",
           ];
         }
-        return [
-          const EquipmentItem(name: 'Bodyweight', category: 'bodyweight'),
-          const EquipmentItem(name: 'Dumbbells', category: 'free_weight'),
-        ];
-      default:
-        return [
-          const EquipmentItem(name: 'Bodyweight', category: 'bodyweight'),
-          const EquipmentItem(name: 'Dumbbells', category: 'free_weight'),
-        ];
+        _interviewMessages.add({
+          'sender': 'ai',
+          'text': "Got it! Calibrated to $_daysPerWeek days per week with your available gear. Ready to choose your coach persona?",
+        });
+      });
     }
   }
 
@@ -175,7 +230,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   void _runCalibrationAndComplete({bool useGoogleAuth = false, String? email, String? password}) async {
     setState(() {
-      _currentStep = 6; // Calibration step
+      _currentStep = 5; // Calibration step
       _calibrationProgressStep = 1;
       _calibrationError = null;
     });
@@ -381,7 +436,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           });
         }
       },
-      child: Scaffold(
+      child: Theme(
+        data: getAuraTheme(_selectedSoul),
+        child: Scaffold(
         backgroundColor: const Color(0xFF0B0B0E), // Deep Void
         body: SafeArea(
           child: Center(
@@ -412,6 +469,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             ),
           ),
         ),
+        ),
       ),
     );
   }
@@ -421,16 +479,14 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       case 0:
         return _buildSparkScreen();
       case 1:
-        return _buildIdentityScreen();
+        return _buildHardConstantsScreen();
       case 2:
-        return _buildGoalsAndLifestyleScreen();
+        return _buildInterviewScreen();
       case 3:
-        return _buildEquipmentScreen();
-      case 4:
         return _buildSoulScreen();
-      case 5:
+      case 4:
         return _buildPlanSummaryScreen();
-      case 6:
+      case 5:
         return _buildCalibrationLoadingScreen();
       default:
         return const SizedBox();
@@ -513,8 +569,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     );
   }
 
-  // ─── SCREEN 1: IDENTITY & BODY ───
-  Widget _buildIdentityScreen() {
+  // ─── STEP A: THE HARD CONSTANTS (UI Forms) ───
+  Widget _buildHardConstantsScreen() {
     final isNameValid = _nameController.text.trim().isNotEmpty;
     final isAgeValid = _age >= 14 && _age <= 99;
     final isHeightValid = _heightCm >= 100 && _heightCm <= 240;
@@ -529,17 +585,17 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           Center(
             child: AuraOrb(soul: _selectedSoul, state: OrbState.pulsing, size: 70),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
           Text(
-            'Tell me about yourself',
+            'Step A: Physical Metrics & Baseline',
             style: GoogleFonts.syne(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 6),
           Text(
-            'AURA uses your exact metrics to calculate precise metabolic math.',
+            'Strict physical parameters ensure mathematical accuracy for your metabolic targets.',
             style: GoogleFonts.plusJakartaSans(color: const Color(0xFFA1A1AA), fontSize: 13),
           ),
-          const SizedBox(height: 24),
+          const SizedBox(height: 20),
 
           // Name Input
           _buildInputContainer(
@@ -625,6 +681,52 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               ),
             ],
           ),
+          const SizedBox(height: 20),
+
+          // Goal Selection
+          Text(
+            'Primary Transformation Goal',
+            style: GoogleFonts.syne(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 10),
+          _buildGoalCard(
+            goal: GoalType.fatLoss,
+            title: 'Burn Fat & Get Lean',
+            subtitle: 'Calorie deficit targeting maximum fat burn while retaining muscle.',
+            icon: LucideIcons.flame,
+          ),
+          const SizedBox(height: 8),
+          _buildGoalCard(
+            goal: GoalType.recomp,
+            title: 'Lose Fat & Build Muscle (Recomp)',
+            subtitle: 'High-protein balance for simultaneous fat loss and hypertrophy.',
+            icon: LucideIcons.refreshCw,
+          ),
+          const SizedBox(height: 8),
+          _buildGoalCard(
+            goal: GoalType.muscleGain,
+            title: 'Build Muscle & Strength',
+            subtitle: 'Slight calorie surplus focusing on progressive overload and size.',
+            icon: LucideIcons.dumbbell,
+          ),
+          const SizedBox(height: 20),
+
+          // Dietary Baseline
+          Text(
+            'Dietary Preference',
+            style: GoogleFonts.syne(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              _buildDietChip('Non-Veg', 'nonVeg'),
+              _buildDietChip('Vegetarian', 'vegetarian'),
+              _buildDietChip('Eggetarian', 'eggetarian'),
+              _buildDietChip('Vegan', 'vegan'),
+            ],
+          ),
           const SizedBox(height: 32),
 
           // Navigation Buttons
@@ -646,13 +748,13 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               Expanded(
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: canProceed ? const Color(0xFF00FFA3) : const Color(0xFF1E293B),
+                    backgroundColor: canProceed ? AuraColors.getSoulPalette(_selectedSoul).primary : const Color(0xFF1E293B),
                     foregroundColor: canProceed ? Colors.black : Colors.white38,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
                     padding: const EdgeInsets.symmetric(vertical: 15),
                   ),
                   onPressed: canProceed ? () => _goToStep(2) : null,
-                  child: Text('Continue', style: GoogleFonts.syne(fontWeight: FontWeight.bold)),
+                  child: Text('Step B: AI Interview →', style: GoogleFonts.syne(fontWeight: FontWeight.bold)),
                 ),
               ),
             ],
@@ -663,249 +765,252 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     );
   }
 
-  // ─── SCREEN 2: GOALS & LIFESTYLE ───
-  Widget _buildGoalsAndLifestyleScreen() {
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 12),
-          Center(
-            child: AuraOrb(soul: _selectedSoul, state: OrbState.pulsing, size: 70),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            'Your Transformation Goal',
-            style: GoogleFonts.syne(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Select your target physique outcome and training schedule.',
-            style: GoogleFonts.plusJakartaSans(color: const Color(0xFFA1A1AA), fontSize: 13),
-          ),
-          const SizedBox(height: 20),
+  // ─── STEP B: THE STATE-DRIVEN INTERVIEW (AI Chat) ───
+  Widget _buildInterviewScreen() {
+    final equipNames = _interviewEquipmentList.map((e) => e.name).join(', ');
 
-          // Goal Selector Cards
-          _buildGoalCard(
-            goal: GoalType.fatLoss,
-            title: 'Burn Fat & Get Lean',
-            subtitle: 'Calorie deficit targeting maximum fat burn while retaining muscle.',
-            icon: LucideIcons.flame,
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const SizedBox(height: 8),
+        Center(
+          child: AuraOrb(soul: _selectedSoul, state: _isInterviewThinking ? OrbState.pulsing : OrbState.idle, size: 80),
+        ),
+        const SizedBox(height: 14),
+        Center(
+          child: Column(
+            children: [
+              Text(
+                'Step B: Lifestyle & Gear Intake',
+                style: GoogleFonts.syne(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 4),
+              Text(
+                'AURA dynamically parses your equipment & training days.',
+                style: GoogleFonts.plusJakartaSans(color: const Color(0xFFA1A1AA), fontSize: 13),
+              ),
+            ],
           ),
-          const SizedBox(height: 10),
-          _buildGoalCard(
-            goal: GoalType.recomp,
-            title: 'Lose Fat & Build Muscle (Recomp)',
-            subtitle: 'High-protein balance for simultaneous fat loss and hypertrophy.',
-            icon: LucideIcons.refreshCw,
-          ),
-          const SizedBox(height: 10),
-          _buildGoalCard(
-            goal: GoalType.muscleGain,
-            title: 'Build Muscle & Strength',
-            subtitle: 'Slight calorie surplus focusing on progressive overload and size.',
-            icon: LucideIcons.dumbbell,
-          ),
-          const SizedBox(height: 20),
+        ),
+        const SizedBox(height: 14),
 
-          // Training Days Frequency
-          Text(
-            'Weekly Workout Frequency',
-            style: GoogleFonts.syne(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+        // Live Calibrated Status Chip
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          decoration: BoxDecoration(
+            color: AuraColors.getSoulPalette(_selectedSoul).primary.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: AuraColors.getSoulPalette(_selectedSoul).primary.withOpacity(0.3)),
           ),
-          const SizedBox(height: 8),
-          Row(
-            children: [3, 4, 5, 6].map((days) {
-              final isSelected = _daysPerWeek == days;
-              return Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 3.0),
-                  child: GestureDetector(
-                    onTap: () => setState(() => _daysPerWeek = days),
+          child: Row(
+            children: [
+              Icon(LucideIcons.checkCircle2, color: AuraColors.getSoulPalette(_selectedSoul).primary, size: 16),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(
+                  'Calibrated: $_daysPerWeek Days/Wk • $equipNames',
+                  style: GoogleFonts.plusJakartaSans(color: AuraColors.getSoulPalette(_selectedSoul).primary, fontWeight: FontWeight.w600, fontSize: 12),
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 12),
+
+        // Chat Transcript Container
+        Expanded(
+          child: Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFF141217),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: Colors.white.withOpacity(0.08)),
+            ),
+            child: ListView.builder(
+              physics: const BouncingScrollPhysics(),
+              itemCount: _interviewMessages.length + (_isInterviewThinking ? 1 : 0),
+              itemBuilder: (context, index) {
+                if (_isInterviewThinking && index == _interviewMessages.length) {
+                  return Align(
+                    alignment: Alignment.centerLeft,
                     child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                      margin: const EdgeInsets.symmetric(vertical: 4),
                       decoration: BoxDecoration(
-                        color: isSelected ? const Color(0xFF00FFA3).withOpacity(0.15) : const Color(0xFF141217),
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: isSelected ? const Color(0xFF00FFA3) : Colors.white.withOpacity(0.08)),
+                        color: Colors.white.withOpacity(0.06),
+                        borderRadius: BorderRadius.circular(14),
                       ),
-                      alignment: Alignment.center,
-                      child: Text(
-                        '$days Days',
-                        style: GoogleFonts.syne(
-                          color: isSelected ? Colors.white : const Color(0xFFA1A1AA),
-                          fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                          fontSize: 13,
-                        ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          SizedBox(
+                            width: 12,
+                            height: 12,
+                            child: CircularProgressIndicator(strokeWidth: 2, color: AuraColors.getSoulPalette(_selectedSoul).primary),
+                          ),
+                          const SizedBox(width: 8),
+                          Text('AURA is parsing your routine...', style: GoogleFonts.plusJakartaSans(color: const Color(0xFFA1A1AA), fontSize: 12)),
+                        ],
+                      ),
+                    ),
+                  );
+                }
+
+                final msg = _interviewMessages[index];
+                final isUser = msg['sender'] == 'user';
+                return Align(
+                  alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    margin: const EdgeInsets.symmetric(vertical: 4),
+                    constraints: const BoxConstraints(maxWidth: 320),
+                    decoration: BoxDecoration(
+                      color: isUser ? AuraColors.getSoulPalette(_selectedSoul).primary.withOpacity(0.18) : Colors.white.withOpacity(0.06),
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(color: isUser ? AuraColors.getSoulPalette(_selectedSoul).primary.withOpacity(0.4) : Colors.transparent),
+                    ),
+                    child: Text(
+                      msg['text'] ?? '',
+                      style: GoogleFonts.plusJakartaSans(
+                        color: Colors.white,
+                        fontSize: 13,
+                        height: 1.4,
                       ),
                     ),
                   ),
-                ),
+                );
+              },
+            ),
+          ),
+        ),
+        const SizedBox(height: 10),
+
+        // Dynamic Quick Suggestion Chips
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: _dynamicQuickReplies.map((reply) {
+              return Padding(
+                padding: const EdgeInsets.only(right: 8.0),
+                child: _buildInspirationChip(reply),
               );
             }).toList(),
           ),
-          const SizedBox(height: 20),
+        ),
+        const SizedBox(height: 10),
 
-          // Dietary Preference
-          Text(
-            'Dietary Preference',
-            style: GoogleFonts.syne(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 8),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: [
-              _buildDietChip('Non-Veg', 'nonVeg'),
-              _buildDietChip('Vegetarian', 'vegetarian'),
-              _buildDietChip('Eggetarian', 'eggetarian'),
-              _buildDietChip('Vegan', 'vegan'),
-            ],
-          ),
-          const SizedBox(height: 32),
-
-          // Navigation
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: BorderSide(color: Colors.white.withOpacity(0.12)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
-                    padding: const EdgeInsets.symmetric(vertical: 15),
+        // Input Field
+        Row(
+          children: [
+            Expanded(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF141217),
+                  borderRadius: BorderRadius.circular(24),
+                  border: Border.all(color: Colors.white.withOpacity(0.12)),
+                ),
+                child: TextField(
+                  controller: _interviewInputController,
+                  style: GoogleFonts.plusJakartaSans(color: Colors.white, fontSize: 13),
+                  decoration: const InputDecoration(
+                    hintText: 'Tell AURA your schedule & gear...',
+                    hintStyle: TextStyle(color: Colors.white30, fontSize: 13),
+                    border: InputBorder.none,
                   ),
-                  onPressed: () => _goToStep(1),
-                  child: const Text('Back'),
+                  onSubmitted: _sendInterviewMessage,
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00FFA3),
-                    foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
-                    padding: const EdgeInsets.symmetric(vertical: 15),
-                  ),
-                  onPressed: () => _goToStep(3),
-                  child: Text('Continue', style: GoogleFonts.syne(fontWeight: FontWeight.bold)),
+            ),
+            const SizedBox(width: 8),
+            GestureDetector(
+              onTap: () => _sendInterviewMessage(_interviewInputController.text),
+              child: Container(
+                width: 44,
+                height: 44,
+                decoration: BoxDecoration(
+                  color: AuraColors.getSoulPalette(_selectedSoul).primary,
+                  shape: BoxShape.circle,
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-        ],
-      ),
-    );
-  }
-
-  // ─── SCREEN 3: EQUIPMENT SETUP ───
-  Widget _buildEquipmentScreen() {
-    return SingleChildScrollView(
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const SizedBox(height: 12),
-          Center(
-            child: AuraOrb(soul: _selectedSoul, state: OrbState.pulsing, size: 70),
-          ),
-          const SizedBox(height: 24),
-          Text(
-            'What equipment do you have?',
-            style: GoogleFonts.syne(color: Colors.white, fontSize: 22, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'AURA will strictly tailor all prescribed exercises to what you have access to.',
-            style: GoogleFonts.plusJakartaSans(color: const Color(0xFFA1A1AA), fontSize: 13),
-          ),
-          const SizedBox(height: 20),
-
-          _buildEquipmentOptionCard(
-            presetKey: 'bodyweight',
-            title: 'Bodyweight Only (No Gear)',
-            description: 'Calisthenics, functional core, and bodyweight movements at home or traveling.',
-            icon: LucideIcons.user,
-          ),
-          const SizedBox(height: 10),
-          _buildEquipmentOptionCard(
-            presetKey: 'dumbbells',
-            title: 'Dumbbells & Resistance Bands',
-            description: 'Home setup with adjustable or fixed dumbbells and band accessories.',
-            icon: LucideIcons.dumbbell,
-          ),
-          const SizedBox(height: 10),
-          _buildEquipmentOptionCard(
-            presetKey: 'full_gym',
-            title: 'Full Commercial Gym Access',
-            description: 'Full access to barbells, cable stations, leg presses, and specialty machines.',
-            icon: LucideIcons.building,
-          ),
-          const SizedBox(height: 10),
-          _buildEquipmentOptionCard(
-            presetKey: 'custom',
-            title: 'Custom Gear / Specific Equipment',
-            description: 'Specify unique gear (e.g. "10kg weight bag", "doorway pull-up bar", "kettlebell").',
-            icon: LucideIcons.sliders,
-          ),
-
-          if (_equipmentPreset == 'custom') ...[
-            const SizedBox(height: 12),
-            _buildInputContainer(
-              label: 'Your Custom Equipment Details',
-              child: TextField(
-                controller: _customEquipmentController,
-                style: GoogleFonts.plusJakartaSans(color: Colors.white, fontSize: 14),
-                decoration: const InputDecoration(
-                  hintText: 'e.g. 10kg Workout Bag, Resistance Bands',
-                  hintStyle: TextStyle(color: Colors.white30, fontSize: 13),
-                  border: InputBorder.none,
-                ),
-                onChanged: (val) => setState(() => _customEquipmentNote = val),
+                child: const Icon(LucideIcons.send, color: Colors.black, size: 18),
               ),
             ),
           ],
+        ),
+        const SizedBox(height: 16),
 
-          const SizedBox(height: 32),
-
-          // Navigation
-          Row(
-            children: [
-              Expanded(
-                child: OutlinedButton(
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: Colors.white,
-                    side: BorderSide(color: Colors.white.withOpacity(0.12)),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
-                    padding: const EdgeInsets.symmetric(vertical: 15),
+        // Navigation
+        Row(
+          children: [
+            Expanded(
+              child: OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: Colors.white,
+                  side: BorderSide(color: Colors.white.withOpacity(0.12)),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                onPressed: () => _goToStep(1),
+                child: const Text('Back'),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: _isLifestyleIntakeComplete
+                      ? AuraColors.getSoulPalette(_selectedSoul).primary
+                      : const Color(0xFF27272A),
+                  foregroundColor: _isLifestyleIntakeComplete ? Colors.black : const Color(0xFF71717A),
+                  disabledBackgroundColor: const Color(0xFF27272A),
+                  disabledForegroundColor: const Color(0xFF71717A),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
+                  padding: const EdgeInsets.symmetric(vertical: 14),
+                ),
+                onPressed: _isLifestyleIntakeComplete ? () => _goToStep(3) : null,
+                child: Text(
+                  _isLifestyleIntakeComplete ? 'Select Coach Persona →' : 'Complete Intake to Continue',
+                  style: GoogleFonts.syne(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    color: _isLifestyleIntakeComplete ? Colors.black : const Color(0xFF71717A),
                   ),
-                  onPressed: () => _goToStep(2),
-                  child: const Text('Back'),
                 ),
               ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF00FFA3),
-                    foregroundColor: Colors.black,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
-                    padding: const EdgeInsets.symmetric(vertical: 15),
-                  ),
-                  onPressed: () => _goToStep(4),
-                  child: Text('Continue', style: GoogleFonts.syne(fontWeight: FontWeight.bold)),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 20),
-        ],
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+      ],
+    );
+  }
+
+  Widget _buildInspirationChip(String text) {
+    return GestureDetector(
+      onTap: () {
+        _interviewInputController.text = text;
+        _interviewInputController.selection = TextSelection.fromPosition(
+          TextPosition(offset: text.length),
+        );
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+        decoration: BoxDecoration(
+          color: const Color(0xFF141217),
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: Colors.white.withOpacity(0.1)),
+        ),
+        child: Text(
+          text,
+          style: GoogleFonts.plusJakartaSans(color: const Color(0xFFA1A1AA), fontSize: 11),
+        ),
       ),
     );
   }
 
-  // ─── SCREEN 4: CHOOSE COACH SOUL ───
+  // ─── SCREEN 3: CHOOSE COACH SOUL ───
   Widget _buildSoulScreen() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -958,7 +1063,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
                   padding: const EdgeInsets.symmetric(vertical: 15),
                 ),
-                onPressed: () => _goToStep(3),
+                onPressed: () => _goToStep(2),
                 child: const Text('Back'),
               ),
             ),
@@ -966,12 +1071,12 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             Expanded(
               child: ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF00FFA3),
+                  backgroundColor: AuraColors.getSoulPalette(_selectedSoul).primary,
                   foregroundColor: Colors.black,
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
                   padding: const EdgeInsets.symmetric(vertical: 15),
                 ),
-                onPressed: () => _goToStep(5),
+                onPressed: () => _goToStep(4),
                 child: Text('Review Plan', style: GoogleFonts.syne(fontWeight: FontWeight.bold)),
               ),
             ),
@@ -982,7 +1087,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
     );
   }
 
-  // ─── SCREEN 5: PLAN SUMMARY & AUTH ───
+  // ─── SCREEN 4: PLAN SUMMARY & AUTH ───
   Widget _buildPlanSummaryScreen() {
     final equipSummary = _buildFinalEquipmentList().map((e) => e.toString()).join(', ');
 
@@ -1024,13 +1129,13 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     Text(
                       'AI CALIBRATION PROFILE',
                       style: GoogleFonts.syne(
-                        color: const Color(0xFF00FFA3),
+                        color: AuraColors.getSoulPalette(_selectedSoul).primary,
                         fontSize: 11,
                         fontWeight: FontWeight.bold,
                         letterSpacing: 1.2,
                       ),
                     ),
-                    const Icon(LucideIcons.sparkles, color: Color(0xFF00FFA3), size: 14),
+                    Icon(LucideIcons.sparkles, color: AuraColors.getSoulPalette(_selectedSoul).primary, size: 14),
                   ],
                 ),
                 const SizedBox(height: 14),
@@ -1075,7 +1180,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             height: 48,
             child: OutlinedButton(
               style: OutlinedButton.styleFrom(
-                foregroundColor: const Color(0xFF00FFA3),
+                foregroundColor: AuraColors.getSoulPalette(_selectedSoul).primary,
                 side: const BorderSide(color: Color(0x6000FFA3)),
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
               ),
@@ -1087,7 +1192,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
           Center(
             child: TextButton(
-              onPressed: () => _goToStep(4),
+              onPressed: () => _goToStep(3),
               child: Text('Edit soul selection', style: GoogleFonts.plusJakartaSans(color: const Color(0xFFA1A1AA), fontSize: 12)),
             ),
           ),
@@ -1133,7 +1238,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           ),
           const SizedBox(height: 28),
           ElevatedButton(
-            style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF00FFA3), foregroundColor: Colors.black),
+            style: ElevatedButton.styleFrom(backgroundColor: AuraColors.getSoulPalette(_selectedSoul).primary, foregroundColor: Colors.black),
             onPressed: () => _runCalibrationAndComplete(),
             child: const Text('Retry Calibration'),
           ),
@@ -1162,7 +1267,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           child: LinearProgressIndicator(
             value: _calibrationProgressStep / 4.0,
             backgroundColor: Colors.white12,
-            valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF00FFA3)),
+            valueColor: AlwaysStoppedAnimation<Color>(AuraColors.getSoulPalette(_selectedSoul).primary),
             borderRadius: BorderRadius.circular(4),
           ),
         ),
@@ -1202,9 +1307,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 8),
           decoration: BoxDecoration(
-            color: isSelected ? const Color(0xFF00FFA3).withOpacity(0.12) : Colors.transparent,
+            color: isSelected ? AuraColors.getSoulPalette(_selectedSoul).primary.withOpacity(0.12) : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
-            border: Border.all(color: isSelected ? const Color(0xFF00FFA3) : Colors.white12),
+            border: Border.all(color: isSelected ? AuraColors.getSoulPalette(_selectedSoul).primary : Colors.white12),
           ),
           alignment: Alignment.center,
           child: Text(
@@ -1232,19 +1337,19 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF00FFA3).withOpacity(0.10) : const Color(0xFF141217),
+          color: isSelected ? AuraColors.getSoulPalette(_selectedSoul).primary.withOpacity(0.10) : const Color(0xFF141217),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: isSelected ? const Color(0xFF00FFA3) : Colors.white.withOpacity(0.08), width: isSelected ? 1.5 : 1.0),
+          border: Border.all(color: isSelected ? AuraColors.getSoulPalette(_selectedSoul).primary : Colors.white.withOpacity(0.08), width: isSelected ? 1.5 : 1.0),
         ),
         child: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: isSelected ? const Color(0xFF00FFA3).withOpacity(0.2) : Colors.white.withOpacity(0.04),
+                color: isSelected ? AuraColors.getSoulPalette(_selectedSoul).primary.withOpacity(0.2) : Colors.white.withOpacity(0.04),
                 shape: BoxShape.circle,
               ),
-              child: Icon(icon, color: isSelected ? const Color(0xFF00FFA3) : Colors.white60, size: 20),
+              child: Icon(icon, color: isSelected ? AuraColors.getSoulPalette(_selectedSoul).primary : Colors.white60, size: 20),
             ),
             const SizedBox(width: 14),
             Expanded(
@@ -1270,9 +1375,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF00FFA3).withOpacity(0.15) : const Color(0xFF141217),
+          color: isSelected ? AuraColors.getSoulPalette(_selectedSoul).primary.withOpacity(0.15) : const Color(0xFF141217),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: isSelected ? const Color(0xFF00FFA3) : Colors.white.withOpacity(0.08)),
+          border: Border.all(color: isSelected ? AuraColors.getSoulPalette(_selectedSoul).primary : Colors.white.withOpacity(0.08)),
         ),
         child: Text(
           label,
@@ -1281,49 +1386,6 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             fontSize: 12,
             fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
           ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildEquipmentOptionCard({
-    required String presetKey,
-    required String title,
-    required String description,
-    required IconData icon,
-  }) {
-    final isSelected = _equipmentPreset == presetKey;
-    return GestureDetector(
-      onTap: () => setState(() => _equipmentPreset = presetKey),
-      child: Container(
-        padding: const EdgeInsets.all(14),
-        decoration: BoxDecoration(
-          color: isSelected ? const Color(0xFF00FFA3).withOpacity(0.10) : const Color(0xFF141217),
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: isSelected ? const Color(0xFF00FFA3) : Colors.white.withOpacity(0.08), width: isSelected ? 1.5 : 1.0),
-        ),
-        child: Row(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(10),
-              decoration: BoxDecoration(
-                color: isSelected ? const Color(0xFF00FFA3).withOpacity(0.2) : Colors.white.withOpacity(0.04),
-                shape: BoxShape.circle,
-              ),
-              child: Icon(icon, color: isSelected ? const Color(0xFF00FFA3) : Colors.white60, size: 20),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(title, style: GoogleFonts.syne(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14)),
-                  const SizedBox(height: 3),
-                  Text(description, style: GoogleFonts.plusJakartaSans(color: const Color(0xFFA1A1AA), fontSize: 11)),
-                ],
-              ),
-            ),
-          ],
         ),
       ),
     );

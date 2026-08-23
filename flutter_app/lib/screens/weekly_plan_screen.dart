@@ -246,25 +246,25 @@ class WeeklyPlanScreen extends ConsumerWidget {
                   isFilled: true,
                 )
               else if (isCompleted)
-                const AuraStatBadge(
+                AuraStatBadge(
                   label: 'COMPLETED',
                   icon: LucideIcons.check,
-                  color: AuraColors.success,
+                  color: Theme.of(context).colorScheme.primary,
                 )
               else if (isSkipped)
-                const AuraStatBadge(
+                AuraStatBadge(
                   label: 'SKIPPED',
                   icon: LucideIcons.minus,
                   color: AuraColors.textTertiary,
                 )
               else if (day.isRestDay)
-                const AuraStatBadge(
+                AuraStatBadge(
                   label: 'REST',
                   icon: LucideIcons.moonStar,
                   color: AuraColors.textTertiary,
                 )
               else if (isPast)
-                const AuraStatBadge(
+                AuraStatBadge(
                   label: 'MISSED',
                   color: AuraColors.textTertiary,
                 ),

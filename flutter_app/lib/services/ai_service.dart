@@ -5,6 +5,91 @@ import 'package:firebase_auth/firebase_auth.dart';
 import '../providers/transformation_state.dart';
 import '../models/models.dart';
 
+class WeeklyDebrief {
+  final String headline;
+  final String narrative;
+  final String keyAchievement;
+  final String primaryNextStep;
+  final int adherenceScore;
+
+  WeeklyDebrief({
+    required this.headline,
+    required this.narrative,
+    required this.keyAchievement,
+    required this.primaryNextStep,
+    required this.adherenceScore,
+  });
+
+  factory WeeklyDebrief.fromJson(Map<String, dynamic> json) {
+    return WeeklyDebrief(
+      headline: json['headline']?.toString() ?? 'Weekly Calibration Summary',
+      narrative: json['narrative']?.toString() ?? 'You stayed committed to your targets this week. Great work!',
+      keyAchievement: json['keyAchievement']?.toString() ?? 'Consistent training compliance',
+      primaryNextStep: json['primaryNextStep']?.toString() ?? 'Maintain hydration and sleep consistency',
+      adherenceScore: (json['adherenceScore'] as num?)?.toInt() ?? 85,
+    );
+  }
+}
+
+class LifestyleIntakeResult {
+  final bool isComplete;
+  final int daysPerWeek;
+  final List<String> equipment;
+  final List<String> missingFields;
+  final String followUpQuestion;
+  final List<String> dynamicQuickReplies;
+  final String? targetPhysique;
+
+  LifestyleIntakeResult({
+    required this.isComplete,
+    required this.daysPerWeek,
+    required this.equipment,
+    required this.missingFields,
+    required this.followUpQuestion,
+    this.dynamicQuickReplies = const [],
+    this.targetPhysique,
+  });
+
+  factory LifestyleIntakeResult.fromJson(Map<String, dynamic> json) {
+    final rawEq = json['equipment'];
+    final List<String> eqList = [];
+    if (rawEq is List) {
+      for (var e in rawEq) {
+        if (e is String) {
+          eqList.add(e);
+        } else if (e is Map && e['name'] != null) {
+          eqList.add(e['name'].toString());
+        }
+      }
+    }
+    final rawMissing = json['missingFields'];
+    final List<String> missingList = [];
+    if (rawMissing is List) {
+      for (var m in rawMissing) {
+        missingList.add(m.toString());
+      }
+    }
+    final rawReplies = json['dynamicQuickReplies'] ?? json['quickReplies'] ?? json['suggestedReplies'];
+    final List<String> quickReplies = [];
+    if (rawReplies is List) {
+      for (var r in rawReplies) {
+        if (r != null && r.toString().trim().isNotEmpty) {
+          quickReplies.add(r.toString().trim());
+        }
+      }
+    }
+    return LifestyleIntakeResult(
+      isComplete: json['isComplete'] == true,
+      daysPerWeek: (json['daysPerWeek'] as num?)?.toInt() ?? 4,
+      equipment: eqList.isNotEmpty ? eqList : ['Bodyweight', 'Dumbbells'],
+      missingFields: missingList,
+      followUpQuestion: json['followUpQuestion']?.toString() ?? 'Got it! How many days per week would you like to train?',
+      dynamicQuickReplies: quickReplies,
+      targetPhysique: json['targetPhysique']?.toString(),
+    );
+  }
+}
+
 abstract class AIService {
   Future<AIOrchestratorResult> processCoachMessage(
       String userPrompt, TransformationEngineState contextState,
@@ -31,6 +116,12 @@ abstract class AIService {
   Future<WeeklyPlan> generateAIWeeklyPlan(
       TransformationEngineState contextState);
   Future<MealItem> estimateAIMealNutrition(String mealDescription);
+  Future<WeeklyDebrief> generateWeeklyDebrief(TransformationEngineState contextState);
+  Future<LifestyleIntakeResult> parseLifestyleIntake(
+    String text,
+    UserProfile currentProfile, {
+    List<Map<String, String>>? conversationHistory,
+  });
 }
 
 class GeminiAIProvider implements AIService {
@@ -48,6 +139,14 @@ class GeminiAIProvider implements AIService {
     return 'https://us-central1-aura-coach-ashu-7.cloudfunctions.net/callGeminiProxy';
   }
 
+  String get _processAiCommandUrl {
+    const customUrl = String.fromEnvironment('AI_COMMAND_URL');
+    if (customUrl.trim().isNotEmpty) {
+      return customUrl.trim();
+    }
+    return 'https://us-central1-aura-coach-ashu-7.cloudfunctions.net/processAiCommand';
+  }
+
   Future<Map<String, String>> _getAuthHeaders() async {
     var user = FirebaseAuth.instance.currentUser;
     if (user == null) {
@@ -63,6 +162,87 @@ class GeminiAIProvider implements AIService {
       'Content-Type': 'application/json',
       if (token != null && token.isNotEmpty) 'Authorization': 'Bearer $token',
     };
+  }
+
+  Map<String, dynamic> _buildStatePayload(TransformationEngineState state) {
+    return {
+      'profile': {
+        'name': state.profile.name,
+        'gender': state.profile.gender,
+        'age': state.profile.age,
+        'heightCm': state.profile.heightCm,
+        'weightKg': state.profile.weightKg,
+        'targetWeightKg': state.profile.targetWeightKg,
+        'goal': state.profile.goal.name,
+        'coachSoul': state.profile.coachSoul.name,
+        'equipmentList': state.profile.equipmentList.map((e) => e.name).toList(),
+        'activeInjuries': state.profile.activeInjuries,
+      },
+      'workout': {
+        'title': state.workout.title,
+        'focusArea': state.workout.focusArea,
+        'status': state.workout.status.name,
+        'estimatedDurationMin': state.workout.estimatedDurationMin,
+      },
+      'nutrition': {
+        'targetCalories': state.nutrition.targetCalories,
+        'targetProteinG': state.nutrition.targetProteinG,
+        'meals': state.nutrition.meals.map((m) => {
+          'name': m.name,
+          'calories': m.calories,
+          'proteinG': m.proteinG,
+          'carbsG': m.carbsG,
+          'fatG': m.fatG,
+        }).toList(),
+      },
+      'recovery': {
+        'sleepHours': state.recovery.sleepHours,
+        'muscleSoreness': state.recovery.muscleSoreness,
+        'energyLevel': state.recovery.energyLevel,
+        'recoveryScore': state.recovery.recoveryScore,
+        'status': state.recovery.status,
+      },
+    };
+  }
+
+  Future<Map<String, dynamic>> _callProcessAiCommand({
+    required String command,
+    Map<String, dynamic>? statePayload,
+    String? message,
+    Uint8List? imageBytes,
+    String? mimeType,
+  }) async {
+    final timer = Stopwatch()..start();
+    _logRequest('processAiCommand:$command', message ?? '');
+    try {
+      final headers = await _getAuthHeaders();
+      final body = <String, dynamic>{
+        'command': command,
+        'model': modelName,
+      };
+      if (statePayload != null) body['state'] = statePayload;
+      if (message != null) body['message'] = message;
+      if (imageBytes != null) {
+        body['imageBase64'] = base64Encode(imageBytes);
+        body['mimeType'] = mimeType ?? 'image/jpeg';
+      }
+
+      final response = await http.post(
+        Uri.parse(_processAiCommandUrl),
+        headers: headers,
+        body: jsonEncode(body),
+      ).timeout(const Duration(seconds: 30));
+
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body);
+        _logResponse('processAiCommand:$command', 200, timer.elapsedMilliseconds, response.body);
+        return data as Map<String, dynamic>;
+      }
+      throw Exception('processAiCommand returned status ${response.statusCode}: ${response.body}');
+    } catch (e) {
+      _logError('processAiCommand:$command', e);
+      rethrow;
+    }
   }
 
   void _logRequest(String method, String prompt) {
@@ -185,11 +365,39 @@ Examine the image carefully:
 4. Physique / Progress Photo: Provide encouraging, supportive observations on consistency.
 ''' : '';
 
-    final prompt = '''
-You are the AI Transformation Coach Orchestrator for AURA.
-Your job is to analyze the user's message in the context of their profile, workout, nutrition, and recovery, and decide what action(s) to execute, if any, along with an empathetic coach reply.
+    final soul = contextState.profile.coachSoul;
+    String soulName;
+    String coachInstruction;
+    switch (soul) {
+      case CoachSoul.supporter:
+        soulName = 'The Supporter';
+        coachInstruction =
+            'You are AURA (The Supporter), an empathetic, warm, and gentle personal fitness coach and elite trainer. '
+            'Your tone is encouraging, validating, and focused on celebrating small wins and self-compassion. '
+            'In "coachResponse", speak warmly, authentically, and conversationally directly to your client.';
+        break;
+      case CoachSoul.pro:
+        soulName = 'The Pro';
+        coachInstruction =
+            'You are AURA (The Pro), a direct, no-nonsense, and results-driven personal fitness coach and elite trainer. '
+            'Your tone is direct, metrics-focused, action-oriented, and highly motivating. '
+            'In "coachResponse", be punchy, clear, and action-oriented directly to your client.';
+        break;
+      case CoachSoul.teacher:
+        soulName = 'The Teacher';
+        coachInstruction =
+            'You are AURA (The Teacher), an analytical, educational, and scientific personal fitness coach and elite trainer. '
+            'Your tone is educational, insightful, and explaining the science behind fitness, recovery, and nutrition. '
+            'In "coachResponse", provide informative, clear explanations directly to your client.';
+        break;
+    }
 
-USER TRANSFORMATION CONTEXT:
+    final prompt = '''
+You are $soulName, an elite personal trainer and health coach for AURA. Your client is talking to you. Speak directly to them, matching their energy. Be conversational, empathetic, and human.
+
+You also possess a silent superpower: you can update their fitness app's database. After you decide how to respond to the client, silently append the necessary system actions to keep their dashboard up to date.
+
+CLIENT WORKING MEMORY & CONTEXT:
 ${_buildSystemContext(contextState)}
 
 INCOMING USER MESSAGE:
@@ -197,7 +405,7 @@ INCOMING USER MESSAGE:
 
 $imageInstructions
 
-AVAILABLE FUNCTIONS / ACTIONS:
+AVAILABLE SYSTEM ACTIONS (Silently append when necessary to update the user's dashboard):
 1. "updateEquipment": Call when the user mentions having new, limited, or specific workout equipment (e.g. "I only have a 10kg weight bag", "no gym today, only dumbbells", "I have dumbbells and bodyweight", "resistance bands and a pull up bar").
    Parameters:
    - "items": Array of objects [{"name": string (e.g. "10kg Workout Bag", "Dumbbells", "Bodyweight", "Resistance Bands"), "category": "free_weight" | "bodyweight" | "bands" | "cables" | "machine" | "other", "weightKg": number or null, "notes": string or null}]
@@ -245,54 +453,31 @@ AVAILABLE FUNCTIONS / ACTIONS:
    - "targetDate": Optional string ("YYYY-MM-DD", "yesterday", or "today")
 
 10. "updateMealPortion": Call when the user requests a portion adjustment or macro edit for a specific logged meal item (e.g. "adjust halwa to 50g", "change protein shake to 30g protein").
-   Parameters:
-   - "mealName": string
-   - "calories": number
-   - "proteinG": number
-   - "carbsG": number
-   - "fatG": number
-   - "targetDate": Optional string ("YYYY-MM-DD", "yesterday", or "today")
+    Parameters:
+    - "mealName": string
+    - "calories": number
+    - "proteinG": number
+    - "carbsG": number
+    - "fatG": number
+    - "targetDate": Optional string ("YYYY-MM-DD", "yesterday", or "today")
 
 NATURAL RECOVERY & READINESS DIRECTIVE:
-1. Do NOT read, track, or cite background recovery scores, sleep logs, or soreness numbers.
-2. Assume the user is in normal, healthy operating condition unless they explicitly state otherwise in chat.
-3. If the user mentions feeling sore, tired, stressed, or injured in their message, respond empathetically, ask them naturally how their body is feeling, and adapt their workout session accordingly.
-4. Speak naturally about energy, form, safety, and progressive overload without ever quoting background metrics, scores, or percentage figures.
+1. Do NOT read, track, or cite background recovery scores, sleep logs, or soreness numbers unless the client brings them up.
+2. Assume the client is in normal, healthy operating condition unless they explicitly state otherwise in chat.
+3. If the client mentions feeling sore, tired, stressed, or injured, respond empathetically, ask how their body is feeling, and adapt their plan accordingly.
+4. Speak naturally about energy, form, safety, and progressive overload without quoting background metric formulas or percentage figures.
 
-Return JSON:
+CRITICAL INSTRUCTION: Return a single JSON object. You MUST write your "coachResponse" FIRST, before listing any "actions":
 {
+  "coachResponse": "Write your natural, empathetic response directly to the user here. Use the tone of $soulName. Do not use robotic language.",
   "actions": [
     {
       "functionName": string,
       "arguments": { ... }
     }
-  ],
-  "coachResponse": string (2-3 warm, supportive sentences in your coach personality answering the user and confirming any changes made)
+  ]
 }
 ''';
-
-    final soul = contextState.profile.coachSoul;
-    String coachInstruction;
-    switch (soul) {
-      case CoachSoul.supporter:
-        coachInstruction =
-            'You are AURA, an empathetic, warm, and gentle personal fitness coach (The Supporter). '
-            'Your tone is encouraging, validating, and focused on celebrating small wins and self-compassion. '
-            'In "coachResponse", speak warmly and clearly.';
-        break;
-      case CoachSoul.pro:
-        coachInstruction =
-            'You are AURA, a direct, no-nonsense, and results-driven personal fitness coach (The Pro). '
-            'Your tone is direct, metrics-focused, and highly motivating. '
-            'In "coachResponse", be punchy and action-oriented.';
-        break;
-      case CoachSoul.teacher:
-        coachInstruction =
-            'You are AURA, an analytical, educational, and scientific personal fitness coach (The Teacher). '
-            'Your tone is educational, insightful, and explaining the science behind fitness and nutrition. '
-            'In "coachResponse", provide informative, clear explanations.';
-        break;
-    }
 
     try {
       final parsed = await _callGeminiJson(
@@ -804,83 +989,91 @@ Return JSON:
   }
 
   String _buildSystemContext(TransformationEngineState state) {
+    final buffer = StringBuffer();
     final p = state.profile;
     final w = state.workout;
     final n = state.nutrition;
+    final r = state.recovery;
     final ctx = state.masterContext;
-    final totalCal = n.meals.fold<num>(0, (sum, m) => sum + m.calories);
-    final totalProt = n.meals.fold<num>(0, (sum, m) => sum + m.proteinG);
 
-    final exercisesStr = w.exercises.isEmpty
-        ? 'No exercises prescribed yet.'
-        : w.exercises.map((e) {
-            final firstSet = e.sets.isNotEmpty ? e.sets.first : null;
-            final repsStr = firstSet != null ? '${firstSet.targetReps} reps' : 'N/A';
-            final weightStr = firstSet != null ? '${firstSet.targetWeightKg}kg' : 'N/A';
-            return '- ${e.name} (${e.targetMuscle} • ${e.equipmentRequired}): ${e.sets.length} sets x $repsStr @ $weightStr. Notes: ${e.notes ?? "none"}';
-          }).join('\n');
+    // 1. High-Level Profile & Goal
+    buffer.writeln('### CLIENT WORKING MEMORY ###');
+    final goalDesc = p.goal.displayName;
+    buffer.writeln('Client: ${p.name} (${p.gender}, ${p.age}y, ${p.weightKg}kg → Target: ${p.targetWeightKg}kg)');
+    buffer.writeln('Goal: $goalDesc (Physique focus: ${p.targetPhysique}, Experience: ${p.experienceLevel.name}, Diet: ${p.dietaryPreference})');
 
-    final mealsStr = n.meals.isEmpty
-        ? 'No meals logged yet today.'
-        : n.meals.map((m) => '- ${m.name}: ${m.calories} kcal (P: ${m.proteinG}g, C: ${m.carbsG}g, F: ${m.fatG}g)').join('\n');
+    // 2. Physical & Recovery State
+    final recoveryDescriptors = <String>[];
+    if (r.sleepHours > 0) {
+      final sleepStr = r.sleepHours % 1 == 0 ? r.sleepHours.toInt().toString() : r.sleepHours.toStringAsFixed(1);
+      recoveryDescriptors.add('Slept $sleepStr hrs');
+    }
+    if (r.muscleSoreness > 0) {
+      recoveryDescriptors.add('Soreness: ${r.muscleSoreness}/10');
+    }
+    if (r.energyLevel > 0) {
+      recoveryDescriptors.add('Energy: ${r.energyLevel}/10');
+    }
+    if (recoveryDescriptors.isNotEmpty) {
+      buffer.writeln('Physical & Recovery State: ${recoveryDescriptors.join(', ')} (Readiness: ${r.status}).');
+    }
 
-    final equipDescriptions = p.equipmentList.isEmpty
-        ? '• Bodyweight'
-        : p.equipmentList.map((e) {
-            final w = e.weightKg != null ? ' (${e.weightKg}kg)' : '';
-            final notes = e.notes != null ? ' - ${e.notes}' : '';
-            return '• ${e.name}$w$notes';
-          }).join('\n');
+    final injuryList = <String>{
+      ...p.activeInjuries,
+      ...ctx.deduced.activeInjuries,
+    }.toList();
+    if (injuryList.isNotEmpty) {
+      buffer.writeln('Active Limitations / Safeguards: ${injuryList.join(', ')}.');
+    }
 
-    final injuryList = p.activeInjuries.isNotEmpty
-        ? p.activeInjuries
-        : ctx.deduced.activeInjuries;
-    final injuryStr = injuryList.isEmpty
-        ? 'None reported.'
-        : injuryList.map((i) => '• $i').join('\n');
-
-    final allNotes = <dynamic>{
-      ...p.dislikedExercises.map((d) => 'Dislikes: $d'),
-      ...ctx.deduced.dislikedExercises.map((d) => 'Dislikes: $d'),
+    final prefsList = <String>{
+      ...p.dislikedExercises.map((d) => 'Dislikes $d'),
+      ...ctx.deduced.dislikedExercises.map((d) => 'Dislikes $d'),
       ...p.personalNotes,
       ...ctx.deduced.personalNotes,
     }.toList();
-    final notesStr = allNotes.isEmpty ? 'No additional notes recorded yet.' : allNotes.map((n) => '• $n').join('\n');
+    if (prefsList.isNotEmpty) {
+      buffer.writeln('Preferences & Notes: ${prefsList.join('; ')}.');
+    }
 
-    return '''
-[CANONICAL USER PROFILE & STATE]
-Name: ${p.name} | Gender: ${p.gender} | Age: ${p.age} | Weight: ${p.weightKg}kg → ${p.targetWeightKg}kg
-Goal: ${p.goal.name} (${p.targetPhysique})
-Experience Level: ${p.experienceLevel.name}
-Dietary Preference: ${p.dietaryPreference}
-Coach Personality/Soul: ${p.coachSoul.name}
+    // 3. Available Gear
+    final gearStr = p.equipmentList.isEmpty
+        ? 'Bodyweight only'
+        : p.equipmentList.map((e) => e.toString()).join(', ');
+    buffer.writeln('Available Equipment: $gearStr.');
 
-[CANONICAL AVAILABLE EQUIPMENT & GEAR]
-$equipDescriptions
+    // 4. Today\'s Workout Context
+    final isDone = w.status == WorkoutStatus.completed;
+    final isSkipped = w.status == WorkoutStatus.skipped;
+    final isAdapted = w.status == WorkoutStatus.adapted;
+    final statusStr = isDone
+        ? 'Completed'
+        : isSkipped
+            ? 'Skipped'
+            : isAdapted
+                ? 'Adapted for today'
+                : 'Pending / Scheduled';
+    buffer.writeln("Workout Today: ${w.title} (${w.focusArea}, ~${w.estimatedDurationMin} min) - Status: $statusStr.");
+    if (w.adaptationNote != null && w.adaptationNote!.isNotEmpty && w.adaptationNote != 'None') {
+      buffer.writeln('Workout Adaptation: ${w.adaptationNote}.');
+    }
 
-[KNOWN INJURIES & MOBILITY LIMITS]
-$injuryStr
+    // 5. Today\'s Nutrition Context (Synthesized delta math)
+    final totalCal = n.meals.fold<num>(0, (sum, m) => sum + m.calories).toInt();
+    final totalProt = n.meals.fold<num>(0, (sum, m) => sum + m.proteinG).toInt();
+    final remCal = (n.targetCalories - totalCal).clamp(0, 9999);
+    final remProt = (n.targetProteinG - totalProt).clamp(0, 999);
+    buffer.writeln("Nutrition Today: $totalCal / ${n.targetCalories} kcal eaten ($remCal kcal remaining). Protein: $totalProt / ${n.targetProteinG}g ($remProt" "g remaining). Water: ${n.waterMl} / ${n.targetWaterMl} ml.");
+    if (n.meals.isNotEmpty) {
+      final mealSummary = n.meals.map((m) => '${m.name} (${m.calories}kcal, ${m.proteinG}g P)').join(', ');
+      buffer.writeln('Logged Meals: $mealSummary.');
+    }
 
-[PERSONAL PREFERENCES & NOTES]
-$notesStr
+    if (state.adaptationNotice != null && state.adaptationNotice!.isNotEmpty) {
+      buffer.writeln('System Notice: ${state.adaptationNotice}.');
+    }
 
-[CURRENT WORKOUT PLAN FOR TODAY]
-Title: ${w.title}
-Status: ${w.status.name}
-Focus Area: ${w.focusArea}
-Adaptation Note: ${w.adaptationNote ?? 'None'}
-Prescribed Exercises:
-$exercisesStr
-
-[CURRENT NUTRITION STATUS]
-Target: ${n.targetCalories} kcal | Protein: ${n.targetProteinG}g | Carbs: ${n.targetCarbsG}g | Fat: ${n.targetFatG}g
-Logged Today: $totalCal / ${n.targetCalories} kcal | Protein: $totalProt / ${n.targetProteinG}g | Water: ${n.waterMl} / ${n.targetWaterMl} ml
-Logged Meals:
-$mealsStr
-
-[AURA SYSTEM NOTICES]
-Recent AI Adaptation Notice: ${state.adaptationNotice ?? 'None'}
-''';
+    return buffer.toString();
   }
 
   @override
@@ -1129,6 +1322,194 @@ Return strictly a JSON object matching this schema:
         ],
         adaptationNote: naturalText,
       );
+    }
+  }
+
+  @override
+  Future<WeeklyDebrief> generateWeeklyDebrief(
+      TransformationEngineState contextState) async {
+    try {
+      final statePayload = _buildStatePayload(contextState);
+      final json = await _callProcessAiCommand(
+        command: 'generateWeeklyDebrief',
+        statePayload: statePayload,
+      );
+      return WeeklyDebrief.fromJson(json);
+    } catch (e) {
+      debugPrint('[AURA AI] processAiCommand generateWeeklyDebrief fallback: $e');
+      final prompt = '''
+Analyze this user's weekly trajectory and synthesize an authentic Narrative Weekly Debrief:
+Context:
+${_buildSystemContext(contextState)}
+
+Connect the dots between different domains:
+1. Explain how sleep/recovery impacted workout load and strength.
+2. Evaluate protein and calorie adherence relative to training load.
+3. Provide 1 actionable focus point for next week.
+Return strictly JSON:
+{
+  "headline": string,
+  "narrative": string (3 paragraphs),
+  "keyAchievement": string,
+  "primaryNextStep": string,
+  "adherenceScore": number (0-100)
+}
+''';
+      try {
+        final json = await _callGeminiJson('generateWeeklyDebrief', prompt);
+        return WeeklyDebrief.fromJson(json);
+      } catch (err) {
+        final soul = contextState.profile.coachSoul;
+        String fallbackNarrative;
+        switch (soul) {
+          case CoachSoul.supporter:
+            fallbackNarrative = "You made meaningful strides this week! Even when life got busy, you showed up for your body. Next week, let's focus on prioritizing restful sleep so you feel energized every morning.";
+            break;
+          case CoachSoul.pro:
+            fallbackNarrative = "Solid baseline execution across the board. Your training compliance is moving in the right direction. To accelerate results next week, lock in your daily protein numbers immediately post-workout.";
+            break;
+          case CoachSoul.teacher:
+            fallbackNarrative = "Neuromuscular adaptation requires balanced recovery cycles. Your training stimulus created productive adaptations, and focusing on sleep consistency next week will optimize protein synthesis and muscle recovery.";
+            break;
+        }
+        return WeeklyDebrief(
+          headline: 'Weekly Synthesis & Next Steps',
+          narrative: fallbackNarrative,
+          keyAchievement: 'Consistent weekly routine engagement',
+          primaryNextStep: 'Lock in 8 hours of sleep and daily protein target',
+          adherenceScore: 82,
+        );
+      }
+    }
+  }
+
+  @override
+  Future<LifestyleIntakeResult> parseLifestyleIntake(
+    String text,
+    UserProfile currentProfile, {
+    List<Map<String, String>>? conversationHistory,
+  }) async {
+    final existingEquipment = currentProfile.equipmentList.map((e) => e.name).toList();
+    final existingDays = currentProfile.daysPerWeek;
+
+    try {
+      final json = await _callProcessAiCommand(
+        command: 'parseLifestyleIntake',
+        message: text,
+      );
+      return LifestyleIntakeResult.fromJson(json);
+    } catch (e) {
+      debugPrint('[AURA AI] processAiCommand parseLifestyleIntake fallback: $e');
+      
+      final historyStr = (conversationHistory != null && conversationHistory.isNotEmpty)
+          ? conversationHistory
+              .map((m) => '${m['sender'] == 'user' ? 'User' : 'AURA'}: ${m['text']}')
+              .join('\n')
+          : 'User: $text';
+
+      final prompt = '''
+The user is having an interactive onboarding interview with AURA (the personal wellness coach).
+Current Calibrated State:
+- Days per Week: $existingDays
+- Available Equipment: ${existingEquipment.join(', ')}
+- Primary Goal: ${currentProfile.goal.name}
+- Target Physique: ${currentProfile.targetPhysique}
+- Dietary Preference: ${currentProfile.dietaryPreference}
+
+Full Conversation Transcript so far:
+$historyStr
+
+User's Latest Message: "$text"
+
+Instructions:
+1. CONVERSATION CONTINUITY & MEMORY:
+   - Preserve previously established variables (e.g. if the user previously said "3 days" or "full gym", DO NOT reset or forget them unless the user explicitly updates them).
+   - If the user responds with physique goals (e.g. "Diwali", "bigger arms", "V shape", "lean"), acknowledge them warmly and incorporate into targetPhysique and followUpQuestion.
+2. COMPLETION CRITERIA:
+   - Intake is complete (isComplete: true) ONLY when both training frequency (daysPerWeek: 2-6) and available equipment are firmly known.
+   - If both are known, confirm with an enthusiastic summary and tell them they are ready to choose their coach persona.
+   - If something is still missing, ask for the missing item in followUpQuestion.
+3. DYNAMIC QUICK REPLIES:
+   - Generate 2 to 3 concise, relevant suggestion pills (dynamicQuickReplies) that directly answer or relate to what you asked in followUpQuestion.
+   - For example:
+     * If asking about schedule: ["3 days a week", "4 days a week", "5 days a week"]
+     * If asking about equipment: ["Full commercial gym", "Dumbbells & bench at home", "Bodyweight only"]
+     * If complete: ["Ready to pick my coach!", "I also want to focus on core", "I prefer 30-min workouts"]
+
+Return strictly JSON:
+{
+  "isComplete": boolean,
+  "daysPerWeek": number,
+  "equipment": ["string"],
+  "targetPhysique": string or null,
+  "missingFields": ["string"],
+  "followUpQuestion": "string",
+  "dynamicQuickReplies": ["string"]
+}
+''';
+      try {
+        final json = await _callGeminiJson('parseLifestyleIntake', prompt);
+        final result = LifestyleIntakeResult.fromJson(json);
+        // Merge with existing state if model omitted them
+        final finalDays = (result.daysPerWeek > 0) ? result.daysPerWeek : existingDays;
+        final finalEq = (result.equipment.isNotEmpty) ? result.equipment : existingEquipment;
+        final isReallyComplete = finalDays >= 2 && finalEq.isNotEmpty && result.isComplete;
+        
+        return LifestyleIntakeResult(
+          isComplete: isReallyComplete,
+          daysPerWeek: finalDays,
+          equipment: finalEq,
+          missingFields: result.missingFields,
+          followUpQuestion: result.followUpQuestion,
+          dynamicQuickReplies: result.dynamicQuickReplies.isNotEmpty
+              ? result.dynamicQuickReplies
+              : (isReallyComplete
+                  ? ["Ready to pick my coach!", "I also want to focus on arms", "I prefer 45-min sessions"]
+                  : ["3 days, full gym", "4 days, dumbbells at home", "5 days, bodyweight"]),
+          targetPhysique: result.targetPhysique ?? currentProfile.targetPhysique,
+        );
+      } catch (err) {
+        final lower = text.toLowerCase();
+        int days = existingDays;
+        if (lower.contains('2 day') || lower.contains('twice')) days = 2;
+        if (lower.contains('3 day') || lower.contains('thrice')) days = 3;
+        if (lower.contains('4 day')) days = 4;
+        if (lower.contains('5 day')) days = 5;
+        if (lower.contains('6 day')) days = 6;
+
+        final List<String> eq = List<String>.from(existingEquipment);
+        if (lower.contains('dumbbell') || lower.contains('weights')) {
+          if (!eq.contains('Dumbbells')) eq.add('Dumbbells');
+        }
+        if (lower.contains('band')) {
+          if (!eq.contains('Resistance Bands')) eq.add('Resistance Bands');
+        }
+        if (lower.contains('gym') || lower.contains('commercial')) {
+          eq.clear();
+          eq.addAll(['Barbell', 'Dumbbells', 'Cable Machine', 'Weight Machines', 'Bodyweight']);
+        }
+
+        if (eq.isEmpty) {
+          eq.addAll(['Bodyweight', 'Dumbbells']);
+        }
+
+        final isComplete = days >= 2 && eq.isNotEmpty;
+        return LifestyleIntakeResult(
+          isComplete: isComplete,
+          daysPerWeek: days,
+          equipment: eq,
+          missingFields: isComplete ? [] : ['daysPerWeek'],
+          followUpQuestion: isComplete
+              ? "Awesome! Calibrated to $days days/week with ${eq.take(3).join(', ')}. Ready to choose your coach persona?"
+              : "Got it! How many days per week would you like to train?",
+          dynamicQuickReplies: isComplete
+              ? ["Ready to choose my coach!", "I also want bigger arms", "I prefer morning workouts"]
+              : ["3 days a week", "4 days a week", "5 days a week"],
+          targetPhysique: lower.contains('v shape') || lower.contains('arms')
+              ? 'V-Shape Physique & Bigger Arms'
+              : currentProfile.targetPhysique,
+        );
+      }
     }
   }
 }

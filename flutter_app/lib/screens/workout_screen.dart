@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../providers/transformation_state.dart';
 import '../providers/analytics_provider.dart';
@@ -8,6 +9,7 @@ import '../models/models.dart';
 import '../engine/exercise_database.dart';
 import '../theme/theme.dart';
 import '../widgets/common/common.dart';
+import '../widgets/common/quick_coach_fab.dart';
 
 class WorkoutScreen extends ConsumerWidget {
   const WorkoutScreen({super.key});
@@ -79,7 +81,7 @@ class WorkoutScreen extends ConsumerWidget {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.bold,
-                      color: isCompleted ? AuraColors.actionGreen : auraTheme.primary,
+                      color: isCompleted ? Theme.of(context).colorScheme.primary : auraTheme.primary,
                     ),
                   ),
                 ],
@@ -92,7 +94,7 @@ class WorkoutScreen extends ConsumerWidget {
                   minHeight: 6,
                   backgroundColor: AuraColors.surface2,
                   valueColor: AlwaysStoppedAnimation<Color>(
-                    isCompleted ? AuraColors.actionGreen : auraTheme.primary,
+                    isCompleted ? Theme.of(context).colorScheme.primary : auraTheme.primary,
                   ),
                 ),
               ),
@@ -135,6 +137,7 @@ class WorkoutScreen extends ConsumerWidget {
           ),
         ),
       ),
+      floatingActionButton: const QuickCoachFAB(contextTag: 'workout'),
       body: Center(
         child: ConstrainedBox(
           constraints: BoxConstraints(maxWidth: context.maxFluidContentWidth),
@@ -156,13 +159,13 @@ class WorkoutScreen extends ConsumerWidget {
                         height: 48,
                         decoration: BoxDecoration(
                           color: isCompleted
-                              ? AuraColors.actionGreen.withValues(alpha: 0.15)
+                              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15)
                               : auraTheme.primary.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Icon(
                           isCompleted ? LucideIcons.checkCircle2 : LucideIcons.dumbbell,
-                          color: isCompleted ? AuraColors.actionGreen : auraTheme.primary,
+                          color: isCompleted ? Theme.of(context).colorScheme.primary : auraTheme.primary,
                           size: 24,
                         ),
                       ),
@@ -249,7 +252,7 @@ class WorkoutScreen extends ConsumerWidget {
                     padding: const EdgeInsets.all(16),
                     backgroundColor: auraTheme.surfaceCard,
                     borderColor: isExDone
-                        ? AuraColors.actionGreen.withValues(alpha: 0.3)
+                        ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)
                         : AuraColors.borderSubtle,
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -293,7 +296,7 @@ class WorkoutScreen extends ConsumerWidget {
                                   padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                                   decoration: BoxDecoration(
                                     color: isExDone
-                                        ? AuraColors.actionGreen.withValues(alpha: 0.15)
+                                        ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15)
                                         : AuraColors.surface2,
                                     borderRadius: BorderRadius.circular(6),
                                   ),
@@ -302,7 +305,7 @@ class WorkoutScreen extends ConsumerWidget {
                                     style: TextStyle(
                                       fontSize: 11,
                                       fontWeight: FontWeight.bold,
-                                      color: isExDone ? AuraColors.actionGreen : AuraColors.textSecondary,
+                                      color: isExDone ? Theme.of(context).colorScheme.primary : AuraColors.textSecondary,
                                     ),
                                   ),
                                 ),
@@ -351,14 +354,25 @@ class WorkoutScreen extends ConsumerWidget {
                                 ),
                                 const SizedBox(width: 12),
                                 Expanded(
-                                  child: Text(
-                                    setItem.targetWeightKg > 0
-                                        ? '${setItem.targetWeightKg} kg × ${setItem.targetReps} reps'
-                                        : '${setItem.targetReps} reps',
-                                    style: AuraTypography.bodyMedium.copyWith(
-                                      decoration: setItem.completed ? TextDecoration.lineThrough : null,
-                                      color: setItem.completed ? AuraColors.textTertiary : AuraColors.textPrimary,
-                                      fontWeight: FontWeight.w600,
+                                  child: GestureDetector(
+                                    onTap: () {
+                                      _showSetAdjustmentModal(context, notifier, ex, setIndex, setItem);
+                                    },
+                                    child: Row(
+                                      children: [
+                                        Text(
+                                          setItem.targetWeightKg > 0
+                                              ? '${setItem.targetWeightKg} kg × ${setItem.targetReps} reps'
+                                              : '${setItem.targetReps} reps',
+                                          style: AuraTypography.bodyMedium.copyWith(
+                                            decoration: setItem.completed ? TextDecoration.lineThrough : null,
+                                            color: setItem.completed ? AuraColors.textTertiary : AuraColors.textPrimary,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                        const SizedBox(width: 6),
+                                        const Icon(LucideIcons.edit2, size: 12, color: AuraColors.textTertiary),
+                                      ],
                                     ),
                                   ),
                                 ),
@@ -370,10 +384,10 @@ class WorkoutScreen extends ConsumerWidget {
                                     width: 28,
                                     height: 28,
                                     decoration: BoxDecoration(
-                                      color: setItem.completed ? AuraColors.actionGreen : Colors.transparent,
+                                      color: setItem.completed ? Theme.of(context).colorScheme.primary : Colors.transparent,
                                       borderRadius: BorderRadius.circular(8),
                                       border: Border.all(
-                                        color: setItem.completed ? AuraColors.actionGreen : AuraColors.borderSubtle,
+                                        color: setItem.completed ? Theme.of(context).colorScheme.primary : AuraColors.borderSubtle,
                                         width: 1.5,
                                       ),
                                     ),
@@ -422,9 +436,9 @@ class WorkoutScreen extends ConsumerWidget {
                 height: 64,
                 decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: AuraColors.actionGreen.withValues(alpha: 0.15),
+                  color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
                 ),
-                child: const Icon(LucideIcons.trophy, color: AuraColors.actionGreen, size: 32),
+                child: Icon(LucideIcons.trophy, color: Theme.of(context).colorScheme.primary, size: 32),
               ),
               const SizedBox(height: 16),
               Text(
@@ -669,6 +683,227 @@ class WorkoutScreen extends ConsumerWidget {
           ),
         );
       },
+    );
+  }
+
+  void _showSetAdjustmentModal(
+    BuildContext context,
+    TransformationEngineNotifier notifier,
+    Exercise ex,
+    int setIndex,
+    ExerciseSet currentSet,
+  ) {
+    int reps = currentSet.targetReps;
+    double weight = currentSet.targetWeightKg;
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: const Color(0xFF14141A),
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(24, 20, 24, 32),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Center(
+                    child: Container(
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.white24,
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Adjust Set #${setIndex + 1}',
+                            style: GoogleFonts.syne(
+                              color: Colors.white,
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                          Text(
+                            ex.name,
+                            style: GoogleFonts.plusJakartaSans(
+                              color: const Color(0xFFA1A1AA),
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF00FFA3).withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          'MICRO-DEVIATION',
+                          style: GoogleFonts.syne(
+                            color: const Color(0xFF00FFA3),
+                            fontSize: 10,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.0,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+
+                  // Reps Stepper
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Target Reps',
+                        style: GoogleFonts.plusJakartaSans(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Row(
+                        children: [
+                          _buildStepperBtn(
+                            icon: LucideIcons.minus,
+                            onTap: () {
+                              if (reps > 1) {
+                                setModalState(() => reps -= 1);
+                              }
+                            },
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                            child: Text(
+                              '$reps',
+                              style: GoogleFonts.syne(
+                                color: Colors.white,
+                                fontSize: 20,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          _buildStepperBtn(
+                            icon: LucideIcons.plus,
+                            onTap: () {
+                              setModalState(() => reps += 1);
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 18),
+
+                  // Weight Stepper (if applicable)
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Text(
+                        'Target Weight (kg)',
+                        style: GoogleFonts.plusJakartaSans(
+                          color: Colors.white,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                      Row(
+                        children: [
+                          _buildStepperBtn(
+                            icon: LucideIcons.minus,
+                            onTap: () {
+                              if (weight >= 2.5) {
+                                setModalState(() => weight -= 2.5);
+                              } else {
+                                setModalState(() => weight = 0.0);
+                              }
+                            },
+                          ),
+                          Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 14.0),
+                            child: Text(
+                              '${weight.toStringAsFixed(weight.truncateToDouble() == weight ? 0 : 1)} kg',
+                              style: GoogleFonts.syne(
+                                color: Colors.white,
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          _buildStepperBtn(
+                            icon: LucideIcons.plus,
+                            onTap: () {
+                              setModalState(() => weight += 2.5);
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 28),
+
+                  // Save Button
+                  SizedBox(
+                    width: double.infinity,
+                    height: 48,
+                    child: ElevatedButton(
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: const Color(0xFF00FFA3),
+                        foregroundColor: Colors.black,
+                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+                      ),
+                      onPressed: () {
+                        notifier.updateSetTarget(
+                          ex.id,
+                          setIndex,
+                          newReps: reps,
+                          newWeightKg: weight,
+                        );
+                        Navigator.pop(ctx);
+                      },
+                      child: Text(
+                        'Save Adjustment',
+                        style: GoogleFonts.syne(fontWeight: FontWeight.bold, fontSize: 14),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+  }
+
+  Widget _buildStepperBtn({required IconData icon, required VoidCallback onTap}) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        width: 38,
+        height: 38,
+        decoration: BoxDecoration(
+          color: const Color(0xFF22222A),
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.white12),
+        ),
+        child: Icon(icon, color: Colors.white, size: 16),
+      ),
     );
   }
 }

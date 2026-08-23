@@ -68,17 +68,19 @@ class _AuraOrbState extends State<AuraOrb> with SingleTickerProviderStateMixin {
 
   List<Color> _getOrbColors() {
     final baseColors = AuraColors.getSoulColors(widget.soul);
+    final soulPalette = AuraColors.getSoulPalette(widget.soul);
+    
     if (widget.state == OrbState.adapting) {
-      // Shift toward Action Green during plan adaptation
-      const green = AuraColors.actionGreen;
+      // Shift toward primary color during plan adaptation
+      final primary = soulPalette.primary;
       return [
-        Color.lerp(baseColors.primary, green, 0.7)!,
-        Color.lerp(baseColors.secondary, green.withValues(alpha: 0.8), 0.7)!,
+        Color.lerp(baseColors.primary, primary, 0.7)!,
+        Color.lerp(baseColors.secondary, primary.withValues(alpha: 0.8), 0.7)!,
       ];
     } else if (widget.state == OrbState.completed) {
       return [
-        AuraColors.actionGreen,
-        AuraColors.actionGreen.withValues(alpha: 0.5),
+        soulPalette.primary,
+        soulPalette.primary.withValues(alpha: 0.5),
       ];
     }
     return [baseColors.primary, baseColors.secondary];

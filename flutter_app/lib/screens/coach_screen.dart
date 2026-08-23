@@ -215,12 +215,12 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
                           color: isAdapted
-                              ? AuraColors.actionGreen.withOpacity(0.15)
+                              ? Theme.of(context).colorScheme.primary.withOpacity(0.15)
                               : auraTheme.surfaceLight,
                           borderRadius: BorderRadius.circular(6),
                           border: Border.all(
                             color: isAdapted
-                                ? AuraColors.actionGreen.withOpacity(0.4)
+                                ? Theme.of(context).colorScheme.primary.withOpacity(0.4)
                                 : AuraColors.borderSubtle,
                           ),
                         ),
@@ -229,7 +229,7 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                           style: TextStyle(
                             fontSize: 10,
                             fontWeight: FontWeight.w600,
-                            color: isAdapted ? AuraColors.actionGreen : AuraColors.textSecondary,
+                            color: isAdapted ? Theme.of(context).colorScheme.primary : AuraColors.textSecondary,
                           ),
                         ),
                       ),
@@ -380,20 +380,20 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                                           color: auraTheme.surfaceLight,
                                           borderRadius: BorderRadius.circular(12),
                                           border: Border.all(
-                                              color: AuraColors.actionGreen.withOpacity(0.4)),
+                                              color: Theme.of(context).colorScheme.primary.withOpacity(0.4)),
                                         ),
                                         child: Column(
                                           crossAxisAlignment: CrossAxisAlignment.start,
                                           children: [
                                             Row(
                                               children: [
-                                                const Icon(LucideIcons.gitFork,
-                                                    color: AuraColors.actionGreen, size: 15),
+                                                Icon(LucideIcons.gitFork,
+                                                    color: Theme.of(context).colorScheme.primary, size: 15),
                                                 const SizedBox(width: 6),
                                                 Text(
                                                   'ADAPTED WORKOUT',
                                                   style: AuraTypography.sectionHeader.copyWith(
-                                                    color: AuraColors.actionGreen,
+                                                    color: Theme.of(context).colorScheme.primary,
                                                     fontSize: 10,
                                                     letterSpacing: 1.0,
                                                   ),
@@ -401,7 +401,7 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                                               ],
                                             ),
                                             const SizedBox(height: 8),
-                                            const Row(
+                                            Row(
                                               children: [
                                                 Expanded(
                                                   child: Text(
@@ -414,7 +414,7 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                                                   ),
                                                 ),
                                                 Icon(LucideIcons.arrowRight,
-                                                    size: 14, color: AuraColors.actionGreen),
+                                                    size: 14, color: Theme.of(context).colorScheme.primary),
                                                 SizedBox(width: 6),
                                                 Expanded(
                                                   child: Text(
@@ -437,9 +437,9 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                                               width: double.infinity,
                                               onPressed: () {
                                                 ScaffoldMessenger.of(context).showSnackBar(
-                                                  const SnackBar(
+                                                  SnackBar(
                                                     content: Text('Revised workout locked in for today!'),
-                                                    backgroundColor: AuraColors.actionGreen,
+                                                    backgroundColor: Theme.of(context).colorScheme.primary,
                                                     duration: Duration(seconds: 2),
                                                   ),
                                                 );
@@ -483,10 +483,10 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                                               children: [
                                                 _buildCompactActionBtn(
                                                   label: 'Keep',
-                                                  color: AuraColors.actionGreen,
+                                                  color: Theme.of(context).colorScheme.primary,
                                                   onTap: () {
                                                     ScaffoldMessenger.of(context).showSnackBar(
-                                                      const SnackBar(
+                                                      SnackBar(
                                                         content: Text('Meal entry confirmed!'),
                                                         duration: Duration(seconds: 1),
                                                       ),
@@ -928,7 +928,7 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Text('Current Goal', style: TextStyle(fontSize: 12, color: AuraColors.textSecondary)),
-                          Text(state.profile.goal.displayName, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AuraColors.textPrimary)),
+                          Text(state.profile.goal.displayName, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AuraColors.textPrimary)),
                         ],
                       ),
                       const Divider(height: 16, color: AuraColors.borderSubtle),
@@ -936,7 +936,7 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Text('Recovery Score', style: TextStyle(fontSize: 12, color: AuraColors.textSecondary)),
-                          Text('${state.recovery.recoveryScore}% (${state.recovery.status})', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AuraColors.actionGreen)),
+                          Text('${state.recovery.recoveryScore}% (${state.recovery.status})', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary)),
                         ],
                       ),
                       const Divider(height: 16, color: AuraColors.borderSubtle),
@@ -944,7 +944,7 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Text('Equipment Detected', style: TextStyle(fontSize: 12, color: AuraColors.textSecondary)),
-                          Text('${state.profile.equipmentList.length} items mapped', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AuraColors.textPrimary)),
+                          Text('${state.profile.equipmentList.length} items mapped', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AuraColors.textPrimary)),
                         ],
                       ),
                     ],
@@ -1018,7 +1018,7 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                 Text('AURA analyzes meals, nutrition labels, and progress check-ins.', style: AuraTypography.bodySmall.copyWith(color: AuraColors.textSecondary)),
                 const SizedBox(height: 16),
                 ListTile(
-                  leading: const Icon(LucideIcons.camera, color: AuraColors.actionGreen),
+                  leading: Icon(LucideIcons.camera, color: Theme.of(context).colorScheme.primary),
                   title: const Text('Take Photo (Camera)', style: TextStyle(color: AuraColors.textPrimary, fontWeight: FontWeight.w600)),
                   subtitle: const Text('Snap meal plate or label right now', style: TextStyle(color: AuraColors.textSecondary, fontSize: 12)),
                   onTap: () {
@@ -1061,7 +1061,7 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                 Text('Fast operational shortcuts for your transformation.', style: AuraTypography.bodySmall.copyWith(color: AuraColors.textSecondary)),
                 const SizedBox(height: 16),
                 ListTile(
-                  leading: const Icon(LucideIcons.utensils, color: AuraColors.actionGreen),
+                  leading: Icon(LucideIcons.utensils, color: Theme.of(context).colorScheme.primary),
                   title: const Text('Log Meal / Snack', style: TextStyle(color: AuraColors.textPrimary, fontWeight: FontWeight.w600)),
                   subtitle: const Text('Describe in natural language for AI macro extraction', style: TextStyle(color: AuraColors.textSecondary, fontSize: 12)),
                   onTap: () {

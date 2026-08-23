@@ -18,6 +18,8 @@ abstract class ITransformationRepository {
 
   Future<List<ProgressEntry>> loadProgressHistory();
   Future<void> saveProgressEntry(ProgressEntry entry);
+
+  Future<void> clearAll();
 }
 
 class LocalTransformationRepository implements ITransformationRepository {
@@ -328,5 +330,12 @@ class LocalTransformationRepository implements ITransformationRepository {
       if (p.workoutStatus != null) 'workoutStatus': p.workoutStatus!.name,
     }).toList();
     await prefs.setString(_keyProgress, jsonEncode(mapList));
+  }
+
+  @override
+  Future<void> clearAll() async {
+    debugPrint('[AURA REPOSITORY] Clearing all local storage data...');
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.clear();
   }
 }

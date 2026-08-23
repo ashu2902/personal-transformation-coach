@@ -102,6 +102,7 @@ All Mixpanel events in AURA follow strict conventions:
 | `soul_switched` | User swaps active coach persona in settings | `soul_name`, `previous_soul`, `surface` | `lib/screens/profile_screen.dart` |
 | `goal_updated` | User recalibrates transformation goal or schedule | `previous_goal`, `new_goal`, `target_physique`, `days_per_week` | `lib/screens/profile_screen.dart` |
 | `screen_viewed` | User navigates tabs or pushes a major screen | `screen_name` (`today`, `coach`, `insights`, `profile`, `workout_active`) | `lib/main.dart` |
+| `account_deleted` | User confirms account deletion | `reason` | `lib/services/firebase_service.dart` |
 
 ---
 

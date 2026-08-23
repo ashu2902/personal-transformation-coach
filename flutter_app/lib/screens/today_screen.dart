@@ -6,6 +6,7 @@ import '../providers/transformation_state.dart';
 import '../models/models.dart';
 import '../theme/theme.dart';
 import '../widgets/common/common.dart';
+import '../widgets/common/quick_coach_fab.dart';
 import 'widgets/aura_orb.dart';
 import 'weekly_plan_screen.dart';
 
@@ -85,20 +86,6 @@ class TodayScreen extends ConsumerWidget {
                       ],
                     ),
                   ),
-                  const SizedBox(width: 12),
-                  GestureDetector(
-                    onTap: () => onNavigateToTab?.call(1), // Navigate to Coach chat tab
-                    child: Hero(
-                      tag: 'aura_orb_hero',
-                      child: AuraOrb(
-                        soul: soul,
-                        state: state.isInitializing
-                            ? OrbState.pulsing
-                            : (isAdapted ? OrbState.adapting : OrbState.idle),
-                        size: 42,
-                      ),
-                    ),
-                  ),
                 ],
               ),
               const SizedBox(height: 18),
@@ -130,7 +117,7 @@ class TodayScreen extends ConsumerWidget {
                 padding: const EdgeInsets.all(22),
                 backgroundColor: auraTheme.surfaceCard,
                 borderColor: isAdapted
-                    ? AuraColors.actionGreen.withValues(alpha: 0.45)
+                    ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.45)
                     : auraTheme.primary.withValues(alpha: 0.28),
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -147,7 +134,7 @@ class TodayScreen extends ConsumerWidget {
                                 height: 8,
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
-                                  color: isAdapted ? AuraColors.actionGreen : auraTheme.primary,
+                                  color: isAdapted ? Theme.of(context).colorScheme.primary : auraTheme.primary,
                                 ),
                               ),
                               const SizedBox(width: 8),
@@ -155,7 +142,7 @@ class TodayScreen extends ConsumerWidget {
                                 child: Text(
                                   isAdapted ? "AURA'S ADAPTED WORKOUT" : "TODAY'S WORKOUT",
                                   style: AuraTypography.sectionHeader.copyWith(
-                                    color: isAdapted ? AuraColors.actionGreen : auraTheme.primary,
+                                    color: isAdapted ? Theme.of(context).colorScheme.primary : auraTheme.primary,
                                     fontSize: 11,
                                     letterSpacing: 1.2,
                                     fontWeight: FontWeight.bold,
@@ -170,14 +157,14 @@ class TodayScreen extends ConsumerWidget {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
-                              color: AuraColors.actionGreen.withValues(alpha: 0.15),
+                              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
                               borderRadius: BorderRadius.circular(6),
-                              border: Border.all(color: AuraColors.actionGreen.withValues(alpha: 0.3)),
+                              border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)),
                             ),
                             child: Text(
                               'Adapted',
                               style: AuraTypography.bodySmall.copyWith(
-                                color: AuraColors.actionGreen,
+                                color: Theme.of(context).colorScheme.primary,
                                 fontSize: 10,
                                 fontWeight: FontWeight.bold,
                               ),
@@ -225,7 +212,7 @@ class TodayScreen extends ConsumerWidget {
                             Container(
                               width: 4,
                               height: 4,
-                              decoration: const BoxDecoration(
+                              decoration: BoxDecoration(
                                 shape: BoxShape.circle,
                                 color: AuraColors.textTertiary,
                               ),
@@ -496,7 +483,7 @@ class TodayScreen extends ConsumerWidget {
                           decoration: BoxDecoration(
                             color: remainingCal > 0
                                 ? auraTheme.primary.withValues(alpha: 0.12)
-                                : AuraColors.actionGreen.withValues(alpha: 0.15),
+                                : Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(6),
                           ),
                           child: Text(
@@ -504,7 +491,7 @@ class TodayScreen extends ConsumerWidget {
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.bold,
-                              color: remainingCal > 0 ? auraTheme.primary : AuraColors.actionGreen,
+                              color: remainingCal > 0 ? auraTheme.primary : Theme.of(context).colorScheme.primary,
                             ),
                           ),
                         ),
@@ -568,7 +555,7 @@ class TodayScreen extends ConsumerWidget {
                         Expanded(
                           flex: 3,
                           child: InkWell(
-                            onTap: () => onNavigateToTab?.call(1),
+                            onTap: () => showQuickCoachModal(context, state.profile.coachSoul, contextTag: 'log_food'),
                             borderRadius: BorderRadius.circular(10),
                             child: Container(
                               padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
@@ -580,7 +567,7 @@ class TodayScreen extends ConsumerWidget {
                               child: Row(
                                 mainAxisAlignment: MainAxisAlignment.center,
                                 children: [
-                                  const Icon(LucideIcons.camera, size: 14, color: AuraColors.actionGreen),
+                                  Icon(LucideIcons.camera, size: 14, color: Theme.of(context).colorScheme.primary),
                                   const SizedBox(width: 6),
                                   Text(
                                     'Log Food with AI',
@@ -602,9 +589,9 @@ class TodayScreen extends ConsumerWidget {
                             onTap: () {
                               notifier.addWater(250);
                               ScaffoldMessenger.of(context).showSnackBar(
-                                const SnackBar(
+                                SnackBar(
                                   content: Text('Logged +250ml water!'),
-                                  backgroundColor: AuraColors.actionGreen,
+                                  backgroundColor: Theme.of(context).colorScheme.primary,
                                   duration: Duration(seconds: 1),
                                 ),
                               );
@@ -767,7 +754,7 @@ class TodayScreen extends ConsumerWidget {
                       color: isToday
                           ? auraTheme.primary.withValues(alpha: 0.18)
                           : isCompleted
-                              ? AuraColors.actionGreen.withValues(alpha: 0.10)
+                              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.10)
                               : isSkipped
                                   ? AuraColors.surface2.withValues(alpha: 0.5)
                                   : AuraColors.surface2,
@@ -776,7 +763,7 @@ class TodayScreen extends ConsumerWidget {
                         color: isToday
                             ? auraTheme.primary
                             : isCompleted
-                                ? AuraColors.actionGreen.withValues(alpha: 0.3)
+                                ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)
                                 : AuraColors.borderSubtle,
                         width: isToday ? 1.5 : 1.0,
                       ),
@@ -803,7 +790,7 @@ class TodayScreen extends ConsumerWidget {
                         const SizedBox(height: 4),
                         // Status Dot / Indicator
                         if (isCompleted)
-                          const Icon(LucideIcons.check, size: 10, color: AuraColors.actionGreen)
+                          Icon(LucideIcons.check, size: 10, color: Theme.of(context).colorScheme.primary)
                         else if (isSkipped)
                           const Icon(LucideIcons.minus, size: 9, color: AuraColors.textTertiary)
                         else if (isRestDay)
@@ -812,7 +799,7 @@ class TodayScreen extends ConsumerWidget {
                           Container(
                             width: 5,
                             height: 5,
-                            decoration: const BoxDecoration(
+                            decoration: BoxDecoration(
                               shape: BoxShape.circle,
                               color: AuraColors.textTertiary,
                             ),
@@ -892,18 +879,18 @@ class TodayScreen extends ConsumerWidget {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                         decoration: BoxDecoration(
-                          color: AuraColors.actionGreen.withValues(alpha: 0.15),
+                          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: AuraColors.actionGreen.withValues(alpha: 0.3)),
+                          border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)),
                         ),
-                        child: const Row(
+                        child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            Icon(LucideIcons.check, size: 11, color: AuraColors.actionGreen),
+                            Icon(LucideIcons.check, size: 11, color: Theme.of(context).colorScheme.primary),
                             SizedBox(width: 4),
                             Text(
                               'Completed',
-                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AuraColors.actionGreen),
+                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary),
                             ),
                           ],
                         ),
@@ -1492,7 +1479,7 @@ class TodayScreen extends ConsumerWidget {
                         ScaffoldMessenger.of(context).showSnackBar(
                           SnackBar(
                             content: Text('Logged "${workout.title}" successfully!'),
-                            backgroundColor: AuraColors.actionGreen,
+                            backgroundColor: Theme.of(context).colorScheme.primary,
                             behavior: SnackBarBehavior.floating,
                           ),
                         );
@@ -1576,16 +1563,16 @@ class _NaturalWorkoutQuickLogCardState extends ConsumerState<NaturalWorkoutQuick
                   Container(
                     padding: const EdgeInsets.all(5),
                     decoration: BoxDecoration(
-                      color: AuraColors.actionGreen.withValues(alpha: 0.15),
+                      color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(6),
                     ),
-                    child: const Icon(LucideIcons.sparkles, size: 14, color: AuraColors.actionGreen),
+                    child: Icon(LucideIcons.sparkles, size: 14, color: Theme.of(context).colorScheme.primary),
                   ),
                   const SizedBox(width: 8),
                   Text(
                     'EXPRESS AI WORKOUT LOG',
                     style: AuraTypography.sectionHeader.copyWith(
-                      color: AuraColors.actionGreen,
+                      color: Theme.of(context).colorScheme.primary,
                       fontSize: 10,
                       letterSpacing: 1.1,
                     ),
@@ -1593,10 +1580,10 @@ class _NaturalWorkoutQuickLogCardState extends ConsumerState<NaturalWorkoutQuick
                 ],
               ),
               if (_isParsing)
-                const SizedBox(
+                SizedBox(
                   width: 14,
                   height: 14,
-                  child: CircularProgressIndicator(strokeWidth: 2, color: AuraColors.actionGreen),
+                  child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.primary),
                 ),
             ],
           ),
@@ -1638,7 +1625,7 @@ class _NaturalWorkoutQuickLogCardState extends ConsumerState<NaturalWorkoutQuick
                   height: 38,
                   width: 40,
                   decoration: BoxDecoration(
-                    color: AuraColors.actionGreen,
+                    color: Theme.of(context).colorScheme.primary,
                     borderRadius: BorderRadius.circular(10),
                   ),
                   child: const Center(

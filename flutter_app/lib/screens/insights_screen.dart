@@ -1,18 +1,54 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../providers/transformation_state.dart';
 import '../models/models.dart';
+import '../services/ai_service.dart';
 import '../theme/theme.dart';
 import '../widgets/common/common.dart';
 import 'widgets/aura_orb.dart';
 import 'weekly_plan_screen.dart';
 
-class InsightsScreen extends ConsumerWidget {
+class InsightsScreen extends ConsumerStatefulWidget {
   const InsightsScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<InsightsScreen> createState() => _InsightsScreenState();
+}
+
+class _InsightsScreenState extends ConsumerState<InsightsScreen> {
+  WeeklyDebrief? _debrief;
+  bool _isLoadingDebrief = false;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadWeeklyDebrief();
+    });
+  }
+
+  Future<void> _loadWeeklyDebrief() async {
+    final state = ref.read(transformationEngineProvider);
+    setState(() => _isLoadingDebrief = true);
+    try {
+      final debrief = await ref.read(transformationEngineProvider.notifier).aiService.generateWeeklyDebrief(state);
+      if (mounted) {
+        setState(() {
+          _debrief = debrief;
+          _isLoadingDebrief = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() => _isLoadingDebrief = false);
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final state = ref.watch(transformationEngineProvider);
     final auraTheme = context.auraTheme;
     final soul = state.profile.coachSoul;
@@ -35,14 +71,6 @@ class InsightsScreen extends ConsumerWidget {
         ? (currentProgressDelta / totalGoalDelta).clamp(0.08, 1.0)
         : 1.0;
 
-    // 3. LIVE DYNAMIC DATA: Algorithmic Pattern Synthesis
-    final pattern = _generateDynamicPattern(
-      trackedCount: trackedCount,
-      soul: soul,
-      avgSleep: state.recovery.sleepHours,
-      recoveryScore: state.recovery.recoveryScore,
-    );
-
     return Scaffold(
       backgroundColor: auraTheme.scaffoldBackground,
       body: Center(
@@ -54,83 +82,38 @@ class InsightsScreen extends ConsumerWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-            // Screen Header
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+                // Screen Header
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
-                    Text(
-                      'INSIGHTS & PATTERNS',
-                      style: AuraTypography.sectionHeader.copyWith(
-                        color: auraTheme.primary,
-                      ),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'NARRATIVE INSIGHTS',
+                          style: AuraTypography.sectionHeader.copyWith(
+                            color: auraTheme.primary,
+                          ),
+                        ),
+                        const SizedBox(height: 4),
+                        Text(
+                          'Weekly Debrief',
+                          style: AuraTypography.displayMedium,
+                        ),
+                      ],
                     ),
-                    const SizedBox(height: 4),
-                    Text(
-                      'Learned by AURA',
-                      style: AuraTypography.displayMedium,
+                    AuraOrb(
+                      soul: soul,
+                      state: _isLoadingDebrief ? OrbState.pulsing : OrbState.idle,
+                      size: 40,
                     ),
                   ],
                 ),
-                AuraOrb(
-                  soul: soul,
-                  state: OrbState.idle,
-                  size: 40,
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
+                const SizedBox(height: 20),
 
-            // 1. HERO INSIGHT CARD (Dynamic Interpretation First)
-            AuraCard(
-              padding: const EdgeInsets.all(20),
-              backgroundColor: auraTheme.surfaceCard,
-              borderColor: auraTheme.primary.withOpacity(0.3),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Container(
-                        padding: const EdgeInsets.all(8),
-                        decoration: BoxDecoration(
-                          color: auraTheme.primary.withOpacity(0.15),
-                          borderRadius: BorderRadius.circular(10),
-                        ),
-                        child: Icon(LucideIcons.sparkles, color: auraTheme.primary, size: 18),
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        'CORE PATTERN IDENTIFIED',
-                        style: AuraTypography.sectionHeader.copyWith(
-                          color: auraTheme.primary,
-                          fontSize: 11,
-                          letterSpacing: 1.2,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  Text(
-                    pattern.quote,
-                    style: AuraTypography.titleLarge.copyWith(
-                      height: 1.35,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    pattern.explanation,
-                    style: AuraTypography.bodyMedium.copyWith(
-                      color: AuraColors.textSecondary,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
+                // 1. HERO: AI WEEKLY NARRATIVE DEBRIEF CARD
+                _buildWeeklyDebriefHero(auraTheme, soul),
+                const SizedBox(height: 20),
 
             // 2. LIVE MOMENTUM & CONSISTENCY (Dynamic from state)
             AuraCard(
@@ -153,18 +136,18 @@ class InsightsScreen extends ConsumerWidget {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: AuraColors.actionGreen.withOpacity(0.15),
+                          color: Theme.of(context).colorScheme.primary.withOpacity(0.15),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Row(
                           mainAxisSize: MainAxisSize.min,
                           children: [
-                            const Icon(LucideIcons.checkCircle2, color: AuraColors.actionGreen, size: 13),
+                            Icon(LucideIcons.checkCircle2, color: Theme.of(context).colorScheme.primary, size: 13),
                             const SizedBox(width: 4),
                             Text(
                               '$trackedCount of 7 Completed',
                               style: AuraTypography.bodySmall.copyWith(
-                                color: AuraColors.actionGreen,
+                                color: Theme.of(context).colorScheme.primary,
                                 fontWeight: FontWeight.bold,
                               ),
                             ),
@@ -318,7 +301,7 @@ class InsightsScreen extends ConsumerWidget {
                       value: progressRatio,
                       minHeight: 8,
                       backgroundColor: auraTheme.surfaceLight,
-                      valueColor: const AlwaysStoppedAnimation<Color>(AuraColors.actionGreen),
+                      valueColor: AlwaysStoppedAnimation<Color>(Theme.of(context).colorScheme.primary),
                     ),
                   ),
                   const SizedBox(height: 12),
@@ -381,67 +364,194 @@ class InsightsScreen extends ConsumerWidget {
                 ),
               ),
             ),
-            const SizedBox(height: 40),
-          ],
+              ],
+            ),
+          ),
         ),
       ),
-    ),
-  ),
-);
+    );
   }
 
-  ({String quote, String explanation}) _generateDynamicPattern({
-    required int trackedCount,
-    required CoachSoul soul,
-    required double avgSleep,
-    required int recoveryScore,
-  }) {
-    String quote;
-    String explanation;
-
-    if (trackedCount >= 5) {
-      quote = "“You are maintaining strong momentum with $trackedCount of 7 sessions completed. Adherence rate is at ${((trackedCount / 7) * 100).round()}%.”";
-      switch (soul) {
-        case CoachSoul.supporter:
-          explanation = "Your routine is blossoming beautifully! Remember to listen to your body and celebrate this incredible consistency.";
-          break;
-        case CoachSoul.pro:
-          explanation = "Weekly execution is locked in. Maintain this baseline load and ensure nutrition targets match training volume.";
-          break;
-        case CoachSoul.teacher:
-          explanation = "Consistent progressive tension accelerates muscular hypertrophy and neuromuscular recruitment efficiency.";
-          break;
-      }
-    } else if (trackedCount >= 2) {
-      quote = "“You are establishing a steady baseline with $trackedCount sessions tracked this week. Recovery balance is healthy.”";
-      switch (soul) {
-        case CoachSoul.supporter:
-          explanation = "Every workout completed is a victory. Focus on today's small action without worrying about perfection.";
-          break;
-        case CoachSoul.pro:
-          explanation = "Solid foundation. Locking in your next session will push you into optimal weekly transformation velocity.";
-          break;
-        case CoachSoul.teacher:
-          explanation = "Intermittent recovery allows structural tendon repair and glycogen replenishment before heavy loading.";
-          break;
-      }
-    } else {
-      quote = "“Low-friction phase: $trackedCount session logged this week. Today is a great opportunity to reactivate momentum.”";
-      switch (soul) {
-        case CoachSoul.supporter:
-          explanation = "No pressure at all. Even a 10-minute stretch or light walk today helps you feel refreshed and connected.";
-          break;
-        case CoachSoul.pro:
-          explanation = "Let's re-engage today. A 25-minute focused session will re-establish your forward trajectory.";
-          break;
-        case CoachSoul.teacher:
-          explanation = "Brief muscular contractions increase GLUT-4 translocation and insulin sensitivity for up to 48 hours.";
-          break;
-      }
+  Widget _buildWeeklyDebriefHero(AuraThemeExtension auraTheme, CoachSoul soul) {
+    if (_isLoadingDebrief && _debrief == null) {
+      return AuraCard(
+        padding: const EdgeInsets.all(20),
+        backgroundColor: auraTheme.surfaceCard,
+        borderColor: auraTheme.primary.withOpacity(0.3),
+        child: Column(
+          children: [
+            const SizedBox(height: 16),
+            AuraOrb(soul: soul, state: OrbState.pulsing, size: 60),
+            const SizedBox(height: 18),
+            Text(
+              'AURA is synthesizing your weekly debrief...',
+              style: GoogleFonts.syne(color: Colors.white, fontSize: 14, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Connecting sleep, nutrition, and workout load telemetry',
+              style: GoogleFonts.plusJakartaSans(color: const Color(0xFFA1A1AA), fontSize: 12),
+            ),
+            const SizedBox(height: 16),
+          ],
+        ),
+      );
     }
 
-    return (quote: quote, explanation: explanation);
+    final debrief = _debrief ??
+        WeeklyDebrief(
+          headline: 'Weekly Synthesis & Trajectory',
+          narrative: 'Your physical adaptations reflect steady commitment across this 7-day cycle. Recovery balance and nutrition compliance are stabilizing as your body integrates the weekly training volume.',
+          keyAchievement: 'Consistent routine compliance',
+          primaryNextStep: 'Lock in 8 hours of sleep and daily protein target',
+          adherenceScore: 85,
+        );
+
+    return AuraCard(
+      padding: const EdgeInsets.all(20),
+      backgroundColor: auraTheme.surfaceCard,
+      borderColor: auraTheme.primary.withOpacity(0.35),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: auraTheme.primary.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Icon(LucideIcons.sparkles, color: auraTheme.primary, size: 18),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    'AI WEEKLY SYNTHESIS',
+                    style: AuraTypography.sectionHeader.copyWith(
+                      color: auraTheme.primary,
+                      fontSize: 11,
+                      letterSpacing: 1.2,
+                    ),
+                  ),
+                ],
+              ),
+              IconButton(
+                icon: Icon(
+                  LucideIcons.refreshCw,
+                  size: 16,
+                  color: _isLoadingDebrief ? auraTheme.primary : AuraColors.textSecondary,
+                ),
+                tooltip: 'Regenerate Debrief',
+                onPressed: _isLoadingDebrief ? null : _loadWeeklyDebrief,
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+
+          // Headline
+          Text(
+            debrief.headline,
+            style: GoogleFonts.syne(
+              color: Colors.white,
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              height: 1.3,
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Narrative in Coach Soul Voice
+          Text(
+            debrief.narrative,
+            style: GoogleFonts.plusJakartaSans(
+              color: const Color(0xFFD4D4D8),
+              fontSize: 13,
+              height: 1.5,
+            ),
+          ),
+          const SizedBox(height: 16),
+          const Divider(color: Colors.white12, height: 1),
+          const SizedBox(height: 14),
+
+          // Key Achievement & Primary Next Step Badges
+          Row(
+            children: [
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF00FFA3).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFF00FFA3).withOpacity(0.25)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(LucideIcons.award, color: Color(0xFF00FFA3), size: 14),
+                          const SizedBox(width: 6),
+                          Text(
+                            'ACHIEVEMENT',
+                            style: GoogleFonts.syne(color: const Color(0xFF00FFA3), fontSize: 9, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        debrief.keyAchievement,
+                        style: GoogleFonts.plusJakartaSans(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Container(
+                  padding: const EdgeInsets.all(10),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF60A5FA).withOpacity(0.1),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: const Color(0xFF60A5FA).withOpacity(0.25)),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(LucideIcons.arrowRightCircle, color: Color(0xFF60A5FA), size: 14),
+                          const SizedBox(width: 6),
+                          Text(
+                            'NEXT WEEK FOCUS',
+                            style: GoogleFonts.syne(color: const Color(0xFF60A5FA), fontSize: 9, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        debrief.primaryNextStep,
+                        style: GoogleFonts.plusJakartaSans(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
   }
+
+
 
   Widget _buildDayBubble(String day, bool? completed, AuraThemeExtension theme, {String? label}) {
     Color bg = theme.surfaceLight;
@@ -449,9 +559,9 @@ class InsightsScreen extends ConsumerWidget {
     Widget icon = Text(day, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AuraColors.textSecondary));
 
     if (completed == true) {
-      bg = AuraColors.actionGreen.withOpacity(0.2);
-      border = AuraColors.actionGreen.withOpacity(0.6);
-      icon = const Icon(LucideIcons.check, size: 14, color: AuraColors.actionGreen);
+      bg = Theme.of(context).colorScheme.primary.withOpacity(0.2);
+      border = Theme.of(context).colorScheme.primary.withOpacity(0.6);
+      icon = Icon(LucideIcons.check, size: 14, color: Theme.of(context).colorScheme.primary);
     } else if (completed == false) {
       bg = theme.surfaceLight;
       border = AuraColors.borderSubtle;
@@ -475,7 +585,7 @@ class InsightsScreen extends ConsumerWidget {
           label ?? day,
           style: TextStyle(
             fontSize: 10,
-            color: completed == true ? AuraColors.actionGreen : AuraColors.textSecondary,
+            color: completed == true ? Theme.of(context).colorScheme.primary : AuraColors.textSecondary,
             fontWeight: label != null ? FontWeight.bold : FontWeight.normal,
           ),
         ),

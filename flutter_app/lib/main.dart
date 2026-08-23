@@ -14,6 +14,7 @@ import 'providers/analytics_provider.dart';
 import 'providers/transformation_state.dart';
 import 'theme/theme.dart';
 import 'screens/widgets/aura_orb.dart';
+import 'widgets/common/quick_coach_fab.dart';
 import 'screens/today_screen.dart';
 import 'screens/workout_screen.dart';
 import 'screens/coach_screen.dart';
@@ -309,6 +310,7 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
                 child: screens[_selectedIndex],
               ),
             ),
+            floatingActionButton: _selectedIndex == 0 ? const QuickCoachFAB(contextTag: 'today') : null,
             bottomNavigationBar: BottomNavigationBar(
               currentIndex: _selectedIndex,
               onTap: (index) {

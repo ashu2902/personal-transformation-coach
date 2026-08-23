@@ -256,13 +256,13 @@ class ProfileScreen extends ConsumerWidget {
                         height: 32,
                         decoration: BoxDecoration(
                           color: notifier.isAuthenticated
-                              ? AuraColors.actionGreen.withValues(alpha: 0.15)
+                              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15)
                               : AuraColors.warningAmber.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Icon(
                           notifier.isAuthenticated ? LucideIcons.shieldCheck : LucideIcons.userX,
-                          color: notifier.isAuthenticated ? AuraColors.actionGreen : AuraColors.warningAmber,
+                          color: notifier.isAuthenticated ? Theme.of(context).colorScheme.primary : AuraColors.warningAmber,
                           size: 18,
                         ),
                       ),
@@ -285,7 +285,7 @@ class ProfileScreen extends ConsumerWidget {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  if (!notifier.isAuthenticated)
+                  if (!notifier.isAuthenticated) ...[
                     AuraButton(
                       text: 'Sign In with Google',
                       variant: AuraButtonVariant.secondary,
@@ -295,9 +295,9 @@ class ProfileScreen extends ConsumerWidget {
                           await notifier.signInWithGoogle();
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
+                              SnackBar(
                                 content: Text('Successfully signed in!'),
-                                backgroundColor: AuraColors.actionGreen,
+                                backgroundColor: Theme.of(context).colorScheme.primary,
                               ),
                             );
                           }
@@ -312,8 +312,17 @@ class ProfileScreen extends ConsumerWidget {
                           }
                         }
                       },
-                    )
-                  else
+                    ),
+                    const SizedBox(height: 10),
+                    AuraButton(
+                      text: 'Reset Session Data',
+                      variant: AuraButtonVariant.ghost,
+                      textColor: AuraColors.concernCoral,
+                      width: double.infinity,
+                      icon: LucideIcons.trash2,
+                      onPressed: () => _showDeleteAccountDialog(context, ref),
+                    ),
+                  ] else ...[
                     AuraButton(
                       text: 'Sign Out',
                       variant: AuraButtonVariant.outline,
@@ -323,11 +332,21 @@ class ProfileScreen extends ConsumerWidget {
                         await notifier.signOut();
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(content: Text('Signed out successfully.')),
+                            SnackBar(content: Text('Signed out successfully.')),
                           );
                         }
                       },
                     ),
+                    const SizedBox(height: 10),
+                    AuraButton(
+                      text: 'Delete Account',
+                      variant: AuraButtonVariant.ghost,
+                      textColor: AuraColors.concernCoral,
+                      width: double.infinity,
+                      icon: LucideIcons.trash2,
+                      onPressed: () => _showDeleteAccountDialog(context, ref),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -338,6 +357,126 @@ class ProfileScreen extends ConsumerWidget {
     ),
   ),
 );
+  }
+
+  void _showDeleteAccountDialog(BuildContext context, WidgetRef ref) {
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (dialogCtx) {
+        bool isDeleting = false;
+        return StatefulBuilder(
+          builder: (context, setDialogState) {
+            return AlertDialog(
+              backgroundColor: AuraColors.surface1,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(16),
+                side: const BorderSide(color: AuraColors.borderSubtle),
+              ),
+              title: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: AuraColors.error.withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: const Icon(LucideIcons.alertTriangle, color: AuraColors.error, size: 20),
+                  ),
+                  const SizedBox(width: 12),
+                  const Expanded(
+                    child: Text(
+                      'Delete Account',
+                      style: TextStyle(
+                        color: AuraColors.textPrimary,
+                        fontSize: 18,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              content: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Are you sure you want to delete your account? Your active authentication and session will be permanently deleted, and your transformation history will be archived.',
+                    style: AuraTypography.bodySmall.copyWith(
+                      color: AuraColors.textSecondary,
+                      height: 1.4,
+                    ),
+                  ),
+                  if (isDeleting) ...[
+                    const SizedBox(height: 20),
+                    const Center(
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2.5,
+                        valueColor: AlwaysStoppedAnimation<Color>(AuraColors.concernCoral),
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+              actionsPadding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+              actions: isDeleting
+                  ? []
+                  : [
+                      TextButton(
+                        onPressed: () => Navigator.of(dialogCtx).pop(),
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(color: AuraColors.textSecondary),
+                        ),
+                      ),
+                      ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AuraColors.error,
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                        onPressed: () async {
+                          setDialogState(() => isDeleting = true);
+                          try {
+                            await ref.read(transformationEngineProvider.notifier).deleteAccount();
+                            if (dialogCtx.mounted) {
+                              Navigator.of(dialogCtx).pop();
+                            }
+                            if (context.mounted) {
+                              Navigator.of(context).popUntil((route) => route.isFirst);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Account deleted and data archived.'),
+                                  backgroundColor: AuraColors.surface2,
+                                ),
+                              );
+                            }
+                          } catch (e) {
+                            setDialogState(() => isDeleting = false);
+                            if (context.mounted) {
+                              final errorText = e.toString().contains('requires-recent-login')
+                                  ? 'For your security, please log out and log back in before deleting your account.'
+                                  : 'Failed to delete account. Please try again later.';
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text(errorText),
+                                  backgroundColor: AuraColors.error,
+                                  duration: const Duration(seconds: 5),
+                                ),
+                              );
+                            }
+                          }
+                        },
+                        child: const Text('Delete Account'),
+                      ),
+                    ],
+            );
+          },
+        );
+      },
+    );
   }
 
   Widget _buildPersonaCard({
@@ -769,7 +908,7 @@ class ProfileScreen extends ConsumerWidget {
                           ScaffoldMessenger.of(context).showSnackBar(
                             SnackBar(
                               content: Text('Goals recalibrated! Daily macros updated for ${selectedGoal.displayName}.'),
-                              backgroundColor: AuraColors.actionGreen,
+                              backgroundColor: Theme.of(context).colorScheme.primary,
                               duration: const Duration(seconds: 3),
                             ),
                           );
