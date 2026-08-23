@@ -352,6 +352,251 @@ Return strictly JSON:
           return;
         }
 
+
+        case "generateMetabolicPlan": {
+          const profile = state?.profile || {};
+          const prompt = `Calculate optimal daily calories and macros for this person using the Mifflin-St Jeor equation, appropriate gender correction, and goal-based deficit/surplus:
+Name: ${profile.name || 'Client'}
+Gender: ${profile.gender || 'unspecified'}
+Age: ${profile.age || 25} years
+Height: ${profile.heightCm || 170} cm
+Current Weight: ${profile.weightKg || 70} kg
+Target Weight: ${profile.targetWeightKg || 70} kg
+Goal: ${profile.goal || 'recomp'} (Target Physique: ${profile.targetPhysique || 'general fitness'})
+Training Frequency: ${profile.daysPerWeek || 3} days/week
+
+Apply correct gender-specific BMR formula. Return JSON:
+{
+  "targetCalories": number,
+  "targetProteinG": number,
+  "targetCarbsG": number,
+  "targetFatG": number,
+  "targetWaterMl": number,
+  "reasoning": "string (1 sentence explaining the calorie target)"
+}`;
+          const result = await executeGeminiCall(apiKey, prompt, true, model);
+          const parsed = JSON.parse(result.text.replace(/```json/g, "").replace(/```/g, "").trim());
+          res.status(200).json(parsed);
+          return;
+        }
+
+        case "synthesizeTodayFocus": {
+          const prompt = `Based on the context below, write one action-focused sentence for the client's day:
+${compressedMemory}`;
+          const result = await executeGeminiCall(apiKey, prompt, false, model);
+          res.status(200).json({ focus: result.text.trim() });
+          return;
+        }
+
+        case "generateAdaptedNutrition": {
+          const reason = message || "General adaptation";
+          const prompt = `SYSTEM INSTRUCTION:
+You are an expert sports nutritionist adapting a client's daily targets based on their feedback/deviation.
+Current Context: ${compressedMemory}
+
+User's deviation reason: "${reason}"
+
+Analyze the deviation and adjust the macros ONLY IF biologically necessary. If they missed a meal, maybe bump up protein slightly for the rest of the day, or adjust calories. Keep hydration targets aggressive if they trained hard.
+Return JSON:
+{
+  "targetCalories": number,
+  "targetProteinG": number,
+  "targetCarbsG": number,
+  "targetFatG": number,
+  "targetWaterMl": number,
+  "adaptationReason": "string explaining why targets shifted"
+}`;
+          const result = await executeGeminiCall(apiKey, prompt, true, model);
+          const parsed = JSON.parse(result.text.replace(/```json/g, "").replace(/```/g, "").trim());
+          res.status(200).json(parsed);
+          return;
+        }
+
+        case "generateAdaptedWorkout": {
+          const reason = message || "General adaptation";
+          const prompt = `SYSTEM INSTRUCTION:
+You are an expert strength coach adapting today's workout on the fly.
+Current Context: ${compressedMemory}
+
+User's limitation/deviation: "${reason}"
+
+Modify the workout. If they have an injury or lack equipment, swap the exercises for safe alternatives that target the same focus area. Do NOT drastically increase volume.
+Return JSON:
+{
+  "title": "string (e.g., 'Adapted Pull Day')",
+  "adaptationNote": "string explaining changes to the user",
+  "exercises": [
+    {
+      "name": "string",
+      "targetMuscle": "string",
+      "equipmentRequired": "bodyweight | free_weight | cables | machine",
+      "targetSets": number,
+      "targetReps": number,
+      "targetWeightKg": number,
+      "notes": "string"
+    }
+  ]
+}`;
+          const result = await executeGeminiCall(apiKey, prompt, true, model);
+          const parsed = JSON.parse(result.text.replace(/```json/g, "").replace(/```/g, "").trim());
+          res.status(200).json(parsed);
+          return;
+        }
+
+        case "generateWeeklyPlan": {
+          const prompt = `SYSTEM INSTRUCTION:
+You are an expert fitness coach generating a 7-day adaptive workout and nutrition schedule.
+Client Context: ${compressedMemory}
+
+Design a weekly split matching their training frequency (${state?.profile?.daysPerWeek || 3} days/week). 
+For rest days, focus on active recovery and hydration. For training days, assign a specific focus area and 3-5 core exercises.
+Return JSON:
+{
+  "overview": "string (1 paragraph overview of the week's strategy)",
+  "coachNote": "string (motivational note from their coach)",
+  "days": [
+    {
+      "dayName": "string (e.g., 'Monday')",
+      "date": "string (ISO date if possible, or just skip)",
+      "title": "string (e.g., 'Upper Body Push' or 'Active Recovery')",
+      "focusArea": "string",
+      "isRestDay": boolean,
+      "exerciseNames": ["string"],
+      "nutritionFocus": "string"
+    }
+  ]
+}`;
+          const result = await executeGeminiCall(apiKey, prompt, true, model);
+          const parsed = JSON.parse(result.text.replace(/```json/g, "").replace(/```/g, "").trim());
+          res.status(200).json(parsed);
+          return;
+        }
+
+        case "parseNaturalWorkout": {
+          const workoutText = message || "";
+          const prompt = `Parse this natural language workout log into a structured data format:
+"${workoutText}"
+
+Identify exercises, sets, reps, and weights. If weight is not mentioned, use 0.0. If reps are not mentioned, assume 10.
+Return JSON:
+{
+  "title": "string (Summarize the workout in 3-5 words)",
+  "focusArea": "string (e.g., 'Chest & Triceps' or 'Full Body')",
+  "estimatedDurationMin": number,
+  "adaptationNote": "string (Encouraging feedback on their log)",
+  "exercises": [
+    {
+      "name": "string",
+      "targetMuscle": "string",
+      "equipmentRequired": "bodyweight",
+      "sets": [
+        {
+          "setNumber": number,
+          "targetReps": number,
+          "targetWeightKg": number,
+          "completed": true
+        }
+      ],
+      "notes": "string"
+    }
+  ]
+}`;
+          const result = await executeGeminiCall(apiKey, prompt, true, model);
+          const parsed = JSON.parse(result.text.replace(/```json/g, "").replace(/```/g, "").trim());
+          res.status(200).json(parsed);
+          return;
+        }
+
+
+        case "generateCoachResponse": {
+          const userPrompt = message || "";
+          const prompt = `SYSTEM INSTRUCTION:
+${coachToneInstruction}
+
+User Transformation Context:
+${compressedMemory}
+
+User Message: ${userPrompt}`;
+          const result = await executeGeminiCall(apiKey, prompt, false, model);
+          res.status(200).json({ response: result.text.trim() });
+          return;
+        }
+
+        case "parseQuickLog": {
+          const rawText = message || "";
+          const prompt = `User Context:
+${compressedMemory}
+
+Analyze this natural language daily fitness log entry: "${rawText}"
+Scheduled Workout for today: ${state?.workout?.title || 'Unknown'}
+
+Extract structured data. Return JSON:
+{
+  "workoutStatus": "completed" | "skipped" | "adapted" | null,
+  "workoutReason": "string or null",
+  "mealsToAdd": [{"name": "string", "calories": 0, "proteinG": 0, "carbsG": 0, "fatG": 0}],
+  "skippedMeals": ["string"],
+  "sleepHours": 0,
+  "weightKg": 0,
+  "energyLevel": 0,
+  "coachFeedback": "1-2 sentences feedback written in your specific personality style"
+}`;
+          const result = await executeGeminiCall(apiKey, prompt, true, model);
+          const parsed = JSON.parse(result.text.replace(/```json/g, "").replace(/```/g, "").trim());
+          res.status(200).json(parsed);
+          return;
+        }
+
+        case "adaptWorkoutWithAI": {
+          const adaptationRequest = message || "";
+          const prompt = `You are an elite strength coach adapting a workout plan.
+User Context:
+${compressedMemory}
+
+Adaptation Request: "${adaptationRequest}"
+Current Workout: ${state?.workout?.title || 'Unknown'}
+
+Modify the exercises to suit the adaptation request.
+Return JSON:
+{
+  "title": "string",
+  "adaptationNote": "string",
+  "exercises": [{"name": "string", "targetMuscle": "string", "equipmentRequired": "string", "targetSets": 3, "targetReps": 10, "targetWeightKg": 0, "notes": "string"}]
+}`;
+          const result = await executeGeminiCall(apiKey, prompt, true, model);
+          const parsed = JSON.parse(result.text.replace(/```json/g, "").replace(/```/g, "").trim());
+          res.status(200).json(parsed);
+          return;
+        }
+
+        case "generateEngineDailyInsight": {
+          const prompt = `Write a short, punchy, 1-sentence daily insight for the user based on their context:
+${compressedMemory}
+Keep it warm, encouraging, plain English, and action-focused.`;
+          const result = await executeGeminiCall(apiKey, prompt, false, model);
+          res.status(200).json({ insight: result.text.trim() });
+          return;
+        }
+
+        case "generateAIInitialWorkout": {
+          const profile = state?.profile || {};
+          const prompt = `You are an elite fitness coach designing an initial 1-day workout for a new client.
+Client: ${profile.name || 'Client'}, Goal: ${profile.goal || 'general'}, Equipment: ${(profile.equipmentList || []).map((e: any) => e.name).join(", ")}
+
+Return strictly JSON:
+{
+  "title": "string",
+  "focusArea": "string",
+  "estimatedDurationMin": 45,
+  "adaptationNote": "string",
+  "exercises": [{"name": "string", "targetMuscle": "string", "equipmentRequired": "string", "targetSets": 3, "targetReps": 10, "targetWeightKg": 0, "notes": "string"}]
+}`;
+          const result = await executeGeminiCall(apiKey, prompt, true, model);
+          const parsed = JSON.parse(result.text.replace(/```json/g, "").replace(/```/g, "").trim());
+          res.status(200).json(parsed);
+          return;
+        }
+
         default: {
           res.status(400).json({ error: `Unknown command: ${command}` });
           return;
@@ -364,55 +609,3 @@ Return strictly JSON:
   }
 );
 
-/**
- * Universal Gemini Proxy Endpoint (backward compatibility & raw prompts)
- */
-export const callGeminiProxy = onRequest(
-  {
-    secrets: [geminiApiKey],
-    cors: true,
-    timeoutSeconds: 180,
-    maxInstances: 20,
-    invoker: "public",
-  },
-  async (req, res) => {
-    if (req.method !== "POST") {
-      res.status(405).json({ error: "Method not allowed. Use POST." });
-      return;
-    }
-
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-      res.status(401).json({ error: "Unauthorized: Missing Bearer token." });
-      return;
-    }
-
-    const idToken = authHeader.split("Bearer ")[1]?.trim();
-    try {
-      await admin.auth().verifyIdToken(idToken);
-    } catch (authError: any) {
-      res.status(401).json({ error: "Unauthorized: Invalid Firebase ID token.", details: authError.message });
-      return;
-    }
-
-    try {
-      const { prompt, model, isJson, imageBase64, mimeType } = req.body || {};
-      if (!prompt || typeof prompt !== "string" || prompt.trim().length === 0) {
-        res.status(400).json({ error: "Missing prompt" });
-        return;
-      }
-
-      const apiKey = geminiApiKey.value();
-      if (!apiKey) {
-        res.status(500).json({ error: "Server Gemini API key secret not configured." });
-        return;
-      }
-
-      const result = await executeGeminiCall(apiKey, prompt, isJson === true, model, imageBase64, mimeType);
-      res.status(200).json(result);
-    } catch (error: any) {
-      console.error("[GEMINI PROXY] Internal error:", error);
-      res.status(500).json({ error: "Internal server error", message: error?.message });
-    }
-  }
-);
