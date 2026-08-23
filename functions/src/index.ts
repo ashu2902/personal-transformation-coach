@@ -115,7 +115,11 @@ async function executeGeminiCall(apiKey: string, prompt: string, isJson: boolean
 
         if (response.ok) {
           const data: any = await response.json();
-          const rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+          let rawText = data?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+          if (isJson) {
+            const match = rawText.match(/\{[\s\S]*\}/);
+            if (match) rawText = match[0];
+          }
           return { text: rawText, model };
         }
 
@@ -160,7 +164,11 @@ async function executeGeminiCall(apiKey: string, prompt: string, isJson: boolean
           );
           if (dynResp.ok) {
             const dynData: any = await dynResp.json();
-            const rawText = dynData?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+            let rawText = dynData?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
+            if (isJson) {
+              const match = rawText.match(/\{[\s\S]*\}/);
+              if (match) rawText = match[0];
+            }
             return { text: rawText, model: modelName };
           }
         }
