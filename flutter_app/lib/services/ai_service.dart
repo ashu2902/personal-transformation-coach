@@ -125,11 +125,7 @@ abstract class AIService {
 }
 
 class GeminiAIProvider implements AIService {
-  final String modelName;
-
-  GeminiAIProvider({
-    this.modelName = 'gemini-3.6-flash',
-  });
+  GeminiAIProvider();
 
 
   String get _processAiCommandUrl {
@@ -212,7 +208,6 @@ class GeminiAIProvider implements AIService {
       final headers = await _getAuthHeaders();
       final body = <String, dynamic>{
         'command': command,
-        'model': modelName,
       };
       if (statePayload != null) body['state'] = statePayload;
       if (message != null) body['message'] = message;

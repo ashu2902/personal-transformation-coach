@@ -65,16 +65,12 @@ function compressSemanticState(state: any): string {
 /**
  * Call Gemini API with automated retry and candidate model fallback
  */
-async function executeGeminiCall(apiKey: string, prompt: string, isJson: boolean = false, requestedModel?: string, imageBase64?: string, mimeType?: string): Promise<{ text: string; model: string }> {
-  const targetModel = requestedModel || "gemini-3.5-flash-lite";
-  const candidateModels = Array.from(
-    new Set([
-      targetModel,
-      "gemini-3.5-flash-lite",
-      "gemini-3.1-flash-lite",
-      "gemini-3.5-flash",
-    ])
-  );
+async function executeGeminiCall(apiKey: string, prompt: string, isJson: boolean = false, imageBase64?: string, mimeType?: string): Promise<{ text: string; model: string }> {
+  const candidateModels = [
+    "gemini-3.5-flash-lite",
+    "gemini-3.1-flash-lite",
+    "gemini-3.5-flash",
+  ];
 
   const parts: Array<Record<string, any>> = [];
   if (imageBase64 && typeof imageBase64 === "string" && imageBase64.trim().length > 0) {
@@ -187,7 +183,7 @@ export const processAiCommand = onRequest(
       return;
     }
 
-    const { command, state, message, imageBase64, mimeType, model, history } = req.body || {};
+    const { command, state, message, imageBase64, mimeType, history } = req.body || {};
 
     try {
       const compressedMemory = compressSemanticState(state);
@@ -238,7 +234,7 @@ Return strictly JSON:
     { "functionName": "string", "arguments": {} }
   ]
 }`;
-          const result = await executeGeminiCall(apiKey, prompt, true, model, imageBase64, mimeType);
+          const result = await executeGeminiCall(apiKey, prompt, true, imageBase64, mimeType);
           const parsed = JSON.parse(result.text.replace(/```json/g, "").replace(/```/g, "").trim());
           res.status(200).json(parsed);
           return;
@@ -274,7 +270,7 @@ Return strictly JSON:
   "followUpQuestion": "string",
   "dynamicQuickReplies": ["string"]
 }`;
-          const result = await executeGeminiCall(apiKey, prompt, true, model);
+          const result = await executeGeminiCall(apiKey, prompt, true);
           const parsed = JSON.parse(result.text.replace(/```json/g, "").replace(/```/g, "").trim());
           res.status(200).json(parsed);
           return;
@@ -302,7 +298,7 @@ Return strictly JSON:
   "primaryNextStep": "1 actionable goal for next week",
   "adherenceScore": number
 }`;
-          const result = await executeGeminiCall(apiKey, prompt, true, model);
+          const result = await executeGeminiCall(apiKey, prompt, true);
           const parsed = JSON.parse(result.text.replace(/```json/g, "").replace(/```/g, "").trim());
           res.status(200).json(parsed);
           return;
@@ -322,7 +318,7 @@ Return strictly JSON:
   "fatG": number,
   "breakdown": "1-sentence portion and ingredient explanation"
 }`;
-          const result = await executeGeminiCall(apiKey, prompt, true, model);
+          const result = await executeGeminiCall(apiKey, prompt, true);
           const parsed = JSON.parse(result.text.replace(/```json/g, "").replace(/```/g, "").trim());
           res.status(200).json(parsed);
           return;
@@ -350,7 +346,7 @@ Apply correct gender-specific BMR formula. Return JSON:
   "targetWaterMl": number,
   "reasoning": "string (1 sentence explaining the calorie target)"
 }`;
-          const result = await executeGeminiCall(apiKey, prompt, true, model);
+          const result = await executeGeminiCall(apiKey, prompt, true);
           const parsed = JSON.parse(result.text.replace(/```json/g, "").replace(/```/g, "").trim());
           res.status(200).json(parsed);
           return;
@@ -359,7 +355,7 @@ Apply correct gender-specific BMR formula. Return JSON:
         case "synthesizeTodayFocus": {
           const prompt = `Based on the context below, write one action-focused sentence for the client's day:
 ${compressedMemory}`;
-          const result = await executeGeminiCall(apiKey, prompt, false, model);
+          const result = await executeGeminiCall(apiKey, prompt, false);
           res.status(200).json({ focus: result.text.trim() });
           return;
         }
@@ -382,7 +378,7 @@ Return JSON:
   "targetWaterMl": number,
   "adaptationReason": "string explaining why targets shifted"
 }`;
-          const result = await executeGeminiCall(apiKey, prompt, true, model);
+          const result = await executeGeminiCall(apiKey, prompt, true);
           const parsed = JSON.parse(result.text.replace(/```json/g, "").replace(/```/g, "").trim());
           res.status(200).json(parsed);
           return;
@@ -413,7 +409,7 @@ Return JSON:
     }
   ]
 }`;
-          const result = await executeGeminiCall(apiKey, prompt, true, model);
+          const result = await executeGeminiCall(apiKey, prompt, true);
           const parsed = JSON.parse(result.text.replace(/```json/g, "").replace(/```/g, "").trim());
           res.status(200).json(parsed);
           return;
@@ -442,7 +438,7 @@ Return JSON:
     }
   ]
 }`;
-          const result = await executeGeminiCall(apiKey, prompt, true, model);
+          const result = await executeGeminiCall(apiKey, prompt, true);
           const parsed = JSON.parse(result.text.replace(/```json/g, "").replace(/```/g, "").trim());
           res.status(200).json(parsed);
           return;
@@ -477,7 +473,7 @@ Return JSON:
     }
   ]
 }`;
-          const result = await executeGeminiCall(apiKey, prompt, true, model);
+          const result = await executeGeminiCall(apiKey, prompt, true);
           const parsed = JSON.parse(result.text.replace(/```json/g, "").replace(/```/g, "").trim());
           res.status(200).json(parsed);
           return;
@@ -493,7 +489,7 @@ User Transformation Context:
 ${compressedMemory}
 
 User Message: ${userPrompt}`;
-          const result = await executeGeminiCall(apiKey, prompt, false, model);
+          const result = await executeGeminiCall(apiKey, prompt, false);
           res.status(200).json({ response: result.text.trim() });
           return;
         }
@@ -517,7 +513,7 @@ Extract structured data. Return JSON:
   "energyLevel": 0,
   "coachFeedback": "1-2 sentences feedback written in your specific personality style"
 }`;
-          const result = await executeGeminiCall(apiKey, prompt, true, model);
+          const result = await executeGeminiCall(apiKey, prompt, true);
           const parsed = JSON.parse(result.text.replace(/```json/g, "").replace(/```/g, "").trim());
           res.status(200).json(parsed);
           return;
@@ -539,7 +535,7 @@ Return JSON:
   "adaptationNote": "string",
   "exercises": [{"name": "string", "targetMuscle": "string", "equipmentRequired": "string", "targetSets": 3, "targetReps": 10, "targetWeightKg": 0, "notes": "string"}]
 }`;
-          const result = await executeGeminiCall(apiKey, prompt, true, model);
+          const result = await executeGeminiCall(apiKey, prompt, true);
           const parsed = JSON.parse(result.text.replace(/```json/g, "").replace(/```/g, "").trim());
           res.status(200).json(parsed);
           return;
@@ -549,7 +545,7 @@ Return JSON:
           const prompt = `Write a short, punchy, 1-sentence daily insight for the user based on their context:
 ${compressedMemory}
 Keep it warm, encouraging, plain English, and action-focused.`;
-          const result = await executeGeminiCall(apiKey, prompt, false, model);
+          const result = await executeGeminiCall(apiKey, prompt, false);
           res.status(200).json({ insight: result.text.trim() });
           return;
         }
@@ -567,7 +563,7 @@ Return strictly JSON:
   "adaptationNote": "string",
   "exercises": [{"name": "string", "targetMuscle": "string", "equipmentRequired": "string", "targetSets": 3, "targetReps": 10, "targetWeightKg": 0, "notes": "string"}]
 }`;
-          const result = await executeGeminiCall(apiKey, prompt, true, model);
+          const result = await executeGeminiCall(apiKey, prompt, true);
           const parsed = JSON.parse(result.text.replace(/```json/g, "").replace(/```/g, "").trim());
           res.status(200).json(parsed);
           return;
