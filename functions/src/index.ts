@@ -66,15 +66,13 @@ function compressSemanticState(state: any): string {
  * Call Gemini API with automated retry and candidate model fallback
  */
 async function executeGeminiCall(apiKey: string, prompt: string, isJson: boolean = false, requestedModel?: string, imageBase64?: string, mimeType?: string): Promise<{ text: string; model: string }> {
-  const targetModel = requestedModel || "gemini-3.6-flash";
+  const targetModel = requestedModel || "gemini-3.5-flash-lite";
   const candidateModels = Array.from(
     new Set([
       targetModel,
-      "gemini-3.6-flash",
+      "gemini-3.5-flash-lite",
+      "gemini-3.1-flash-lite",
       "gemini-3.5-flash",
-      "gemini-3.7-flash",
-      "gemini-flash-latest",
-      "gemini-pro-latest",
     ])
   );
 
@@ -146,37 +144,7 @@ async function executeGeminiCall(apiKey: string, prompt: string, isJson: boolean
     await sleep(150);
   }
 
-  // Fallback discovery
-  try {
-    const listResp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models?key=${apiKey}`);
-    const listData: any = await listResp.json();
-    if (listData?.models && Array.isArray(listData.models)) {
-      for (const m of listData.models) {
-        if (m.supportedGenerationMethods?.includes("generateContent")) {
-          const modelName = m.name.replace(/^models\//, "");
-          const dynResp = await fetch(
-            `https://generativelanguage.googleapis.com/v1beta/models/${modelName}:generateContent?key=${apiKey}`,
-            {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify(requestBody),
-            }
-          );
-          if (dynResp.ok) {
-            const dynData: any = await dynResp.json();
-            let rawText = dynData?.candidates?.[0]?.content?.parts?.[0]?.text ?? "";
-            if (isJson) {
-              const match = rawText.match(/\{[\s\S]*\}/);
-              if (match) rawText = match[0];
-            }
-            return { text: rawText, model: modelName };
-          }
-        }
-      }
-    }
-  } catch (listErr) {
-    console.warn("Fallback model discovery failed:", listErr);
-  }
+  // No wildcard fallback discovery — only use curated models above to prevent hallucinations
 
   throw new Error(`All Gemini models in fallback chain failed (${lastStatus}): ${lastError}`);
 }
