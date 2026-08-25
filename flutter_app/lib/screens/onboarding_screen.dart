@@ -56,6 +56,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   late TextEditingController _interviewInputController;
   bool _isInterviewThinking = false;
   bool _isLifestyleIntakeComplete = false;
+  String? _interviewTargetPhysique;
+  final List<String> _interviewNotes = [];
   List<String> _dynamicQuickReplies = [
     '3 days, full commercial gym',
     '4 days, dumbbells & bands at home',
@@ -176,6 +178,35 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       setState(() {
         _daysPerWeek = res.daysPerWeek;
         _interviewEquipmentList = parsedEq;
+        if (res.targetPhysique != null && res.targetPhysique!.trim().isNotEmpty) {
+          _interviewTargetPhysique = res.targetPhysique!.trim();
+        }
+        for (final n in res.lifestyleNotes) {
+          if (n.trim().isNotEmpty && !_interviewNotes.contains(n.trim())) {
+            _interviewNotes.add(n.trim());
+          }
+        }
+        // Also capture user text if it mentions fasting, dietary rules, or specific schedule days
+        final lowerText = userText.toLowerCase();
+        if (lowerText.contains('fast') ||
+            lowerText.contains('vegetarian') ||
+            lowerText.contains('vegan') ||
+            lowerText.contains('mon') ||
+            lowerText.contains('tue') ||
+            lowerText.contains('wed') ||
+            lowerText.contains('thu') ||
+            lowerText.contains('fri') ||
+            lowerText.contains('sat') ||
+            lowerText.contains('sun')) {
+          if (!_interviewNotes.contains(userText.trim())) {
+            _interviewNotes.add(userText.trim());
+          }
+        }
+        if (lowerText.contains('vegetarian') && _dietaryPreference == 'nonVeg') {
+          _dietaryPreference = 'vegetarian';
+        } else if (lowerText.contains('vegan') && _dietaryPreference != 'vegan') {
+          _dietaryPreference = 'vegan';
+        }
         _isLifestyleIntakeComplete = res.isComplete && res.daysPerWeek >= 2 && parsedEq.isNotEmpty;
         if (res.dynamicQuickReplies.isNotEmpty) {
           _dynamicQuickReplies = res.dynamicQuickReplies;
@@ -247,7 +278,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       targetWeightKg: _getTargetWeight(),
       goal: _selectedGoal,
       daysPerWeek: _daysPerWeek,
-      targetPhysique: _getTargetPhysique(),
+      targetPhysique: _interviewTargetPhysique ?? _getTargetPhysique(),
+      personalNotes: _interviewNotes,
       equipmentList: equipList,
       experienceLevel: ExperienceLevel.beginner,
       coachSoul: _selectedSoul,

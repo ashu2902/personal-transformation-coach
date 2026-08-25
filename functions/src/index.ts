@@ -58,8 +58,14 @@ function compressSemanticState(state: any): string {
   const injuries = Array.isArray(profile.activeInjuries) && profile.activeInjuries.length > 0
     ? profile.activeInjuries.join(", ")
     : "none";
+  const dietPref = profile.dietaryPreference ? `diet: ${profile.dietaryPreference}` : "";
+  const physiquePref = profile.targetPhysique ? `physique focus: ${profile.targetPhysique}` : "";
+  const extraProfile = [dietPref, physiquePref].filter(Boolean).join(", ");
+  const personalNotes = Array.isArray(profile.personalNotes) && profile.personalNotes.length > 0
+    ? `Schedule & Lifestyle Notes: ${profile.personalNotes.join("; ")}.`
+    : "";
 
-  return `Client ${name} (${gender}, ${age}y, ${weight}kg -> ${targetWeight}kg, goal: ${goal}, coach: ${soul}). Gear: ${equipment}. Joint safeguards: ${injuries}. Recovery: ${sleepH}, ${sore}, ${energy} (${recStatus}). Fuel today: ${totalCal}/${targetCal} kcal (${remCal} left), ${totalProt}/${targetProt}g protein (${remProt}g left). Workout: ${workoutTitle} (${focus}, status: ${workoutStatus}).`;
+  return `Client ${name} (${gender}, ${age}y, ${weight}kg -> ${targetWeight}kg, goal: ${goal}, coach: ${soul}${extraProfile ? `, ${extraProfile}` : ""}). Gear: ${equipment}. Joint safeguards: ${injuries}.${personalNotes ? ` ${personalNotes}` : ""} Recovery: ${sleepH}, ${sore}, ${energy} (${recStatus}). Fuel today: ${totalCal}/${targetCal} kcal (${remCal} left), ${totalProt}/${targetProt}g protein (${remProt}g left). Workout: ${workoutTitle} (${focus}, status: ${workoutStatus}).`;
 }
 
 /**
@@ -257,8 +263,9 @@ User's Latest Message: "${intakeText}"
 Directives:
 1. Preserve previously established variables (e.g. training frequency, equipment) unless the user explicitly updates them.
 2. If the user mentions goals (e.g. "Diwali", "bigger arms", "V shape", "lean"), acknowledge them warmly.
-3. Determine if intake is complete (isComplete: true) - true ONLY when both daysPerWeek (2-6) and equipment are firmly established.
-4. Generate 2 to 3 contextual quick-reply pills (dynamicQuickReplies) that directly relate to what you just asked in followUpQuestion.
+3. Extract any specific lifestyle constraints, fasting habits (e.g. "Water fast on Mondays"), preferred days of week (e.g. "Tue, Thu, Sat"), and dietary nuances (e.g. "Vegetarian") into "lifestyleNotes".
+4. Determine if intake is complete (isComplete: true) - true ONLY when both daysPerWeek (2-6) and equipment are firmly established.
+5. Generate 2 to 3 contextual quick-reply pills (dynamicQuickReplies) that directly relate to what you just asked in followUpQuestion.
 
 Return strictly JSON:
 {
@@ -266,6 +273,7 @@ Return strictly JSON:
   "daysPerWeek": number,
   "equipment": ["string"],
   "targetPhysique": string or null,
+  "lifestyleNotes": ["string"],
   "missingFields": ["string"],
   "followUpQuestion": "string",
   "dynamicQuickReplies": ["string"]
@@ -327,6 +335,9 @@ Return strictly JSON:
 
         case "generateMetabolicPlan": {
           const profile = state?.profile || {};
+          const notesStr = Array.isArray(profile.personalNotes) && profile.personalNotes.length > 0
+            ? profile.personalNotes.join("; ")
+            : "none";
           const prompt = `Calculate optimal daily calories and macros for this person using the Mifflin-St Jeor equation, appropriate gender correction, and goal-based deficit/surplus:
 Name: ${profile.name || 'Client'}
 Gender: ${profile.gender || 'unspecified'}
@@ -336,8 +347,10 @@ Current Weight: ${profile.weightKg || 70} kg
 Target Weight: ${profile.targetWeightKg || 70} kg
 Goal: ${profile.goal || 'recomp'} (Target Physique: ${profile.targetPhysique || 'general fitness'})
 Training Frequency: ${profile.daysPerWeek || 3} days/week
+Dietary Preference: ${profile.dietaryPreference || 'unspecified'}
+Schedule & Lifestyle Notes: ${notesStr}
 
-Apply correct gender-specific BMR formula. Return JSON:
+Apply correct gender-specific BMR formula. Ensure protein and macro distributions accommodate their dietary preference. Return JSON:
 {
   "targetCalories": number,
   "targetProteinG": number,
@@ -420,8 +433,11 @@ Return JSON:
 You are an expert fitness coach generating a 7-day adaptive workout and nutrition schedule.
 Client Context: ${compressedMemory}
 
-Design a weekly split matching their training frequency (${state?.profile?.daysPerWeek || 3} days/week). 
-For rest days, focus on active recovery and hydration. For training days, assign a specific focus area and 3-5 core exercises.
+CRITICAL SCHEDULING CONSTRAINTS:
+1. Examine Client Context carefully for explicit preferred training days (e.g. "Tue, Thu, Sat") and fasting protocols (e.g. "Water fast on Mondays").
+2. You MUST strictly place workout days (isRestDay: false) on the client's designated training days.
+3. If the client has a fasting day (e.g., Monday water fast), you MUST designate that day as active recovery/rest (isRestDay: true) and specify a fasting/hydration protocol in "nutritionFocus".
+4. Design a weekly split matching their training frequency (${state?.profile?.daysPerWeek || 3} days/week). For rest days, focus on active recovery and mobility. For training days, assign a specific focus area and 3-5 core exercises.
 Return JSON:
 {
   "overview": "string (1 paragraph overview of the week's strategy)",

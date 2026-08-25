@@ -65,6 +65,7 @@ void main() {
         'followUpQuestion': 'All set! Ready to pick your coach persona.',
         'dynamicQuickReplies': ['Ready to choose my coach!', 'I prefer 45-min sessions'],
         'targetPhysique': 'V-Shape Physique & Bigger Arms',
+        'lifestyleNotes': ['Water fast on Mondays', 'Prefers Tue, Thu, Sat training days'],
       };
 
       final result = LifestyleIntakeResult.fromJson(json);
@@ -76,6 +77,7 @@ void main() {
       expect(result.followUpQuestion, contains('All set'));
       expect(result.dynamicQuickReplies, contains('Ready to choose my coach!'));
       expect(result.targetPhysique, 'V-Shape Physique & Bigger Arms');
+      expect(result.lifestyleNotes, containsAll(['Water fast on Mondays', 'Prefers Tue, Thu, Sat training days']));
     });
 
     test('EquipmentItem parses strings and formats correctly', () {

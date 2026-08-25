@@ -39,6 +39,7 @@ class LifestyleIntakeResult {
   final String followUpQuestion;
   final List<String> dynamicQuickReplies;
   final String? targetPhysique;
+  final List<String> lifestyleNotes;
 
   LifestyleIntakeResult({
     required this.isComplete,
@@ -48,6 +49,7 @@ class LifestyleIntakeResult {
     required this.followUpQuestion,
     this.dynamicQuickReplies = const [],
     this.targetPhysique,
+    this.lifestyleNotes = const [],
   });
 
   factory LifestyleIntakeResult.fromJson(Map<String, dynamic> json) {
@@ -78,6 +80,15 @@ class LifestyleIntakeResult {
         }
       }
     }
+    final rawNotes = json['lifestyleNotes'] ?? json['notes'] ?? json['constraints'];
+    final List<String> notesList = [];
+    if (rawNotes is List) {
+      for (var n in rawNotes) {
+        if (n != null && n.toString().trim().isNotEmpty) {
+          notesList.add(n.toString().trim());
+        }
+      }
+    }
     return LifestyleIntakeResult(
       isComplete: json['isComplete'] == true,
       daysPerWeek: (json['daysPerWeek'] as num?)?.toInt() ?? 4,
@@ -86,6 +97,7 @@ class LifestyleIntakeResult {
       followUpQuestion: json['followUpQuestion']?.toString() ?? 'Got it! How many days per week would you like to train?',
       dynamicQuickReplies: quickReplies,
       targetPhysique: json['targetPhysique']?.toString(),
+      lifestyleNotes: notesList,
     );
   }
 }
@@ -163,9 +175,14 @@ class GeminiAIProvider implements AIService {
         'weightKg': state.profile.weightKg,
         'targetWeightKg': state.profile.targetWeightKg,
         'goal': state.profile.goal.name,
+        'daysPerWeek': state.profile.daysPerWeek,
+        'targetPhysique': state.profile.targetPhysique,
+        'dietaryPreference': state.profile.dietaryPreference,
+        'personalNotes': state.profile.personalNotes,
         'coachSoul': state.profile.coachSoul.name,
         'equipmentList': state.profile.equipmentList.map((e) => e.name).toList(),
         'activeInjuries': state.profile.activeInjuries,
+        'dislikedExercises': state.profile.dislikedExercises,
       },
       'workout': {
         'title': state.workout.title,
@@ -388,22 +405,58 @@ class GeminiAIProvider implements AIService {
   }
 
   @override
-  @override
   Future<DailyWorkout> generateAIInitialWorkout(UserProfile profile) async {
     try {
       final parsed = await _callProcessAiCommand(
         command: 'generateAIInitialWorkout',
-        statePayload: {'profile': {'name': profile.name, 'goal': profile.goal.name, 'equipmentList': profile.equipmentList.map((e) => {'name': e.name}).toList()}},
+        statePayload: {
+          'profile': {
+            'name': profile.name,
+            'gender': profile.gender,
+            'age': profile.age,
+            'goal': profile.goal.name,
+            'targetPhysique': profile.targetPhysique,
+            'dietaryPreference': profile.dietaryPreference,
+            'personalNotes': profile.personalNotes,
+            'equipmentList': profile.equipmentList.map((e) => {'name': e.name}).toList(),
+          }
+        },
       );
       final todayStr = DateTime.now().toIso8601String().split('T')[0];
+      final rawExercises = parsed['exercises'] as List? ?? [];
+      final exercises = rawExercises.asMap().entries.map((entry) {
+        final i = entry.key;
+        final e = entry.value;
+        final targetSets = (e['targetSets'] as num?)?.toInt() ?? 3;
+        final targetReps = (e['targetReps'] as num?)?.toInt() ?? 10;
+        final targetWeightKg = (e['targetWeightKg'] as num?)?.toDouble() ?? 0.0;
+        final sets = List.generate(
+          targetSets,
+          (sIdx) => ExerciseSet(
+            setNumber: sIdx + 1,
+            targetReps: targetReps,
+            targetWeightKg: targetWeightKg,
+            completed: false,
+          ),
+        );
+        return Exercise(
+          id: 'init_ex_${i + 1}_${DateTime.now().millisecondsSinceEpoch}',
+          name: e['name']?.toString() ?? 'Exercise ${i + 1}',
+          targetMuscle: e['targetMuscle']?.toString() ?? 'Full Body',
+          equipmentRequired: e['equipmentRequired']?.toString() ?? 'bodyweight',
+          sets: sets,
+          notes: e['notes']?.toString(),
+        );
+      }).toList();
+
       return DailyWorkout(
         id: 'w_${DateTime.now().millisecondsSinceEpoch}',
         date: todayStr,
         title: parsed['title']?.toString() ?? 'Initial Plan',
         focusArea: parsed['focusArea']?.toString() ?? 'Full Body',
         estimatedDurationMin: (parsed['estimatedDurationMin'] as num?)?.toInt() ?? 45,
-        status: WorkoutStatus.completed,
-        exercises: [],
+        status: WorkoutStatus.scheduled,
+        exercises: exercises,
         adaptationNote: parsed['adaptationNote']?.toString() ?? 'Ready to start.',
       );
     } catch (e) {
@@ -413,12 +466,25 @@ class GeminiAIProvider implements AIService {
   }
 
   @override
-  @override
   Future<DailyNutrition> generateAIMetabolicPlan(UserProfile profile) async {
     try {
       final parsed = await _callProcessAiCommand(
         command: 'generateMetabolicPlan',
-        statePayload: {'profile': {'name': profile.name, 'gender': profile.gender, 'age': profile.age, 'heightCm': profile.heightCm, 'weightKg': profile.weightKg, 'targetWeightKg': profile.targetWeightKg, 'goal': profile.goal.name, 'targetPhysique': profile.targetPhysique, 'daysPerWeek': profile.daysPerWeek}},
+        statePayload: {
+          'profile': {
+            'name': profile.name,
+            'gender': profile.gender,
+            'age': profile.age,
+            'heightCm': profile.heightCm,
+            'weightKg': profile.weightKg,
+            'targetWeightKg': profile.targetWeightKg,
+            'goal': profile.goal.name,
+            'targetPhysique': profile.targetPhysique,
+            'daysPerWeek': profile.daysPerWeek,
+            'dietaryPreference': profile.dietaryPreference,
+            'personalNotes': profile.personalNotes,
+          }
+        },
       );
       final todayStr = DateTime.now().toIso8601String().split('T')[0];
       debugPrint('[GEMINI NUTRITION] Reasoning: ${parsed['reasoning']}');
