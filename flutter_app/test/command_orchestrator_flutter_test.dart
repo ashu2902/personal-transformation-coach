@@ -6,7 +6,7 @@ import 'package:aura_transformation_engine/screens/widgets/action_preview_card.d
 void main() {
   group('ContextEnvelope Tests', () {
     test('serializes and deserializes correctly', () {
-      final envelope = ContextEnvelope(
+      const envelope = ContextEnvelope(
         activeScreen: 'workout',
         focusedExerciseId: 'ex_1',
         focusedExerciseName: 'Barbell Back Squat',
@@ -110,14 +110,14 @@ void main() {
     testWidgets('renders low-risk preview with category badge, diff, and undo chip', (tester) async {
       bool undoTapped = false;
 
-      final preview = CommandPreview(
+      const preview = CommandPreview(
         commandName: 'workout.substituteExercise',
         category: 'workout',
         risk: 'low',
         summary: 'Substituted Barbell Back Squat with Goblet Squat',
         title: 'Swap Exercise',
         inverseCommand: 'Swap back to Barbell Back Squat',
-        changes: const [
+        changes: [
           CommandChange(
             target: 'Exercise',
             description: 'Substituted for equipment availability',
@@ -157,7 +157,7 @@ void main() {
       bool approved = false;
       bool rejected = false;
 
-      final preview = const CommandPreview(
+      const preview = CommandPreview(
         commandName: 'profile.updateInjuries',
         category: 'profile',
         risk: 'high',
@@ -207,7 +207,7 @@ void main() {
 
   group('Unified Orchestrator 5-Scenario Verification', () {
     test('Scenario 1: Exercise substitution with ContextEnvelope', () {
-      final envelope = ContextEnvelope(
+      const envelope = ContextEnvelope(
         activeScreen: 'workout',
         focusedExerciseId: 'ex_squat',
         focusedExerciseName: 'Barbell Back Squat',
@@ -236,7 +236,7 @@ void main() {
     });
 
     test('Scenario 2: Workout volume adjustment', () {
-      final preview = const CommandPreview(
+      const preview = CommandPreview(
         commandName: 'workout.adjustVolume',
         category: 'workout',
         risk: 'low',
@@ -257,7 +257,7 @@ void main() {
     });
 
     test('Scenario 3: Multi-command logging (Meal + Recovery in single turn)', () {
-      final mealPreview = const CommandPreview(
+      const mealPreview = CommandPreview(
         commandName: 'nutrition.logMeal',
         category: 'nutrition',
         risk: 'low',
@@ -272,7 +272,7 @@ void main() {
         ],
       );
 
-      final recoveryPreview = const CommandPreview(
+      const recoveryPreview = CommandPreview(
         commandName: 'recovery.log',
         category: 'recovery',
         risk: 'low',
@@ -287,7 +287,7 @@ void main() {
         ],
       );
 
-      final orchestratorResult = UnifiedAIOrchestratorResult(
+      const orchestratorResult = UnifiedAIOrchestratorResult(
         coachResponse: 'Recorded your 3 eggs and logged 6 hours of rest!',
         previews: [mealPreview, recoveryPreview],
       );
@@ -298,7 +298,7 @@ void main() {
     });
 
     test('Scenario 4: Recovery score calculation model preview', () {
-      final preview = const CommandPreview(
+      const preview = CommandPreview(
         commandName: 'recovery.log',
         category: 'recovery',
         risk: 'low',
@@ -318,7 +318,7 @@ void main() {
     });
 
     test('Scenario 5: High-risk profile modification requiring explicit gate', () {
-      final preview = const CommandPreview(
+      const preview = CommandPreview(
         commandName: 'profile.updateEquipment',
         category: 'profile',
         risk: 'high',

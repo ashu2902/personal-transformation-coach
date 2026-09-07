@@ -1219,7 +1219,7 @@ class ExerciseDatabase {
     if (def?.videoUrl != null && def!.videoUrl!.isNotEmpty) {
       return def.videoUrl!;
     }
-    return 'https://www.youtube.com/results?search_query=${Uri.encodeComponent('Renaissance Periodization ' + ex.name + ' proper form')}';
+    return 'https://www.youtube.com/results?search_query=${Uri.encodeComponent('Renaissance Periodization ${ex.name} proper form')}';
   }
 
   /// Resolves actionable coaching tip matching the user's active Coach Soul

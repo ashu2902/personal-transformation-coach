@@ -44,6 +44,13 @@ class AuraTypography {
     color: AuraColors.textPrimary,
   );
 
+  static TextStyle titleSmall = GoogleFonts.syne(
+    fontSize: 13,
+    fontWeight: FontWeight.bold,
+    letterSpacing: -0.01,
+    color: AuraColors.textPrimary,
+  );
+
   static TextStyle sectionHeader = GoogleFonts.syne(
     fontSize: 11,
     fontWeight: FontWeight.bold,
@@ -70,6 +77,24 @@ class AuraTypography {
     fontWeight: FontWeight.normal,
     height: 1.35,
     color: AuraColors.textTertiary,
+  );
+
+  static TextStyle labelLarge = GoogleFonts.plusJakartaSans(
+    fontSize: 14,
+    fontWeight: FontWeight.w600,
+    color: AuraColors.textPrimary,
+  );
+
+  static TextStyle labelMedium = GoogleFonts.plusJakartaSans(
+    fontSize: 12,
+    fontWeight: FontWeight.w600,
+    color: AuraColors.textPrimary,
+  );
+
+  static TextStyle labelSmall = GoogleFonts.plusJakartaSans(
+    fontSize: 10,
+    fontWeight: FontWeight.w600,
+    color: AuraColors.textSecondary,
   );
 
   static TextStyle labelBold = GoogleFonts.plusJakartaSans(

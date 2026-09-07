@@ -52,7 +52,7 @@ void main() {
     });
 
     test('Returns structured 3-Cue Triad for defined exercises', () {
-      final testEx = Exercise(
+      const testEx = Exercise(
         id: 'test_1',
         name: 'Shoulder Press Machine',
         targetMuscle: 'Shoulders',
@@ -68,7 +68,7 @@ void main() {
     });
 
     test('Returns verified direct YouTube tutorial video URLs', () {
-      final testEx = Exercise(
+      const testEx = Exercise(
         id: 'test_2',
         name: 'Triceps Rope Pulldown',
         targetMuscle: 'Triceps',
@@ -82,7 +82,7 @@ void main() {
     });
 
     test('Dynamically adapts coach tip based on active CoachSoul', () {
-      final testEx = Exercise(
+      const testEx = Exercise(
         id: 'test_3',
         name: 'Incline Barbell Bench Press',
         targetMuscle: 'Upper Chest',
@@ -102,7 +102,7 @@ void main() {
     });
 
     test('Gracefully handles novel/unknown long-tail exercises without crashing', () {
-      final novelEx = Exercise(
+      const novelEx = Exercise(
         id: 'novel_1',
         name: 'B-Stance Landmine Hack Squat',
         targetMuscle: 'Quads & Glutes',
