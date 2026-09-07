@@ -43,6 +43,8 @@ class TransformationEngineState {
   final MasterContext masterContext;
   final Map<String, DailyWorkout> recentWorkouts;
   final List<PendingAction> pendingActions;
+  final Map<String, List<CommandPreview>> messagePreviews;
+  final List<CommandPreview> latestPreviews;
 
   TransformationEngineState({
     required this.profile,
@@ -59,6 +61,8 @@ class TransformationEngineState {
     MasterContext? masterContext,
     Map<String, DailyWorkout>? recentWorkouts,
     this.pendingActions = const [],
+    this.messagePreviews = const {},
+    this.latestPreviews = const [],
   })  : masterContext = masterContext ?? const MasterContext(),
         recentWorkouts = recentWorkouts ?? const {};
 
@@ -77,6 +81,8 @@ class TransformationEngineState {
     MasterContext? masterContext,
     Map<String, DailyWorkout>? recentWorkouts,
     List<PendingAction>? pendingActions,
+    Map<String, List<CommandPreview>>? messagePreviews,
+    List<CommandPreview>? latestPreviews,
   }) {
     return TransformationEngineState(
       profile: profile ?? this.profile,
@@ -93,6 +99,8 @@ class TransformationEngineState {
       masterContext: masterContext ?? this.masterContext,
       recentWorkouts: recentWorkouts ?? this.recentWorkouts,
       pendingActions: pendingActions ?? this.pendingActions,
+      messagePreviews: messagePreviews ?? this.messagePreviews,
+      latestPreviews: latestPreviews ?? this.latestPreviews,
     );
   }
 
@@ -1439,7 +1447,13 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
     }
   }
 
-  Future<void> addChatMessage(String text, {Uint8List? imageBytes, String? imageUrl, String mimeType = 'image/jpeg'}) async {
+  Future<void> addChatMessage(
+    String text, {
+    Uint8List? imageBytes,
+    String? imageUrl,
+    String mimeType = 'image/jpeg',
+    ContextEnvelope? contextEnvelope,
+  }) async {
     if (state.isAiThinking) {
       debugPrint('[AURA STATE] AI processing in progress, skipping concurrent message trigger');
       return;
@@ -1479,6 +1493,7 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
         imageBytes: imageBytes,
         imageUrl: imageUrl,
         mimeType: mimeType,
+        contextEnvelope: contextEnvelope,
       );
       debugPrint('[AURA STATE] Orchestrator determined ${orchestratorResult.actions.length} action(s): ${orchestratorResult.actions.map((a) => a.functionName).toList()}');
 
@@ -1503,10 +1518,22 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
         createdAt: now,
       );
 
+      final List<CommandPreview> previews = [];
+      if (orchestratorResult is UnifiedAIOrchestratorResult) {
+        previews.addAll(orchestratorResult.previews);
+      }
+
+      final updatedPreviews = Map<String, List<CommandPreview>>.from(state.messagePreviews);
+      if (previews.isNotEmpty) {
+        updatedPreviews[aiReply.id] = previews;
+      }
+
       final finalChat = List<ChatMessage>.from(state.chatMessages)..add(aiReply);
       state = state.copyWith(
         chatMessages: finalChat,
         isAiThinking: false,
+        messagePreviews: updatedPreviews,
+        latestPreviews: previews,
       );
       await _firestore.saveChatMessage(uid, aiReply);
     } catch (e) {
@@ -1635,13 +1662,25 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
     return result;
   }
 
-  Future<void> adaptTodayWorkoutWithAI(String request) async {
+  Future<void> adaptTodayWorkoutWithAI(String request, {ContextEnvelope? contextEnvelope}) async {
     debugPrint('[AURA STATE] Adapting workout with AI for: "$request"');
-    await _aiService.adaptWorkoutWithAI(request, state);
+    final envelope = contextEnvelope ?? ContextEnvelope(
+      activeScreen: 'workout',
+      activeWorkoutDate: state.workout.date,
+      focusedExerciseId: state.workout.exercises.firstOrNull?.id,
+      focusedExerciseName: state.workout.exercises.firstOrNull?.name,
+    );
+    await addChatMessage(request, contextEnvelope: envelope);
     if (!mounted) return;
     state = state.copyWith(
       adaptationNotice: 'Workout adapted via AURA AI: "$request"',
     );
+  }
+
+  Future<void> undoCommandPreview(CommandPreview preview) async {
+    if (preview.inverseCommand == null || preview.inverseCommand!.isEmpty) return;
+    debugPrint('[AURA STATE] Reversing action via inverse command: ${preview.inverseCommand}');
+    await addChatMessage(preview.inverseCommand!);
   }
 
   @override

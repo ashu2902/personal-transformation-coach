@@ -6,4 +6,6 @@ export 'recovery.dart';
 export 'chat_and_ai.dart';
 export 'master_context.dart';
 export 'exercise_definition.dart';
+export 'context_envelope.dart';
+export 'command_preview.dart';
 

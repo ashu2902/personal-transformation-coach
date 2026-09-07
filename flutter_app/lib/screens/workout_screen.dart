@@ -7,9 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../providers/transformation_state.dart';
 import '../providers/analytics_provider.dart';
 import '../services/analytics_service.dart';
-import '../models/workout.dart';
-import '../models/user_profile.dart';
-import '../models/exercise_definition.dart';
+import '../models/models.dart';
 import '../theme/theme.dart';
 import '../widgets/common/common.dart';
 import '../widgets/common/quick_coach_fab.dart';
@@ -591,6 +589,7 @@ class WorkoutScreen extends ConsumerWidget {
   void _showAIAdaptationBottomSheet(BuildContext context, WidgetRef ref) {
     final textController = TextEditingController();
     final auraTheme = context.auraTheme;
+    final workout = ref.read(transformationEngineProvider).workout;
 
     showModalBottomSheet(
       context: context,
@@ -686,7 +685,13 @@ class WorkoutScreen extends ConsumerWidget {
                     ),
                   );
 
-                  await ref.read(transformationEngineProvider.notifier).adaptTodayWorkoutWithAI(prompt);
+                  await ref.read(transformationEngineProvider.notifier).adaptTodayWorkoutWithAI(
+                    prompt,
+                    contextEnvelope: ContextEnvelope(
+                      activeScreen: 'workout',
+                      activeWorkoutDate: workout.date,
+                    ),
+                  );
                 },
               ),
             ],

@@ -211,6 +211,7 @@ class MockSimulatedAIService implements AIService {
     TransformationEngineState contextState, {
     List<EquipmentType>? explicitEquipment,
     double? maxWeightKg,
+    ContextEnvelope? contextEnvelope,
   }) async {
     await generateAIAdaptedWorkout(contextState, adaptationRequest);
   }
@@ -227,14 +228,6 @@ class MockSimulatedAIService implements AIService {
   }
 
   @override
-  Future<String> generateCoachResponse(
-    String userPrompt,
-    TransformationEngineState contextState,
-  ) async {
-    return "Focus on dynamic stretching and controlled sets today.";
-  }
-
-  @override
   Future<QuickLogParsedResult> parseQuickLog(
     String rawText,
     TransformationEngineState contextState,
@@ -242,11 +235,6 @@ class MockSimulatedAIService implements AIService {
     return const QuickLogParsedResult(
       coachFeedback: 'Quick log processed',
     );
-  }
-
-  @override
-  Future<String> synthesizeAITodayFocus(TransformationEngineState contextState) async {
-    return 'Monday water fasting active: Keep hydration high with 3.5L of water today.';
   }
 
   @override
@@ -270,17 +258,13 @@ class MockSimulatedAIService implements AIService {
   }
 
   @override
-  Future<String> generateEngineDailyInsight(TransformationEngineState contextState) async {
-    return 'Monday water fasting active: Keep hydration high with 3.5L of water today.';
-  }
-
-  @override
   Future<AIOrchestratorResult> processCoachMessage(
     String userPrompt,
     TransformationEngineState contextState, {
     Uint8List? imageBytes,
     String? imageUrl,
     String? mimeType,
+    ContextEnvelope? contextEnvelope,
   }) async {
     return const AIOrchestratorResult(
       coachResponse: "Focus on active hamstring mobility and dynamic warm-up before hitting your working sets.",

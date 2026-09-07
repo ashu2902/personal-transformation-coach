@@ -2,6 +2,7 @@ import 'dart:typed_data';
 import 'package:freezed_annotation/freezed_annotation.dart';
 import 'workout.dart';
 import 'nutrition.dart';
+import 'command_preview.dart';
 
 part 'chat_and_ai.freezed.dart';
 part 'chat_and_ai.g.dart';
@@ -136,6 +137,31 @@ abstract class AIOrchestratorResult with _$AIOrchestratorResult {
   }) = _AIOrchestratorResult;
 
   factory AIOrchestratorResult.fromJson(Map<String, dynamic> json) => _$AIOrchestratorResultFromJson(json);
+}
+
+class UnifiedAIOrchestratorResult extends AIOrchestratorResult {
+  @override
+  final List<AIActionCall> actions;
+  @override
+  final String coachResponse;
+  @override
+  final List<PendingAction> pendingActions;
+  final List<CommandPreview> previews;
+
+  const UnifiedAIOrchestratorResult({
+    this.actions = const [],
+    required this.coachResponse,
+    this.pendingActions = const [],
+    this.previews = const [],
+  }) : super._();
+
+  @override
+  Map<String, dynamic> toJson() => {
+    'actions': actions.map((a) => a.toJson()).toList(),
+    'coachResponse': coachResponse,
+    'pendingActions': pendingActions.map((p) => p.toJson()).toList(),
+    'previews': previews.map((p) => p.toJson()).toList(),
+  };
 }
 
 class WeeklyDebrief {

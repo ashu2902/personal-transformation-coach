@@ -8,10 +8,10 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import '../providers/transformation_state.dart';
 import '../providers/analytics_provider.dart';
 import '../services/analytics_service.dart';
-import '../models/user_profile.dart';
+import '../models/models.dart';
 import '../theme/theme.dart';
-import '../widgets/common/common.dart';
 import 'widgets/aura_orb.dart';
+import 'widgets/action_preview_card.dart';
 
 class CoachScreen extends ConsumerStatefulWidget {
   const CoachScreen({super.key});
@@ -310,12 +310,6 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                       lowerText.contains('combine') ||
                       lowerText.contains('options');
 
-                  final isPlanAdjustment = isAi &&
-                      (lowerText.contains('workout adapted') ||
-                          lowerText.contains('revised session') ||
-                          lowerText.contains('swapped exercise') ||
-                          lowerText.contains('adapted today’s workout'));
-
                   final isMealLog = isAi &&
                       !isAdviceOrSuggestion &&
                       (lowerText.contains('logged meal') ||
@@ -431,88 +425,49 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                                     ),
                                   ),
 
-                                  // IN-LINE CARD: Decision Card for Plan Adjustment
-                                  if (isPlanAdjustment)
-                                    Padding(
-                                      padding: const EdgeInsets.only(top: 12.0),
-                                      child: Container(
-                                        padding: const EdgeInsets.all(12),
-                                        decoration: BoxDecoration(
-                                          color: auraTheme.surfaceLight,
-                                          borderRadius: BorderRadius.circular(12),
-                                          border: Border.all(
-                                              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.4)),
-                                        ),
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Row(
-                                              children: [
-                                                Icon(LucideIcons.gitFork,
-                                                    color: Theme.of(context).colorScheme.primary, size: 15),
-                                                const SizedBox(width: 6),
-                                                Text(
-                                                  'ADAPTED WORKOUT',
-                                                  style: AuraTypography.sectionHeader.copyWith(
-                                                    color: Theme.of(context).colorScheme.primary,
-                                                    fontSize: 10,
-                                                    letterSpacing: 1.0,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                            const SizedBox(height: 8),
-                                            Row(
-                                              children: [
-                                                const Expanded(
-                                                  child: Text(
-                                                    'Lower Body Strength',
-                                                    style: TextStyle(
-                                                      fontSize: 12,
-                                                      color: AuraColors.textSecondary,
-                                                      decoration: TextDecoration.lineThrough,
-                                                    ),
-                                                  ),
-                                                ),
-                                                Icon(LucideIcons.arrowRight,
-                                                    size: 14, color: Theme.of(context).colorScheme.primary),
-                                                const SizedBox(width: 6),
-                                                const Expanded(
-                                                  child: Text(
-                                                    'Active Recovery Walk',
-                                                    style: TextStyle(
-                                                      fontSize: 12,
-                                                      fontWeight: FontWeight.bold,
-                                                      color: AuraColors.textPrimary,
-                                                    ),
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                            const SizedBox(height: 10),
-                                            AuraButton(
-                                              text: 'Accept Revised Plan',
-                                              variant: AuraButtonVariant.primary,
-                                              backgroundColor: auraTheme.primary,
-                                              textColor: Colors.black,
-                                              width: double.infinity,
-                                              onPressed: () {
-                                                ScaffoldMessenger.of(context).showSnackBar(
-                                                  SnackBar(
-                                                    content: const Text('Revised workout locked in for today!'),
-                                                    backgroundColor: Theme.of(context).colorScheme.primary,
-                                                    duration: const Duration(seconds: 2),
-                                                  ),
-                                                );
-                                              },
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                    ),
-
-                                  // IN-LINE CARD: Meal Confirmation Card
-                                  if (isMealLog && !isPlanAdjustment)
+                                  // IN-LINE ACTION PREVIEWS: Deterministic Command Previews & Diff Cards
+                                  if (state.messagePreviews[msg.id] != null || (messageIndex == 0 && state.latestPreviews.isNotEmpty)) ...[
+                                    const SizedBox(height: 10),
+                                    ...(state.messagePreviews[msg.id] ?? (messageIndex == 0 ? state.latestPreviews : const <CommandPreview>[]))
+                                        .map((preview) => Padding(
+                                              padding: const EdgeInsets.only(top: 8.0),
+                                              child: ActionPreviewCard(
+                                                preview: preview,
+                                                onApprove: preview.pendingActionId != null
+                                                    ? () async {
+                                                        await ref.read(transformationEngineProvider.notifier).approvePendingAction(preview.pendingActionId!);
+                                                        if (context.mounted) {
+                                                          ScaffoldMessenger.of(context).showSnackBar(
+                                                            SnackBar(
+                                                              content: Text('Approved: ${preview.title}'),
+                                                              backgroundColor: auraTheme.primary,
+                                                              duration: const Duration(seconds: 2),
+                                                            ),
+                                                          );
+                                                        }
+                                                      }
+                                                    : null,
+                                                onReject: preview.pendingActionId != null
+                                                    ? () async {
+                                                        await ref.read(transformationEngineProvider.notifier).rejectPendingAction(preview.pendingActionId!);
+                                                        if (context.mounted) {
+                                                          ScaffoldMessenger.of(context).showSnackBar(
+                                                            const SnackBar(
+                                                              content: Text('Action cancelled.'),
+                                                              duration: Duration(seconds: 2),
+                                                            ),
+                                                          );
+                                                        }
+                                                      }
+                                                    : null,
+                                                onUndo: preview.inverseCommand != null
+                                                    ? () async {
+                                                        await ref.read(transformationEngineProvider.notifier).undoCommandPreview(preview);
+                                                      }
+                                                    : null,
+                                              ),
+                                            )),
+                                  ] else if (isMealLog)
                                     Padding(
                                       padding: const EdgeInsets.only(top: 12.0),
                                       child: Container(

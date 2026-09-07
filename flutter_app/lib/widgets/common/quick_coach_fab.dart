@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import '../../models/user_profile.dart';
+import '../../models/models.dart';
 import '../../providers/transformation_state.dart';
 import '../../providers/analytics_provider.dart';
 import '../../services/analytics_service.dart';
@@ -123,9 +123,14 @@ class _QuickCoachSheetState extends ConsumerState<_QuickCoachSheet> {
     );
 
     try {
+      final currentWorkout = ref.read(transformationEngineProvider).workout;
+      final envelope = ContextEnvelope(
+        activeScreen: widget.contextTag ?? 'today',
+        activeWorkoutDate: widget.contextTag == 'workout' ? currentWorkout.date : null,
+      );
       await ref
           .read(transformationEngineProvider.notifier)
-          .addChatMessage(prompt);
+          .addChatMessage(prompt, contextEnvelope: envelope);
       if (mounted) {
         Navigator.pop(context);
         ScaffoldMessenger.of(context).showSnackBar(

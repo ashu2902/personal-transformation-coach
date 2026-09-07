@@ -8,22 +8,17 @@ import '../models/models.dart';
 abstract class AIService {
   Future<AIOrchestratorResult> processCoachMessage(
       String userPrompt, TransformationEngineState contextState,
-      {Uint8List? imageBytes, String? imageUrl, String? mimeType});
-  Future<String> generateCoachResponse(
-      String userPrompt, TransformationEngineState contextState);
+      {Uint8List? imageBytes, String? imageUrl, String? mimeType, ContextEnvelope? contextEnvelope});
   Future<QuickLogParsedResult> parseQuickLog(
       String rawText, TransformationEngineState contextState);
   Future<void> adaptWorkoutWithAI(
       String adaptationRequest, TransformationEngineState contextState,
-      {List<EquipmentType>? explicitEquipment, double? maxWeightKg});
+      {List<EquipmentType>? explicitEquipment, double? maxWeightKg, ContextEnvelope? contextEnvelope});
   Future<DailyWorkout> parseWorkoutFromNaturalText(
       String naturalText, TransformationEngineState contextState,
       {String? targetDate});
-  Future<String> generateEngineDailyInsight(
-      TransformationEngineState contextState);
   Future<void> generateAIInitialWorkout(UserProfile profile);
   Future<void> generateAIMetabolicPlan(UserProfile profile);
-  Future<String> synthesizeAITodayFocus(TransformationEngineState contextState);
   Future<void> generateAIAdaptedNutrition(
       TransformationEngineState contextState, String reason);
   Future<void> generateAIAdaptedWorkout(
@@ -71,6 +66,7 @@ class GeminiAIProvider implements AIService {
     required String command,
     String? message,
     List<Map<String, dynamic>>? history,
+    Map<String, dynamic>? contextEnvelope,
     Uint8List? imageBytes,
     String? imageUrl,
     String? mimeType,
@@ -84,6 +80,7 @@ class GeminiAIProvider implements AIService {
       };
       if (message != null) body['message'] = message;
       if (history != null) body['history'] = history;
+      if (contextEnvelope != null) body['contextEnvelope'] = contextEnvelope;
       if (imageUrl != null) {
         body['imageUrl'] = imageUrl;
       } else if (imageBytes != null) {
@@ -131,11 +128,12 @@ class GeminiAIProvider implements AIService {
   @override
   Future<AIOrchestratorResult> processCoachMessage(
       String userPrompt, TransformationEngineState contextState,
-      {Uint8List? imageBytes, String? imageUrl, String? mimeType}) async {
+      {Uint8List? imageBytes, String? imageUrl, String? mimeType, ContextEnvelope? contextEnvelope}) async {
     try {
       final parsed = await _callProcessAiCommand(
         command: 'chatMessage',
         message: userPrompt,
+        contextEnvelope: contextEnvelope?.toJson(),
         imageBytes: imageBytes,
         imageUrl: imageUrl,
         mimeType: mimeType,
@@ -150,28 +148,23 @@ class GeminiAIProvider implements AIService {
         }
       }
 
-      return AIOrchestratorResult(
+      final List<CommandPreview> previews = [];
+      if (parsed['previews'] is List) {
+        for (var p in parsed['previews']) {
+          if (p is Map) {
+            previews.add(CommandPreview.fromJson(Map<String, dynamic>.from(p)));
+          }
+        }
+      }
+
+      return UnifiedAIOrchestratorResult(
         coachResponse: parsed['coachResponse']?.toString() ?? 'Got it.',
         actions: const [],
         pendingActions: pending,
+        previews: previews,
       );
     } catch (e) {
       _logError('processCoachMessage', e);
-      rethrow;
-    }
-  }
-
-  @override
-  Future<String> generateCoachResponse(
-      String userPrompt, TransformationEngineState contextState) async {
-    try {
-      final res = await _callProcessAiCommand(
-        command: 'generateCoachResponse',
-        message: userPrompt,
-      );
-      return res['response']?.toString() ?? 'Got it!';
-    } catch (e) {
-      _logError('generateCoachResponse', e);
       rethrow;
     }
   }
@@ -215,28 +208,18 @@ class GeminiAIProvider implements AIService {
   @override
   Future<void> adaptWorkoutWithAI(
       String adaptationRequest, TransformationEngineState contextState,
-      {List<EquipmentType>? explicitEquipment, double? maxWeightKg}) async {
+      {List<EquipmentType>? explicitEquipment, double? maxWeightKg, ContextEnvelope? contextEnvelope}) async {
     try {
       await _callProcessAiCommand(
-        command: 'adaptWorkoutWithAI',
+        command: 'chatMessage',
         message: adaptationRequest,
+        contextEnvelope: contextEnvelope?.toJson() ?? {
+          'activeScreen': 'workout',
+          'activeWorkoutDate': contextState.workout.date,
+        },
       );
     } catch (e) {
       _logError('adaptWorkoutWithAI', e);
-      rethrow;
-    }
-  }
-
-  @override
-  Future<String> generateEngineDailyInsight(
-      TransformationEngineState contextState) async {
-    try {
-      final res = await _callProcessAiCommand(
-        command: 'generateEngineDailyInsight',
-      );
-      return res['insight']?.toString() ?? 'Keep going!';
-    } catch (e) {
-      _logError('generateEngineDailyInsight', e);
       rethrow;
     }
   }
@@ -262,19 +245,6 @@ class GeminiAIProvider implements AIService {
     } catch (e) {
       _logError('generateAIMetabolicPlan', e);
       rethrow;
-    }
-  }
-
-  @override
-  Future<String> synthesizeAITodayFocus(
-      TransformationEngineState contextState) async {
-    try {
-      final res = await _callProcessAiCommand(
-        command: 'synthesizeTodayFocus',
-      );
-      return res['focus']?.toString() ?? "Let's win today!";
-    } catch (e) {
-      return "Let's win today!";
     }
   }
 
