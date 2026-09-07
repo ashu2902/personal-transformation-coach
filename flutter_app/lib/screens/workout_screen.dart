@@ -286,7 +286,7 @@ class WorkoutScreen extends ConsumerWidget {
                                   icon: Icon(LucideIcons.helpCircle, size: 18, color: auraTheme.primary),
                                   tooltip: 'How to Perform',
                                   onPressed: () {
-                                    _showExerciseGuidanceModal(context, ex);
+                                    _showExerciseGuidanceModal(context, ex, state.profile.coachSoul);
                                   },
                                 ),
                                 IconButton(
@@ -922,23 +922,19 @@ class WorkoutScreen extends ConsumerWidget {
     );
   }
 
-  void _showExerciseGuidanceModal(BuildContext context, Exercise ex) {
+  void _showExerciseGuidanceModal(BuildContext context, Exercise ex, CoachSoul soul) {
     final auraTheme = context.auraTheme;
-    final def = ExerciseDatabase.findDefinition(ex.name);
-    final guideText = ex.instructions ?? def?.instructions ?? """### Movement Instructions
-- Maintain a stable base and keep your core tightly braced throughout.
-- Move through a complete range of motion with full muscular control.
-- Control the lowering (eccentric) phase for 2 seconds.
-- Exhale on exertion and maintain consistent tempo.
-""";
-    final videoUrl = ex.videoUrl ?? def?.videoUrl;
+    final cues = ExerciseDatabase.resolveCues(ex);
+    final videoUrl = ExerciseDatabase.resolveVideoUrl(ex);
+    final coachTip = ExerciseDatabase.resolveCoachTip(ex, soul);
+    final guideText = ExerciseDatabase.resolveInstructions(ex);
 
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (ctx) => Container(
-        height: MediaQuery.of(context).size.height * 0.75,
+        height: MediaQuery.of(context).size.height * 0.85,
         decoration: BoxDecoration(
           color: auraTheme.surfaceCard,
           borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
@@ -980,9 +976,41 @@ class WorkoutScreen extends ConsumerWidget {
                           ex.name,
                           style: AuraTypography.titleLarge.copyWith(fontSize: 18),
                         ),
-                        Text(
-                          '${ex.targetMuscle} • ${ex.equipmentRequired.toUpperCase()}',
-                          style: AuraTypography.bodySmall.copyWith(color: auraTheme.primary),
+                        const SizedBox(height: 2),
+                        Row(
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: auraTheme.primary.withValues(alpha: 0.15),
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                ex.targetMuscle,
+                                style: AuraTypography.bodySmall.copyWith(
+                                  color: auraTheme.primary,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(width: 6),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: AuraColors.surface2,
+                                borderRadius: BorderRadius.circular(4),
+                              ),
+                              child: Text(
+                                ex.equipmentRequired.toUpperCase(),
+                                style: AuraTypography.bodySmall.copyWith(
+                                  color: AuraColors.textSecondary,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ),
+                          ],
                         ),
                       ],
                     ),
@@ -994,53 +1022,228 @@ class WorkoutScreen extends ConsumerWidget {
                 ],
               ),
             ),
-            const Divider(color: AuraColors.borderSubtle, height: 24),
+            const Divider(color: AuraColors.borderSubtle, height: 20),
 
-            // Video Guide Button if URL exists
-            if (videoUrl != null && videoUrl.isNotEmpty)
-              Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 4.0),
-                child: SizedBox(
-                  width: double.infinity,
-                  height: 44,
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFFF0000),
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    icon: const Icon(LucideIcons.play, size: 16),
-                    label: const Text('Watch Video Form Tutorial', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
-                    onPressed: () async {
-                      final uri = Uri.parse(videoUrl);
-                      if (await canLaunchUrl(uri)) {
-                        await launchUrl(uri, mode: LaunchMode.externalApplication);
-                      }
-                    },
-                  ),
-                ),
-              ),
-
-            // Instructions Body
+            // Scrollable Content
             Expanded(
               child: SingleChildScrollView(
-                padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
-                child: MarkdownBody(
-                  data: guideText,
-                  styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
-                    p: AuraTypography.bodyLarge.copyWith(color: AuraColors.textPrimary, height: 1.45),
-                    strong: AuraTypography.bodyLarge.copyWith(color: auraTheme.primary, fontWeight: FontWeight.bold),
-                    h1: AuraTypography.displayMedium.copyWith(color: auraTheme.primary, fontSize: 17),
-                    h2: AuraTypography.displaySmall.copyWith(color: auraTheme.primary, fontSize: 15),
-                    h3: AuraTypography.titleMedium.copyWith(color: auraTheme.primary, fontSize: 13),
-                    listBullet: AuraTypography.bodyLarge.copyWith(color: auraTheme.primary),
-                  ),
+                padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 6.0),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    // ─── 1. GLANCEABLE 3-CUE TRIAD CARD (3-Second In-Workout Review) ───
+                    Container(
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: AuraColors.surface2,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AuraColors.borderSubtle),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(LucideIcons.zap, size: 14, color: auraTheme.primary),
+                              const SizedBox(width: 6),
+                              Text(
+                                'FORM CUES (3-SEC REVIEW)',
+                                style: AuraTypography.labelMedium.copyWith(
+                                  color: auraTheme.primary,
+                                  letterSpacing: 0.8,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 12),
+
+                          // Feel It In
+                          _buildCueRow(
+                            emoji: '🎯',
+                            label: 'FEEL IT IN',
+                            labelColor: auraTheme.primary,
+                            content: cues.feelItIn,
+                            highlight: true,
+                          ),
+                          const SizedBox(height: 10),
+
+                          // Setup & Position
+                          _buildCueRow(
+                            emoji: '⚡',
+                            label: 'KEY SETUP CUE',
+                            labelColor: AuraColors.textSecondary,
+                            content: cues.setupCue,
+                            highlight: false,
+                          ),
+                          const SizedBox(height: 10),
+
+                          // Avoid / Safety
+                          _buildCueRow(
+                            emoji: '⚠️',
+                            label: 'AVOID',
+                            labelColor: const Color(0xFFFFB020),
+                            content: cues.avoidMistake,
+                            highlight: false,
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // ─── 2. COACH PERSONA TIP CARD ───
+                    Container(
+                      padding: const EdgeInsets.all(14),
+                      decoration: BoxDecoration(
+                        color: auraTheme.primary.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: auraTheme.primary.withValues(alpha: 0.25)),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(LucideIcons.sparkles, size: 16, color: auraTheme.primary),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'COACH ${soul.displayName.toUpperCase()} TIP',
+                                  style: AuraTypography.labelSmall.copyWith(
+                                    color: auraTheme.primary,
+                                    fontWeight: FontWeight.bold,
+                                    letterSpacing: 0.5,
+                                    fontSize: 10,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  '"$coachTip"',
+                                  style: AuraTypography.bodySmall.copyWith(
+                                    color: AuraColors.textPrimary,
+                                    fontStyle: FontStyle.italic,
+                                    height: 1.35,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
+
+                    // ─── 3. VERIFIED TUTORIAL VIDEO BUTTON ───
+                    SizedBox(
+                      width: double.infinity,
+                      height: 46,
+                      child: ElevatedButton.icon(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFFE50914),
+                          foregroundColor: Colors.white,
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          elevation: 0,
+                        ),
+                        icon: const Icon(LucideIcons.play, size: 16, color: Colors.white),
+                        label: const Text(
+                          'Watch Video Form Tutorial',
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Colors.white),
+                        ),
+                        onPressed: () async {
+                          final uri = Uri.parse(videoUrl);
+                          if (await canLaunchUrl(uri)) {
+                            await launchUrl(uri, mode: LaunchMode.externalApplication);
+                          }
+                        },
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+
+                    // ─── 4. DETAILED STEP-BY-STEP BREAKDOWN (Expandable) ───
+                    Theme(
+                      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
+                      child: ExpansionTile(
+                        tilePadding: EdgeInsets.zero,
+                        collapsedTextColor: AuraColors.textSecondary,
+                        textColor: auraTheme.primary,
+                        iconColor: auraTheme.primary,
+                        collapsedIconColor: AuraColors.textSecondary,
+                        title: Text(
+                          'Detailed Step-by-Step Instructions',
+                          style: AuraTypography.titleSmall.copyWith(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.only(top: 4.0, bottom: 12.0),
+                            child: MarkdownBody(
+                              data: guideText,
+                              styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+                                p: AuraTypography.bodyMedium.copyWith(color: AuraColors.textPrimary, height: 1.45),
+                                strong: AuraTypography.bodyMedium.copyWith(color: auraTheme.primary, fontWeight: FontWeight.bold),
+                                h1: AuraTypography.titleMedium.copyWith(color: auraTheme.primary, fontSize: 16),
+                                h2: AuraTypography.titleSmall.copyWith(color: auraTheme.primary, fontSize: 14),
+                                h3: AuraTypography.labelLarge.copyWith(color: auraTheme.primary, fontSize: 12),
+                                listBullet: AuraTypography.bodyMedium.copyWith(color: auraTheme.primary),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                 ),
               ),
             ),
           ],
         ),
       ),
+    );
+  }
+
+  Widget _buildCueRow({
+    required String emoji,
+    required String label,
+    required Color labelColor,
+    required String content,
+    required bool highlight,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Text(emoji, style: const TextStyle(fontSize: 13)),
+            const SizedBox(width: 6),
+            Text(
+              label,
+              style: AuraTypography.labelSmall.copyWith(
+                color: labelColor,
+                fontWeight: FontWeight.bold,
+                fontSize: 10,
+                letterSpacing: 0.5,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 3),
+        Padding(
+          padding: const EdgeInsets.only(left: 20.0),
+          child: Text(
+            content,
+            style: AuraTypography.bodySmall.copyWith(
+              color: highlight ? Colors.white : AuraColors.textPrimary,
+              fontWeight: highlight ? FontWeight.w600 : FontWeight.normal,
+              height: 1.35,
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
