@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../providers/transformation_state.dart';
 import '../providers/analytics_provider.dart';
@@ -255,14 +256,14 @@ class ProfileScreen extends ConsumerWidget {
                         width: 32,
                         height: 32,
                         decoration: BoxDecoration(
-                          color: notifier.isAuthenticated
+                          color: notifier.isPermanentUser
                               ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15)
                               : AuraColors.warningAmber.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(8),
                         ),
                         child: Icon(
-                          notifier.isAuthenticated ? LucideIcons.shieldCheck : LucideIcons.userX,
-                          color: notifier.isAuthenticated ? Theme.of(context).colorScheme.primary : AuraColors.warningAmber,
+                          notifier.isPermanentUser ? LucideIcons.shieldCheck : LucideIcons.userX,
+                          color: notifier.isPermanentUser ? Theme.of(context).colorScheme.primary : AuraColors.warningAmber,
                           size: 18,
                         ),
                       ),
@@ -272,11 +273,13 @@ class ProfileScreen extends ConsumerWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              notifier.currentAuthEmail ?? 'Guest Athlete',
+                              notifier.isPermanentUser
+                                  ? (notifier.currentAuthEmail ?? notifier.currentAuthDisplayName ?? 'Synced Athlete')
+                                  : 'Guest Athlete (Not Signed In)',
                               style: AuraTypography.labelBold.copyWith(fontSize: 14),
                             ),
                             Text(
-                              notifier.isAuthenticated ? 'Synced with Cloud Firestore' : 'Local Guest Account',
+                              notifier.isPermanentUser ? 'Synced with Cloud Firestore' : 'Local Guest Account (Unsaved)',
                               style: AuraTypography.bodySmall.copyWith(color: AuraColors.textSecondary),
                             ),
                           ],
@@ -285,21 +288,65 @@ class ProfileScreen extends ConsumerWidget {
                     ],
                   ),
                   const SizedBox(height: 16),
-                  if (!notifier.isAuthenticated) ...[
+                  if (notifier.isAnonymous) ...[
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AuraColors.surface2,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AuraColors.borderSubtle),
+                      ),
+                      child: Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Icon(LucideIcons.info, size: 16, color: auraTheme.primary),
+                          const SizedBox(width: 10),
+                          Expanded(
+                            child: Text(
+                              'Sign in to permanently save your workout history, nutrition logs, and AI coach memory across devices without losing any data.',
+                              style: AuraTypography.bodySmall.copyWith(
+                                color: AuraColors.textSecondary,
+                                fontSize: 12,
+                                height: 1.35,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 14),
                     AuraButton(
                       text: 'Sign In with Google',
-                      variant: AuraButtonVariant.secondary,
+                      icon: LucideIcons.logIn,
+                      variant: AuraButtonVariant.primary,
+                      backgroundColor: auraTheme.primary,
+                      textColor: Colors.black,
                       width: double.infinity,
                       onPressed: () async {
                         try {
-                          await notifier.signInWithGoogle();
+                          await notifier.linkAnonymousWithGoogle();
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: const Text('Successfully signed in!'),
+                                content: const Text('Successfully linked! All your workout and nutrition data is saved.'),
                                 backgroundColor: Theme.of(context).colorScheme.primary,
                               ),
                             );
+                          }
+                        } on FirebaseAuthException catch (e) {
+                          if (e.code == 'credential-already-in-use') {
+                            if (context.mounted) {
+                              _showAccountMergeDialog(context, notifier);
+                            }
+                          } else {
+                            if (context.mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(
+                                  content: Text('Sign-in error: ${e.message ?? e.code}'),
+                                  backgroundColor: AuraColors.error,
+                                ),
+                              );
+                            }
                           }
                         } catch (e) {
                           if (context.mounted) {
@@ -357,6 +404,84 @@ class ProfileScreen extends ConsumerWidget {
     ),
   ),
 );
+  }
+
+  void _showAccountMergeDialog(BuildContext context, TransformationEngineNotifier notifier) {
+    showDialog(
+      context: context,
+      builder: (ctx) {
+        return AlertDialog(
+          backgroundColor: AuraColors.surface1,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(16),
+            side: const BorderSide(color: AuraColors.borderSubtle),
+          ),
+          title: Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: AuraColors.warningAmber.withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: const Icon(LucideIcons.alertCircle, color: AuraColors.warningAmber, size: 20),
+              ),
+              const SizedBox(width: 12),
+              const Expanded(
+                child: Text(
+                  'Existing Account Found',
+                  style: TextStyle(
+                    color: AuraColors.textPrimary,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          content: const Text(
+            'This Google account is already registered with an existing profile. Would you like to switch to that account?',
+            style: TextStyle(color: AuraColors.textSecondary, fontSize: 14, height: 1.4),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.of(ctx).pop(),
+              child: const Text('Cancel', style: TextStyle(color: AuraColors.textSecondary)),
+            ),
+            ElevatedButton(
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Theme.of(context).colorScheme.primary,
+                foregroundColor: Colors.black,
+              ),
+              onPressed: () async {
+                Navigator.of(ctx).pop();
+                try {
+                  final success = await notifier.signInAndLoadUserProfile(useGoogleAuth: true);
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text(success ? 'Switched to your Google profile!' : 'Account loaded.'),
+                        backgroundColor: Theme.of(context).colorScheme.primary,
+                      ),
+                    );
+                  }
+                } catch (e) {
+                  if (context.mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(
+                        content: Text('Failed to switch accounts: $e'),
+                        backgroundColor: AuraColors.error,
+                      ),
+                    );
+                  }
+                }
+              },
+              child: const Text('Switch Account'),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   void _showDeleteAccountDialog(BuildContext context, WidgetRef ref) {

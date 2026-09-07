@@ -1241,3 +1241,43 @@ export const handlePendingAction = onRequest(
   }
 );
 
+export const migrateEnterpriseToStandard = onRequest(
+  { cors: true, timeoutSeconds: 540, memory: "1GiB" },
+  async (req, res) => {
+    const MIGRATION_SECRET = "aura-migrate-enterprise-standard-2026";
+    const authHeader = req.headers.authorization;
+    const secretParam = req.query.secret || req.body?.secret;
+
+    let isAuthorized = false;
+    if (secretParam === MIGRATION_SECRET) {
+      isAuthorized = true;
+    } else if (authHeader?.startsWith("Bearer ")) {
+      try {
+        const token = authHeader.split("Bearer ")[1];
+        await admin.auth().verifyIdToken(token);
+        isAuthorized = true;
+      } catch {
+        // Invalid token
+      }
+    }
+
+    if (!isAuthorized) {
+      res.status(401).json({
+        error: "Unauthorized. Provide Authorization Bearer token or ?secret=aura-migrate-enterprise-standard-2026",
+      });
+      return;
+    }
+
+    const isDryRun = req.query.dryRun === "true" || req.body?.dryRun === true;
+    try {
+      const { runEnterpriseToStandardMigration } = await import("../scripts/run_migrations");
+      const summary = await runEnterpriseToStandardMigration(isDryRun);
+      res.status(200).json({ success: true, isDryRun, summary });
+    } catch (err: any) {
+      console.error("Migration endpoint error:", err);
+      res.status(500).json({ error: err.message || String(err) });
+    }
+  }
+);
+
+

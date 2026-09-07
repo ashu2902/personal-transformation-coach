@@ -689,6 +689,35 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
   String? get currentAuthEmail => _auth.email;
   String? get currentAuthDisplayName => _auth.displayName;
   bool get isAuthenticated => _auth.isAuthenticated;
+  bool get isAnonymous => _auth.isAnonymous;
+  bool get isPermanentUser => _auth.isPermanentUser;
+
+  Future<UserCredential?> linkAnonymousWithGoogle() async {
+    debugPrint('[AURA STATE] Linking anonymous user with Google...');
+    try {
+      final cred = await _auth.linkAnonymousWithGoogle();
+      final user = cred?.user;
+      if (user != null) {
+        final uid = user.uid;
+        debugPrint('[AURA STATE] Account linked successfully for UID $uid (${user.email})');
+
+        // Preserve and update profile in state and Firestore without wiping workouts or plans
+        final currentName = state.profile.name;
+        final newName = (user.displayName != null && user.displayName!.trim().isNotEmpty && (currentName.isEmpty || currentName == 'Guest Athlete'))
+            ? user.displayName!.trim()
+            : currentName;
+        final updatedProfile = state.profile.copyWith(name: newName);
+        state = state.copyWith(profile: updatedProfile);
+
+        await _firestore.saveUserProfile(uid, updatedProfile);
+        setupSubscriptions(uid);
+      }
+      return cred;
+    } catch (e) {
+      debugPrint('[AURA STATE] Account link error: $e');
+      rethrow;
+    }
+  }
 
   Future<UserCredential?> signInWithGoogle() async {
     debugPrint('[AURA STATE] Initiating Google Sign-In...');

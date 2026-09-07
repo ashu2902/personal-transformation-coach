@@ -31,7 +31,44 @@ class FirebaseAuthService {
   String? get email => _auth?.currentUser?.email;
   String? get displayName => _auth?.currentUser?.displayName;
   bool get isAuthenticated => _auth?.currentUser != null;
+  bool get isAnonymous => _auth?.currentUser?.isAnonymous ?? true;
+  bool get isPermanentUser => _auth?.currentUser != null && !_auth!.currentUser!.isAnonymous;
   Stream<User?> get authStateChanges => _auth?.authStateChanges() ?? const Stream.empty();
+
+  Future<UserCredential?> linkAnonymousWithGoogle() async {
+    try {
+      if (_auth == null) return null;
+      final currentUser = _auth!.currentUser;
+      final googleProvider = GoogleAuthProvider();
+      UserCredential cred;
+
+      if (currentUser != null && currentUser.isAnonymous) {
+        debugPrint('[FIREBASE AUTH] Linking anonymous guest account with Google...');
+        cred = await currentUser.linkWithPopup(googleProvider);
+      } else {
+        debugPrint('[FIREBASE AUTH] Signing in with Google popup...');
+        cred = await _auth!.signInWithPopup(googleProvider);
+      }
+
+      final user = cred.user;
+      if (user != null) {
+        await _analytics.setUserId(user.uid);
+        await _analytics.setUserProperties({
+          if (user.displayName != null) r'$name': user.displayName,
+          if (user.email != null) r'$email': user.email,
+          'sign_up_method': 'google_linked',
+          'is_guest': false,
+        });
+      }
+      return cred;
+    } on FirebaseAuthException catch (e) {
+      debugPrint('[FIREBASE AUTH] Google Link/Sign-In error code: ${e.code}, message: ${e.message}');
+      rethrow;
+    } catch (e) {
+      debugPrint('[FIREBASE AUTH] Google Link error: $e');
+      rethrow;
+    }
+  }
 
   Future<UserCredential?> signInWithGoogle() async {
     try {
