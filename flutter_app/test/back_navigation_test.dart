@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:aura_transformation_engine/models/models.dart';
+import 'package:aura_transformation_engine/models/user_profile.dart';
 import 'package:aura_transformation_engine/screens/onboarding_screen.dart';
 import 'package:aura_transformation_engine/theme/theme.dart';
 

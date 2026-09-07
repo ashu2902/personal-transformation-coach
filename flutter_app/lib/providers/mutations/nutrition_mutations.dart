@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../models/models.dart';
+import '../../models/nutrition.dart';
 import '../transformation_state.dart';
 
 /// Domain mutations for Nutrition targets, logged meals, portion corrections, and water.

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import '../../models/models.dart';
+import '../../models/user_profile.dart';
 import '../../providers/transformation_state.dart';
 import '../../providers/analytics_provider.dart';
 import '../../services/analytics_service.dart';
@@ -39,7 +39,7 @@ class QuickCoachFAB extends ConsumerWidget {
           shape: BoxShape.circle,
           boxShadow: [
             BoxShadow(
-              color: const Color(0xFF00FFA3).withOpacity(0.35),
+              color: const Color(0xFF00FFA3).withValues(alpha: 0.35),
               blurRadius: 16,
               spreadRadius: 2,
             ),
@@ -53,7 +53,7 @@ class QuickCoachFAB extends ConsumerWidget {
             decoration: BoxDecoration(
               shape: BoxShape.circle,
               border: Border.all(
-                color: Colors.white.withOpacity(0.3),
+                color: Colors.white.withValues(alpha: 0.3),
                 width: 1.5,
               ),
             ),

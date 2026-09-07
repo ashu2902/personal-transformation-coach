@@ -3,7 +3,14 @@ import 'package:flutter/foundation.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import '../models/models.dart';
+import 'package:http/http.dart' as http;
+import '../models/user_profile.dart';
+import '../models/workout.dart';
+import '../models/nutrition.dart';
+import '../models/recovery.dart';
+import '../models/chat_and_ai.dart';
+import '../models/weekly_plan.dart';
+import '../models/master_context.dart';
 import 'transformation_repository.dart';
 import 'analytics_service.dart';
 
@@ -16,7 +23,7 @@ class FirebaseAuthService {
     IAnalyticsService? analytics,
   })  : _auth = auth ??
             (Firebase.apps.isNotEmpty
-                ? FirebaseAuth.instanceFor(app: Firebase.app())
+                ? FirebaseAuth.instance
                 : null),
         _analytics = analytics ?? MixpanelAnalyticsService();
 
@@ -24,6 +31,7 @@ class FirebaseAuthService {
   String? get email => _auth?.currentUser?.email;
   String? get displayName => _auth?.currentUser?.displayName;
   bool get isAuthenticated => _auth?.currentUser != null;
+  Stream<User?> get authStateChanges => _auth?.authStateChanges() ?? const Stream.empty();
 
   Future<UserCredential?> signInWithGoogle() async {
     try {
@@ -127,7 +135,7 @@ class FirebaseFirestoreService {
     ITransformationRepository? localRepo,
   })  : _firestoreInstance = firestore ??
             (Firebase.apps.isNotEmpty
-                ? FirebaseFirestore.instanceFor(app: Firebase.app(), databaseId: 'default')
+                ? FirebaseFirestore.instance
                 : null),
         _localRepo = localRepo ?? LocalTransformationRepository();
 
@@ -146,7 +154,7 @@ class FirebaseFirestoreService {
       'goal': profile.goal.name,
       'daysPerWeek': profile.daysPerWeek,
       'targetPhysique': profile.targetPhysique,
-      'equipmentList': profile.equipmentList.map((e) => e.toMap()).toList(),
+      'equipmentList': profile.equipmentList.map((e) => e.toJson()).toList(),
       'availableEquipment': profile.availableEquipment.map((e) => e.name).toList(),
       'experienceLevel': profile.experienceLevel.name,
       'benchPress1RMKg': profile.benchPress1RMKg,
@@ -187,7 +195,7 @@ class FirebaseFirestoreService {
           List<EquipmentItem> equipItems = [];
           if (map['equipmentList'] is List) {
             equipItems = (map['equipmentList'] as List)
-                .map((e) => EquipmentItem.fromMap(Map<String, dynamic>.from(e as Map)))
+                .map((e) => EquipmentItem.fromJson(Map<String, dynamic>.from(e as Map)))
                 .toList();
           } else if (map['availableEquipment'] is List) {
             equipItems = (map['availableEquipment'] as List)
@@ -247,6 +255,27 @@ class FirebaseFirestoreService {
       }
     } catch (e) {
       debugPrint('[FIRESTORE ERROR] saveDailyWorkout failed: $e');
+    }
+  }
+
+  Future<void> updateDailyWorkoutField(String uid, String dateStr, Map<String, dynamic> fields) async {
+    try {
+      if (_db != null) {
+        final updateData = {
+          ...fields,
+          'updatedAt': FieldValue.serverTimestamp(),
+        };
+        await _db!
+            .collection('users')
+            .doc(uid)
+            .collection('workouts')
+            .doc(dateStr)
+            .update(updateData)
+            .timeout(const Duration(seconds: 15));
+      }
+    } catch (e) {
+      // If doc doesn't exist, update fails. We log it and fallback might be needed but mostly it should exist
+      debugPrint('[FIRESTORE ERROR] updateDailyWorkoutField failed: $e');
     }
   }
 
@@ -325,6 +354,26 @@ class FirebaseFirestoreService {
       }
     } catch (e) {
       debugPrint('[FIRESTORE ERROR] saveDailyNutrition failed: $e');
+    }
+  }
+
+  Future<void> updateDailyNutritionField(String uid, String dateStr, Map<String, dynamic> fields) async {
+    try {
+      if (_db != null) {
+        final updateData = {
+          ...fields,
+          'updatedAt': FieldValue.serverTimestamp(),
+        };
+        await _db!
+            .collection('users')
+            .doc(uid)
+            .collection('nutrition')
+            .doc(dateStr)
+            .update(updateData)
+            .timeout(const Duration(seconds: 15));
+      }
+    } catch (e) {
+      debugPrint('[FIRESTORE ERROR] updateDailyNutritionField failed: $e');
     }
   }
 
@@ -478,7 +527,10 @@ class FirebaseFirestoreService {
           'timestamp': message.timestamp,
           'serverTimestamp': FieldValue.serverTimestamp(),
         };
-        if (message.imageBytes != null && message.imageBytes!.isNotEmpty) {
+        if (message.imageUrl != null) {
+          docData['imageUrl'] = message.imageUrl;
+        } else if (message.imageBytes != null && message.imageBytes!.isNotEmpty) {
+          // Legacy support (to be fully removed after migration)
           docData['imageBase64'] = base64Encode(message.imageBytes!);
         }
         await _db!
@@ -509,45 +561,141 @@ class FirebaseFirestoreService {
         .snapshots();
   }
 
+  // ─── Pending Actions (Structural Gate) ───
+
+  Stream<List<PendingAction>> getPendingActionsStream(String uid) {
+    if (_db == null) return const Stream.empty();
+    return _db!
+        .collection('users')
+        .doc(uid)
+        .collection('pending_actions')
+        .snapshots()
+        .map((snapshot) {
+          final list = <PendingAction>[];
+          for (var doc in snapshot.docs) {
+            try {
+              final data = doc.data();
+              if (data['status'] == 'pending') {
+                list.add(PendingAction.fromJson(data));
+              }
+            } catch (e) {
+              debugPrint('[PENDING ACTION] Skip parsing error for ${doc.id}: $e');
+            }
+          }
+          return list;
+        });
+  }
+
+  Future<void> resolvePendingAction(String uid, String actionId, String decision) async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      final token = await user?.getIdToken();
+      const url = 'https://us-central1-aura-coach-ashu-7.cloudfunctions.net/handlePendingAction';
+      final res = await http.post(
+        Uri.parse(url),
+        headers: {
+          'Content-Type': 'application/json',
+          if (token != null) 'Authorization': 'Bearer $token',
+        },
+        body: jsonEncode({
+          'actionId': actionId,
+          'decision': decision,
+        }),
+      ).timeout(const Duration(seconds: 15));
+
+      if (res.statusCode != 200) {
+        debugPrint('[PENDING ACTION ERROR] Server returned ${res.statusCode}: ${res.body}');
+      }
+    } catch (e) {
+      debugPrint('[PENDING ACTION ERROR] resolvePendingAction failed: $e');
+    }
+  }
+
   // ─── Weekly Plan ───
 
   Future<void> saveWeeklyPlan(String uid, WeeklyPlan plan) async {
     try {
       if (_db != null) {
+        final planData = {
+          ...weeklyPlanToMap(plan),
+          'updatedAt': FieldValue.serverTimestamp(),
+        };
+        if (plan.weekId.isNotEmpty) {
+          await _db!
+              .collection('users')
+              .doc(uid)
+              .collection('weekly_plans')
+              .doc(plan.weekId)
+              .set(planData)
+              .timeout(const Duration(seconds: 15));
+        }
         await _db!
             .collection('users')
             .doc(uid)
             .collection('weekly_plans')
-            .doc(plan.weekId)
-            .set({
-              ...weeklyPlanToMap(plan),
-              'updatedAt': FieldValue.serverTimestamp(),
-            })
+            .doc('current')
+            .set(planData)
             .timeout(const Duration(seconds: 15));
       }
+      await _localRepo.saveWeeklyPlan(plan);
     } catch (e) {
       debugPrint('[FIRESTORE ERROR] saveWeeklyPlan failed: $e');
     }
   }
 
-  Future<WeeklyPlan?> getWeeklyPlan(String uid, String weekId) async {
+  Future<WeeklyPlan?> getWeeklyPlan(String uid, [String? weekId]) async {
     try {
       if (_db != null) {
+        // 1. Try reading the 'current' document or specific weekId document
+        final targetDocId = (weekId != null && weekId.isNotEmpty) ? weekId : 'current';
         final doc = await _db!
             .collection('users')
             .doc(uid)
             .collection('weekly_plans')
-            .doc(weekId)
+            .doc(targetDocId)
             .get()
             .timeout(const Duration(seconds: 15));
         if (doc.exists && doc.data() != null) {
-          return weeklyPlanFromMap(doc.data()!);
+          final plan = weeklyPlanFromMap(doc.data()!);
+          await _localRepo.saveWeeklyPlan(plan);
+          return plan;
+        }
+
+        // 2. Fallback: Fetch all weekly plans for this user and take the newest
+        final snapshot = await _db!
+            .collection('users')
+            .doc(uid)
+            .collection('weekly_plans')
+            .get()
+            .timeout(const Duration(seconds: 15));
+        if (snapshot.docs.isNotEmpty) {
+          final sortedDocs = snapshot.docs.toList()
+            ..sort((a, b) {
+              final aData = a.data();
+              final bData = b.data();
+              final aTime = aData['updatedAt']?.toString() ?? aData['createdAt']?.toString() ?? a.id;
+              final bTime = bData['updatedAt']?.toString() ?? bData['createdAt']?.toString() ?? b.id;
+              return bTime.compareTo(aTime);
+            });
+          final plan = weeklyPlanFromMap(sortedDocs.first.data());
+          await _localRepo.saveWeeklyPlan(plan);
+          return plan;
         }
       }
     } catch (e) {
       debugPrint('[FIRESTORE ERROR] getWeeklyPlan failed: $e');
     }
-    return null;
+    return await _localRepo.loadWeeklyPlan();
+  }
+
+  Stream<DocumentSnapshot> getCurrentWeeklyPlanStream(String uid) {
+    if (_db == null) return const Stream.empty();
+    return _db!
+        .collection('users')
+        .doc(uid)
+        .collection('weekly_plans')
+        .doc('current')
+        .snapshots();
   }
 
   Stream<DocumentSnapshot> getWeeklyPlanStream(String uid, String weekId) {
@@ -559,6 +707,7 @@ class FirebaseFirestoreService {
         .doc(weekId)
         .snapshots();
   }
+
 
   // ─── Master Context ───
 
@@ -684,6 +833,26 @@ class FirebaseFirestoreService {
 
   // ─── Serializers: Workout ───
 
+  List<Map<String, dynamic>> mapExercises(List<Exercise> exercises) {
+    return exercises.map((e) => {
+      'id': e.id,
+      'name': e.name,
+      'targetMuscle': e.targetMuscle,
+      'equipmentRequired': e.equipmentRequired,
+      'notes': e.notes,
+      'instructions': e.instructions,
+      'videoUrl': e.videoUrl,
+      'sets': e.sets.map((s) => {
+        'setNumber': s.setNumber,
+        'targetReps': s.targetReps,
+        'actualReps': s.actualReps,
+        'targetWeightKg': s.targetWeightKg,
+        'actualWeightKg': s.actualWeightKg,
+        'completed': s.completed,
+      }).toList(),
+    }).toList();
+  }
+
   Map<String, dynamic> workoutToMap(DailyWorkout workout) {
     return {
       'id': workout.id,
@@ -693,21 +862,7 @@ class FirebaseFirestoreService {
       'estimatedDurationMin': workout.estimatedDurationMin,
       'status': workout.status.name,
       'adaptationNote': workout.adaptationNote,
-      'exercises': workout.exercises.map((e) => {
-        'id': e.id,
-        'name': e.name,
-        'targetMuscle': e.targetMuscle,
-        'equipmentRequired': e.equipmentRequired,
-        'notes': e.notes,
-        'sets': e.sets.map((s) => {
-          'setNumber': s.setNumber,
-          'targetReps': s.targetReps,
-          'actualReps': s.actualReps,
-          'targetWeightKg': s.targetWeightKg,
-          'actualWeightKg': s.actualWeightKg,
-          'completed': s.completed,
-        }).toList(),
-      }).toList(),
+      'exercises': mapExercises(workout.exercises),
     };
   }
 
@@ -727,6 +882,8 @@ class FirebaseFirestoreService {
           targetMuscle: e['targetMuscle'] ?? '',
           equipmentRequired: e['equipmentRequired']?.toString() ?? 'bodyweight',
           notes: e['notes'],
+          instructions: e['instructions'],
+          videoUrl: e['videoUrl'],
           sets: (e['sets'] as List? ?? []).map((s) {
             return ExerciseSet(
               setNumber: s['setNumber'] ?? 1,
@@ -835,24 +992,46 @@ class FirebaseFirestoreService {
   }
 
   WeeklyPlan weeklyPlanFromMap(Map<String, dynamic> map) {
+    final startDateStr = map['startDate']?.toString() ?? '';
+    DateTime? baseDate;
+    if (startDateStr.isNotEmpty) {
+      try {
+        baseDate = DateTime.parse(startDateStr);
+      } catch (_) {}
+    }
+    if (baseDate == null) {
+      final now = DateTime.now();
+      baseDate = now.subtract(Duration(days: now.weekday - 1));
+    }
+
+    final rawDays = (map['days'] as List? ?? []);
+    final days = <WeeklyDayPlan>[];
+    for (int i = 0; i < rawDays.length; i++) {
+      final d = rawDays[i] as Map? ?? {};
+      String dateStr = d['date']?.toString() ?? '';
+      if (dateStr.isEmpty) {
+        final calculatedDay = baseDate.add(Duration(days: i));
+        dateStr = calculatedDay.toIso8601String().split('T')[0];
+      }
+      days.add(WeeklyDayPlan(
+        dayName: d['dayName']?.toString() ?? '',
+        date: dateStr,
+        title: d['title']?.toString() ?? '',
+        focusArea: d['focusArea']?.toString() ?? '',
+        isRestDay: d['isRestDay'] == true,
+        exerciseNames: (d['exerciseNames'] as List? ?? []).map((e) => e.toString()).toList(),
+        nutritionFocus: d['nutritionFocus']?.toString(),
+      ));
+    }
+
     return WeeklyPlan(
-      weekId: map['weekId'] ?? '',
-      startDate: map['startDate'] ?? '',
-      endDate: map['endDate'] ?? '',
-      overview: map['overview'] ?? '',
-      coachNote: map['coachNote'],
-      createdAt: map['createdAt'] ?? '',
-      days: (map['days'] as List? ?? []).map((d) {
-        return WeeklyDayPlan(
-          dayName: d['dayName'] ?? '',
-          date: d['date'] ?? '',
-          title: d['title'] ?? '',
-          focusArea: d['focusArea'] ?? '',
-          isRestDay: d['isRestDay'] ?? false,
-          exerciseNames: (d['exerciseNames'] as List? ?? []).map((e) => e.toString()).toList(),
-          nutritionFocus: d['nutritionFocus'],
-        );
-      }).toList(),
+      weekId: map['weekId']?.toString() ?? '',
+      startDate: startDateStr.isNotEmpty ? startDateStr : baseDate.toIso8601String().split('T')[0],
+      endDate: map['endDate']?.toString() ?? baseDate.add(const Duration(days: 6)).toIso8601String().split('T')[0],
+      overview: map['overview']?.toString() ?? '',
+      coachNote: map['coachNote']?.toString(),
+      createdAt: map['createdAt']?.toString() ?? '',
+      days: days,
     );
   }
 

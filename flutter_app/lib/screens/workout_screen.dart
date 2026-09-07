@@ -2,11 +2,14 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
+import 'package:url_launcher/url_launcher.dart';
 import '../providers/transformation_state.dart';
 import '../providers/analytics_provider.dart';
 import '../services/analytics_service.dart';
-import '../models/models.dart';
-import '../engine/exercise_database.dart';
+import '../models/workout.dart';
+import '../models/user_profile.dart';
+import '../models/exercise_definition.dart';
 import '../theme/theme.dart';
 import '../widgets/common/common.dart';
 import '../widgets/common/quick_coach_fab.dart';
@@ -281,6 +284,13 @@ class WorkoutScreen extends ConsumerWidget {
                             ),
                             Row(
                               children: [
+                                IconButton(
+                                  icon: Icon(LucideIcons.helpCircle, size: 18, color: auraTheme.primary),
+                                  tooltip: 'How to Perform',
+                                  onPressed: () {
+                                    _showExerciseGuidanceModal(context, ex);
+                                  },
+                                ),
                                 IconButton(
                                   icon: const Icon(LucideIcons.arrowLeftRight, size: 18, color: AuraColors.textSecondary),
                                   tooltip: 'Swap Exercise',
@@ -748,7 +758,7 @@ class WorkoutScreen extends ConsumerWidget {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: const Color(0xFF00FFA3).withOpacity(0.15),
+                          color: const Color(0xFF00FFA3).withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(12),
                         ),
                         child: Text(
@@ -903,6 +913,128 @@ class WorkoutScreen extends ConsumerWidget {
           border: Border.all(color: Colors.white12),
         ),
         child: Icon(icon, color: Colors.white, size: 16),
+      ),
+    );
+  }
+
+  void _showExerciseGuidanceModal(BuildContext context, Exercise ex) {
+    final auraTheme = context.auraTheme;
+    final def = ExerciseDatabase.findDefinition(ex.name);
+    final guideText = ex.instructions ?? def?.instructions ?? """### Movement Instructions
+- Maintain a stable base and keep your core tightly braced throughout.
+- Move through a complete range of motion with full muscular control.
+- Control the lowering (eccentric) phase for 2 seconds.
+- Exhale on exertion and maintain consistent tempo.
+""";
+    final videoUrl = ex.videoUrl ?? def?.videoUrl;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        height: MediaQuery.of(context).size.height * 0.75,
+        decoration: BoxDecoration(
+          color: auraTheme.surfaceCard,
+          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          border: Border.all(color: AuraColors.borderSubtle),
+        ),
+        child: Column(
+          children: [
+            // Handle Bar
+            const SizedBox(height: 12),
+            Container(
+              width: 40,
+              height: 4,
+              decoration: BoxDecoration(
+                color: AuraColors.borderSubtle,
+                borderRadius: BorderRadius.circular(2),
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Modal Header
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 20.0),
+              child: Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: auraTheme.primary.withValues(alpha: 0.15),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(LucideIcons.bookOpen, color: auraTheme.primary, size: 18),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          ex.name,
+                          style: AuraTypography.titleLarge.copyWith(fontSize: 18),
+                        ),
+                        Text(
+                          '${ex.targetMuscle} • ${ex.equipmentRequired.toUpperCase()}',
+                          style: AuraTypography.bodySmall.copyWith(color: auraTheme.primary),
+                        ),
+                      ],
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(LucideIcons.x, color: AuraColors.textSecondary, size: 20),
+                    onPressed: () => Navigator.pop(ctx),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(color: AuraColors.borderSubtle, height: 24),
+
+            // Video Guide Button if URL exists
+            if (videoUrl != null && videoUrl.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 4.0),
+                child: SizedBox(
+                  width: double.infinity,
+                  height: 44,
+                  child: ElevatedButton.icon(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFFF0000),
+                      foregroundColor: Colors.white,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                    ),
+                    icon: const Icon(LucideIcons.play, size: 16),
+                    label: const Text('Watch Video Form Tutorial', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
+                    onPressed: () async {
+                      final uri = Uri.parse(videoUrl);
+                      if (await canLaunchUrl(uri)) {
+                        await launchUrl(uri, mode: LaunchMode.externalApplication);
+                      }
+                    },
+                  ),
+                ),
+              ),
+
+            // Instructions Body
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
+                child: MarkdownBody(
+                  data: guideText,
+                  styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+                    p: AuraTypography.bodyLarge.copyWith(color: AuraColors.textPrimary, height: 1.45),
+                    strong: AuraTypography.bodyLarge.copyWith(color: auraTheme.primary, fontWeight: FontWeight.bold),
+                    h1: AuraTypography.displayMedium.copyWith(color: auraTheme.primary, fontSize: 17),
+                    h2: AuraTypography.displaySmall.copyWith(color: auraTheme.primary, fontSize: 15),
+                    h3: AuraTypography.titleMedium.copyWith(color: auraTheme.primary, fontSize: 13),
+                    listBullet: AuraTypography.bodyLarge.copyWith(color: auraTheme.primary),
+                  ),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

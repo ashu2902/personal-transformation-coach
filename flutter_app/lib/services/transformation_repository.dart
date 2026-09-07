@@ -1,7 +1,11 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import '../models/models.dart';
+import '../models/user_profile.dart';
+import '../models/workout.dart';
+import '../models/nutrition.dart';
+import '../models/recovery.dart';
+import '../models/weekly_plan.dart';
 
 abstract class ITransformationRepository {
   Future<UserProfile?> loadProfile();
@@ -16,6 +20,9 @@ abstract class ITransformationRepository {
   Future<RecoveryCheckIn?> loadTodayRecovery(String dateStr);
   Future<void> saveTodayRecovery(RecoveryCheckIn recovery);
 
+  Future<WeeklyPlan?> loadWeeklyPlan();
+  Future<void> saveWeeklyPlan(WeeklyPlan plan);
+
   Future<List<ProgressEntry>> loadProgressHistory();
   Future<void> saveProgressEntry(ProgressEntry entry);
 
@@ -27,6 +34,7 @@ class LocalTransformationRepository implements ITransformationRepository {
   static const String _keyWorkout = 'aura_daily_workout_';
   static const String _keyNutrition = 'aura_daily_nutrition_';
   static const String _keyRecovery = 'aura_daily_recovery_';
+  static const String _keyWeeklyPlan = 'aura_weekly_plan';
   static const String _keyProgress = 'aura_progress_history';
 
   @override
@@ -43,7 +51,7 @@ class LocalTransformationRepository implements ITransformationRepository {
       List<EquipmentItem> equipItems = [];
       if (map['equipmentList'] is List) {
         equipItems = (map['equipmentList'] as List)
-            .map((e) => EquipmentItem.fromMap(Map<String, dynamic>.from(e as Map)))
+            .map((e) => EquipmentItem.fromJson(Map<String, dynamic>.from(e as Map)))
             .toList();
       } else if (map['availableEquipment'] is List) {
         equipItems = (map['availableEquipment'] as List)
@@ -97,7 +105,7 @@ class LocalTransformationRepository implements ITransformationRepository {
       'goal': profile.goal.name,
       'daysPerWeek': profile.daysPerWeek,
       'targetPhysique': profile.targetPhysique,
-      'equipmentList': profile.equipmentList.map((e) => e.toMap()).toList(),
+      'equipmentList': profile.equipmentList.map((e) => e.toJson()).toList(),
       'availableEquipment': profile.availableEquipment.map((e) => e.name).toList(),
       'experienceLevel': profile.experienceLevel.name,
       'benchPress1RMKg': profile.benchPress1RMKg,
@@ -277,6 +285,67 @@ class LocalTransformationRepository implements ITransformationRepository {
       'status': recovery.status,
     };
     await prefs.setString('$_keyRecovery${recovery.date}', jsonEncode(map));
+  }
+
+  @override
+  Future<WeeklyPlan?> loadWeeklyPlan() async {
+    debugPrint('[AURA REPOSITORY] Loading weekly plan from localStorage...');
+    final prefs = await SharedPreferences.getInstance();
+    final jsonStr = prefs.getString(_keyWeeklyPlan);
+    if (jsonStr == null || jsonStr.isEmpty) return null;
+    try {
+      final map = jsonDecode(jsonStr) as Map<String, dynamic>;
+      final rawDays = (map['days'] as List? ?? []);
+      final days = rawDays.map((d) {
+        final dMap = d as Map<String, dynamic>? ?? {};
+        return WeeklyDayPlan(
+          dayName: dMap['dayName']?.toString() ?? '',
+          date: dMap['date']?.toString() ?? '',
+          title: dMap['title']?.toString() ?? '',
+          focusArea: dMap['focusArea']?.toString() ?? '',
+          isRestDay: dMap['isRestDay'] == true,
+          exerciseNames: (dMap['exerciseNames'] as List? ?? []).map((e) => e.toString()).toList(),
+          nutritionFocus: dMap['nutritionFocus']?.toString(),
+        );
+      }).toList();
+
+      return WeeklyPlan(
+        weekId: map['weekId']?.toString() ?? '',
+        startDate: map['startDate']?.toString() ?? '',
+        endDate: map['endDate']?.toString() ?? '',
+        overview: map['overview']?.toString() ?? '',
+        coachNote: map['coachNote']?.toString(),
+        createdAt: map['createdAt']?.toString() ?? '',
+        days: days,
+      );
+    } catch (e) {
+      debugPrint('[AURA REPOSITORY] Error loading weekly plan: $e');
+      return null;
+    }
+  }
+
+  @override
+  Future<void> saveWeeklyPlan(WeeklyPlan plan) async {
+    debugPrint('[AURA REPOSITORY] Saving weekly plan: ${plan.weekId}');
+    final prefs = await SharedPreferences.getInstance();
+    final map = {
+      'weekId': plan.weekId,
+      'startDate': plan.startDate,
+      'endDate': plan.endDate,
+      'overview': plan.overview,
+      'coachNote': plan.coachNote,
+      'createdAt': plan.createdAt,
+      'days': plan.days.map((d) => {
+        'dayName': d.dayName,
+        'date': d.date,
+        'title': d.title,
+        'focusArea': d.focusArea,
+        'isRestDay': d.isRestDay,
+        'exerciseNames': d.exerciseNames,
+        'nutritionFocus': d.nutritionFocus,
+      }).toList(),
+    };
+    await prefs.setString(_keyWeeklyPlan, jsonEncode(map));
   }
 
   @override

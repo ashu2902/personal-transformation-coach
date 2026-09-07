@@ -1,7 +1,7 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../models/models.dart';
-import '../../engine/exercise_database.dart';
+import '../../models/workout.dart';
+import '../../models/exercise_definition.dart';
 import '../transformation_state.dart';
 
 /// Domain mutations for Workout prescriptions, sets, completions, and micro-deviations.
@@ -61,7 +61,9 @@ mixin WorkoutMutations on StateNotifier<TransformationEngineState> {
 
     final updatedWorkout = state.workout.copyWith(exercises: updatedExercises);
     state = state.copyWith(workout: updatedWorkout);
-    saveWorkoutToRemote(updatedWorkout);
+    updateWorkoutFieldsToRemote({
+      'exercises': updatedExercises.map((e) => e.toJson()).toList(),
+    });
   }
 
   void markAllExercisesCompleted() {
@@ -93,16 +95,22 @@ mixin WorkoutMutations on StateNotifier<TransformationEngineState> {
 
     final updatedWorkout = state.workout.copyWith(exercises: updatedExercises);
     state = state.copyWith(workout: updatedWorkout);
-    saveWorkoutToRemote(updatedWorkout);
+    updateWorkoutFieldsToRemote({
+      'exercises': updatedExercises.map((e) => e.toJson()).toList(),
+    });
   }
 
   void updateWorkoutStatus(WorkoutStatus status) {
     debugPrint('[AURA STATE] Updating workout status: ${status.name}');
     final updatedWorkout = state.workout.copyWith(status: status);
     state = state.copyWith(workout: updatedWorkout);
-    saveWorkoutToRemote(updatedWorkout);
+    updateWorkoutFieldsToRemote({
+      'status': status.name,
+    });
   }
 
   /// Hook for remote persistence
   void saveWorkoutToRemote(DailyWorkout workout);
+
+  void updateWorkoutFieldsToRemote(Map<String, dynamic> fields);
 }

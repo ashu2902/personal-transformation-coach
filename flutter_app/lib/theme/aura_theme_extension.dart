@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../models/models.dart';
+import '../models/user_profile.dart';
 import 'aura_colors.dart';
 
 /// Flutter ThemeExtension for typed, dynamic access to AURA styling tokens.

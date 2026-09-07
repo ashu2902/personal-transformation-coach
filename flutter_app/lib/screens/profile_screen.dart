@@ -4,7 +4,7 @@ import 'package:lucide_icons/lucide_icons.dart';
 import '../providers/transformation_state.dart';
 import '../providers/analytics_provider.dart';
 import '../services/analytics_service.dart';
-import '../models/models.dart';
+import '../models/user_profile.dart';
 import '../theme/theme.dart';
 import '../widgets/common/common.dart';
 import 'widgets/aura_orb.dart';
@@ -296,7 +296,7 @@ class ProfileScreen extends ConsumerWidget {
                           if (context.mounted) {
                             ScaffoldMessenger.of(context).showSnackBar(
                               SnackBar(
-                                content: Text('Successfully signed in!'),
+                                content: const Text('Successfully signed in!'),
                                 backgroundColor: Theme.of(context).colorScheme.primary,
                               ),
                             );
@@ -332,7 +332,7 @@ class ProfileScreen extends ConsumerWidget {
                         await notifier.signOut();
                         if (context.mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
-                            SnackBar(content: Text('Signed out successfully.')),
+                            const SnackBar(content: Text('Signed out successfully.')),
                           );
                         }
                       },
@@ -447,7 +447,7 @@ class ProfileScreen extends ConsumerWidget {
                             if (context.mounted) {
                               Navigator.of(context).popUntil((route) => route.isFirst);
                               ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(
+                                const SnackBar(
                                   content: Text('Account deleted and data archived.'),
                                   backgroundColor: AuraColors.surface2,
                                 ),

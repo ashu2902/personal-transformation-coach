@@ -2,10 +2,13 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:image_picker/image_picker.dart';
+import 'package:firebase_storage/firebase_storage.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter_markdown/flutter_markdown.dart';
 import '../providers/transformation_state.dart';
 import '../providers/analytics_provider.dart';
 import '../services/analytics_service.dart';
-import '../models/models.dart';
+import '../models/user_profile.dart';
 import '../theme/theme.dart';
 import '../widgets/common/common.dart';
 import 'widgets/aura_orb.dart';
@@ -136,9 +139,25 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
       );
 
       _scrollToBottom();
+
+      // Show temporary optimistic state if possible, or just loading.
+      // But we need to upload first to get the URL for the ChatMessage.
+      String? imageUrl;
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid != null) {
+        final storageRef = FirebaseStorage.instance
+            .ref()
+            .child('chat_images')
+            .child(uid)
+            .child('${DateTime.now().millisecondsSinceEpoch}.jpg');
+        final uploadTask = await storageRef.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
+        imageUrl = await uploadTask.ref.getDownloadURL();
+      }
+
       await notifier.addChatMessage(
         caption.isEmpty ? 'Uploaded an image for analysis' : caption,
-        imageBytes: bytes,
+        imageBytes: imageUrl == null ? bytes : null, // Fallback to bytes if upload fails or no user
+        imageUrl: imageUrl,
         mimeType: 'image/jpeg',
       );
       _scrollToBottom();
@@ -195,7 +214,7 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                           color: auraTheme.primary,
                           boxShadow: [
                             BoxShadow(
-                              color: auraTheme.primary.withOpacity(0.6),
+                              color: auraTheme.primary.withValues(alpha: 0.6),
                               blurRadius: 6,
                               spreadRadius: 1,
                             ),
@@ -215,12 +234,12 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
                           color: isAdapted
-                              ? Theme.of(context).colorScheme.primary.withOpacity(0.15)
+                              ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15)
                               : auraTheme.surfaceLight,
                           borderRadius: BorderRadius.circular(6),
                           border: Border.all(
                             color: isAdapted
-                                ? Theme.of(context).colorScheme.primary.withOpacity(0.4)
+                                ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.4)
                                 : AuraColors.borderSubtle,
                           ),
                         ),
@@ -340,7 +359,28 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  if (msg.imageBytes != null)
+                                  if (msg.imageUrl != null && msg.imageUrl!.isNotEmpty)
+                                    Padding(
+                                      padding: const EdgeInsets.only(bottom: 10.0),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(12),
+                                        child: Image.network(
+                                          msg.imageUrl!,
+                                          height: 190,
+                                          width: double.infinity,
+                                          fit: BoxFit.cover,
+                                          loadingBuilder: (ctx, child, progress) {
+                                            if (progress == null) return child;
+                                            return Container(
+                                              height: 190,
+                                              color: auraTheme.surfaceLight,
+                                              child: const Center(child: CircularProgressIndicator(strokeWidth: 2)),
+                                            );
+                                          },
+                                        ),
+                                      ),
+                                    )
+                                  else if (msg.imageBytes != null)
                                     Padding(
                                       padding: const EdgeInsets.only(bottom: 10.0),
                                       child: ClipRRect(
@@ -354,11 +394,32 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                                       ),
                                     ),
 
-                                  Text(
-                                    msg.text,
-                                    style: AuraTypography.bodyLarge.copyWith(
-                                      color: AuraColors.textPrimary,
-                                      height: 1.4,
+                                  MarkdownBody(
+                                    data: msg.text,
+                                    styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+                                      p: AuraTypography.bodyLarge.copyWith(
+                                        color: AuraColors.textPrimary,
+                                        height: 1.4,
+                                      ),
+                                      strong: AuraTypography.bodyLarge.copyWith(
+                                        color: auraTheme.primary,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                      h1: AuraTypography.displayMedium.copyWith(
+                                        color: auraTheme.primary,
+                                        fontSize: 18,
+                                      ),
+                                      h2: AuraTypography.displaySmall.copyWith(
+                                        color: auraTheme.primary,
+                                        fontSize: 16,
+                                      ),
+                                      h3: AuraTypography.titleMedium.copyWith(
+                                        color: auraTheme.primary,
+                                        fontSize: 14,
+                                      ),
+                                      listBullet: AuraTypography.bodyLarge.copyWith(
+                                        color: auraTheme.primary,
+                                      ),
                                     ),
                                   ),
                                   const SizedBox(height: 6),
@@ -380,7 +441,7 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                                           color: auraTheme.surfaceLight,
                                           borderRadius: BorderRadius.circular(12),
                                           border: Border.all(
-                                              color: Theme.of(context).colorScheme.primary.withOpacity(0.4)),
+                                              color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.4)),
                                         ),
                                         child: Column(
                                           crossAxisAlignment: CrossAxisAlignment.start,
@@ -403,7 +464,7 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                                             const SizedBox(height: 8),
                                             Row(
                                               children: [
-                                                Expanded(
+                                                const Expanded(
                                                   child: Text(
                                                     'Lower Body Strength',
                                                     style: TextStyle(
@@ -415,8 +476,8 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                                                 ),
                                                 Icon(LucideIcons.arrowRight,
                                                     size: 14, color: Theme.of(context).colorScheme.primary),
-                                                SizedBox(width: 6),
-                                                Expanded(
+                                                const SizedBox(width: 6),
+                                                const Expanded(
                                                   child: Text(
                                                     'Active Recovery Walk',
                                                     style: TextStyle(
@@ -438,9 +499,9 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                                               onPressed: () {
                                                 ScaffoldMessenger.of(context).showSnackBar(
                                                   SnackBar(
-                                                    content: Text('Revised workout locked in for today!'),
+                                                    content: const Text('Revised workout locked in for today!'),
                                                     backgroundColor: Theme.of(context).colorScheme.primary,
-                                                    duration: Duration(seconds: 2),
+                                                    duration: const Duration(seconds: 2),
                                                   ),
                                                 );
                                               },
@@ -486,7 +547,7 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                                                   color: Theme.of(context).colorScheme.primary,
                                                   onTap: () {
                                                     ScaffoldMessenger.of(context).showSnackBar(
-                                                      SnackBar(
+                                                      const SnackBar(
                                                         content: Text('Meal entry confirmed!'),
                                                         duration: Duration(seconds: 1),
                                                       ),
@@ -532,7 +593,7 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                       margin: const EdgeInsets.only(bottom: 16),
                       padding: const EdgeInsets.all(14),
                       decoration: BoxDecoration(
-                        color: auraTheme.primary.withOpacity(0.18),
+                        color: auraTheme.primary.withValues(alpha: 0.18),
                         borderRadius: const BorderRadius.only(
                           topLeft: Radius.circular(16),
                           topRight: Radius.circular(4),
@@ -540,13 +601,26 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                           bottomRight: Radius.circular(16),
                         ),
                         border: Border.all(
-                          color: auraTheme.primary.withOpacity(0.35),
+                          color: auraTheme.primary.withValues(alpha: 0.35),
                         ),
                       ),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.end,
                         children: [
-                          if (msg.imageBytes != null)
+                          if (msg.imageUrl != null && msg.imageUrl!.isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(bottom: 10.0),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(12),
+                                child: Image.network(
+                                  msg.imageUrl!,
+                                  height: 180,
+                                  width: double.infinity,
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                            )
+                          else if (msg.imageBytes != null)
                             Padding(
                               padding: const EdgeInsets.only(bottom: 10.0),
                               child: ClipRRect(
@@ -582,6 +656,96 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                 },
               ),
             ),
+
+            // 2.5 PENDING STRUCTURAL CONFIRMATIONS (Security Gate)
+            if (state.pendingActions.isNotEmpty)
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 4.0),
+                child: Column(
+                  children: state.pendingActions.map((pa) {
+                    return Container(
+                      margin: const EdgeInsets.only(bottom: 8),
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: auraTheme.surfaceCard,
+                        borderRadius: BorderRadius.circular(14),
+                        border: Border.all(color: auraTheme.primary.withValues(alpha: 0.6)),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(LucideIcons.shieldCheck, color: auraTheme.primary, size: 16),
+                              const SizedBox(width: 6),
+                              Text(
+                                'ACTION CONFIRMATION REQUIRED',
+                                style: AuraTypography.sectionHeader.copyWith(
+                                  color: auraTheme.primary,
+                                  fontSize: 11,
+                                  letterSpacing: 1.0,
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            pa.description,
+                            style: AuraTypography.bodyMedium.copyWith(color: AuraColors.textPrimary),
+                          ),
+                          const SizedBox(height: 10),
+                          Row(
+                            children: [
+                              Expanded(
+                                child: ElevatedButton(
+                                  style: ElevatedButton.styleFrom(
+                                    backgroundColor: auraTheme.primary,
+                                    foregroundColor: Colors.black,
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    padding: const EdgeInsets.symmetric(vertical: 8),
+                                  ),
+                                  onPressed: () {
+                                    ref.read(transformationEngineProvider.notifier).approvePendingAction(pa.id);
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: const Text('Update confirmed and applied!'),
+                                        backgroundColor: auraTheme.primary,
+                                        duration: const Duration(seconds: 2),
+                                      ),
+                                    );
+                                  },
+                                  child: const Text('Approve', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12)),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                child: OutlinedButton(
+                                  style: OutlinedButton.styleFrom(
+                                    foregroundColor: AuraColors.textSecondary,
+                                    side: const BorderSide(color: AuraColors.borderSubtle),
+                                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+                                    padding: const EdgeInsets.symmetric(vertical: 8),
+                                  ),
+                                  onPressed: () {
+                                    ref.read(transformationEngineProvider.notifier).rejectPendingAction(pa.id);
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(
+                                        content: Text('Action cancelled.'),
+                                        duration: Duration(seconds: 1),
+                                      ),
+                                    );
+                                  },
+                                  child: const Text('Reject', style: TextStyle(fontSize: 12)),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    );
+                  }).toList(),
+                ),
+              ),
 
             // 3. CONTEXTUAL ACTION CHIPS (Floating Above Input)
             if (!isThinking)
@@ -761,7 +925,7 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                 bottomLeft: Radius.circular(16),
                 bottomRight: Radius.circular(16),
               ),
-              border: Border.all(color: auraTheme.primary.withOpacity(0.3)),
+              border: Border.all(color: auraTheme.primary.withValues(alpha: 0.3)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -813,7 +977,7 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
               width: 4 * scale,
               height: 4 * scale,
               decoration: BoxDecoration(
-                color: color.withOpacity(scale),
+                color: color.withValues(alpha: scale),
                 shape: BoxShape.circle,
               ),
             );
@@ -833,9 +997,9 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
         decoration: BoxDecoration(
-          color: color.withOpacity(0.15),
+          color: color.withValues(alpha: 0.15),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: color.withOpacity(0.4)),
+          border: Border.all(color: color.withValues(alpha: 0.4)),
         ),
         child: Text(
           label,
@@ -928,7 +1092,7 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Text('Current Goal', style: TextStyle(fontSize: 12, color: AuraColors.textSecondary)),
-                          Text(state.profile.goal.displayName, style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AuraColors.textPrimary)),
+                          Text(state.profile.goal.displayName, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AuraColors.textPrimary)),
                         ],
                       ),
                       const Divider(height: 16, color: AuraColors.borderSubtle),
@@ -944,7 +1108,7 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                         mainAxisAlignment: MainAxisAlignment.spaceBetween,
                         children: [
                           const Text('Equipment Detected', style: TextStyle(fontSize: 12, color: AuraColors.textSecondary)),
-                          Text('${state.profile.equipmentList.length} items mapped', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AuraColors.textPrimary)),
+                          Text('${state.profile.equipmentList.length} items mapped', style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AuraColors.textPrimary)),
                         ],
                       ),
                     ],
@@ -974,7 +1138,7 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
           decoration: BoxDecoration(
-            color: isSelected ? color.withOpacity(0.18) : AuraColors.surface2,
+            color: isSelected ? color.withValues(alpha: 0.18) : AuraColors.surface2,
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
               color: isSelected ? color : AuraColors.borderSubtle,

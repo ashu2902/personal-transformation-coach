@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import '../models/models.dart';
+import '../models/user_profile.dart';
 
 /// Semantic and core color palette for AURA.
 class AuraColors {

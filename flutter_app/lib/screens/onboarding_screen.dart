@@ -4,7 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import '../models/models.dart';
+import '../models/user_profile.dart';
 import '../providers/transformation_state.dart';
 import '../providers/analytics_provider.dart';
 import '../services/analytics_service.dart';
@@ -317,91 +317,24 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
       // Step 2: Metabolic Plan
       if (mounted) setState(() => _calibrationProgressStep = 2);
-      DailyNutrition nutrition;
       try {
-        nutrition = await aiService.generateAIMetabolicPlan(finalProfile);
+        await aiService.generateAIMetabolicPlan(finalProfile);
       } catch (e) {
         debugPrint('[AURA ONBOARDING] AI nutrition fallback triggered: $e');
-        final todayStr = DateTime.now().toIso8601String().split('T')[0];
-        nutrition = DailyNutrition(
-          date: todayStr,
-          targetCalories: finalProfile.goal == GoalType.fatLoss ? 1900 : 2300,
-          targetProteinG: (finalProfile.weightKg * 1.8).round(),
-          targetCarbsG: 220,
-          targetFatG: 65,
-          targetWaterMl: 3000,
-          waterMl: 0,
-          meals: [],
-        );
       }
 
       // Step 3: Workout Plan
       if (mounted) setState(() => _calibrationProgressStep = 3);
-      DailyWorkout workout;
       try {
-        workout = await aiService.generateAIInitialWorkout(finalProfile);
+        await aiService.generateAIInitialWorkout(finalProfile);
       } catch (e) {
         debugPrint('[AURA ONBOARDING] AI workout fallback triggered: $e');
-        final todayStr = DateTime.now().toIso8601String().split('T')[0];
-        workout = DailyWorkout(
-          id: 'workout_$todayStr',
-          date: todayStr,
-          title: 'Full Body Calibration',
-          focusArea: 'Full Body',
-          estimatedDurationMin: 45,
-          status: WorkoutStatus.scheduled,
-          adaptationNote: 'Calibrated for ${finalProfile.name}',
-          exercises: [
-            Exercise(
-              id: 'init_1',
-              name: 'Push-Ups',
-              targetMuscle: 'Chest & Triceps',
-              equipmentRequired: 'Bodyweight',
-              sets: [
-                ExerciseSet(setNumber: 1, targetReps: 12, targetWeightKg: 0),
-                ExerciseSet(setNumber: 2, targetReps: 12, targetWeightKg: 0),
-                ExerciseSet(setNumber: 3, targetReps: 10, targetWeightKg: 0),
-              ],
-            ),
-            Exercise(
-              id: 'init_2',
-              name: 'Goblet Squats',
-              targetMuscle: 'Quadriceps & Glutes',
-              equipmentRequired: finalProfile.equipmentList.first.name,
-              sets: [
-                ExerciseSet(setNumber: 1, targetReps: 12, targetWeightKg: 10),
-                ExerciseSet(setNumber: 2, targetReps: 12, targetWeightKg: 10),
-                ExerciseSet(setNumber: 3, targetReps: 12, targetWeightKg: 10),
-              ],
-            ),
-            Exercise(
-              id: 'init_3',
-              name: 'Dumbbell Bent-Over Row',
-              targetMuscle: 'Upper Back & Lats',
-              equipmentRequired: finalProfile.equipmentList.first.name,
-              sets: [
-                ExerciseSet(setNumber: 1, targetReps: 12, targetWeightKg: 10),
-                ExerciseSet(setNumber: 2, targetReps: 12, targetWeightKg: 10),
-                ExerciseSet(setNumber: 3, targetReps: 12, targetWeightKg: 10),
-              ],
-            ),
-            Exercise(
-              id: 'init_4',
-              name: 'Plank Hold',
-              targetMuscle: 'Core',
-              equipmentRequired: 'Bodyweight',
-              sets: [
-                ExerciseSet(setNumber: 1, targetReps: 45, targetWeightKg: 0),
-                ExerciseSet(setNumber: 2, targetReps: 45, targetWeightKg: 0),
-              ],
-            ),
-          ],
-        );
       }
 
       // Step 4: Launch
       if (mounted) setState(() => _calibrationProgressStep = 4);
 
+      if (!mounted) return;
       // Track with Mixpanel
       final analytics = ref.read(analyticsServiceProvider);
       await analytics.setUserId(uid);
@@ -418,12 +351,15 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         'goal_type': finalProfile.goal.name,
       });
 
+      final targetCal = finalProfile.goal == GoalType.fatLoss ? 1900 : 2300;
+      final targetProt = (finalProfile.weightKg * 1.8).round();
+
       await analytics.logEvent(
         AuraAnalyticsEvents.planCalibrated,
         properties: {
           'goal_type': finalProfile.goal.name,
-          'target_calories': nutrition.targetCalories,
-          'target_protein_g': nutrition.targetProteinG,
+          'target_calories': targetCal,
+          'target_protein_g': targetProt,
           'days_per_week': finalProfile.daysPerWeek,
           'equipment_count': finalProfile.equipmentList.length,
           'coach_soul': finalProfile.coachSoul.name,
@@ -444,7 +380,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       await Future.delayed(const Duration(milliseconds: 600));
 
       if (mounted) {
-        notifier.completeOnboardingWithPlan(finalProfile, nutrition, workout);
+        await notifier.completeOnboarding(finalProfile);
       }
     } catch (e) {
       debugPrint('[AURA ONBOARDING] Calibration failed: $e');
@@ -768,7 +704,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 child: OutlinedButton(
                   style: OutlinedButton.styleFrom(
                     foregroundColor: Colors.white,
-                    side: BorderSide(color: Colors.white.withOpacity(0.12)),
+                    side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
                     padding: const EdgeInsets.symmetric(vertical: 15),
                   ),
@@ -831,9 +767,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
           width: double.infinity,
           padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
           decoration: BoxDecoration(
-            color: AuraColors.getSoulPalette(_selectedSoul).primary.withOpacity(0.12),
+            color: AuraColors.getSoulPalette(_selectedSoul).primary.withValues(alpha: 0.12),
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: AuraColors.getSoulPalette(_selectedSoul).primary.withOpacity(0.3)),
+            border: Border.all(color: AuraColors.getSoulPalette(_selectedSoul).primary.withValues(alpha: 0.3)),
           ),
           child: Row(
             children: [
@@ -858,7 +794,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             decoration: BoxDecoration(
               color: const Color(0xFF141217),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white.withOpacity(0.08)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
             ),
             child: ListView.builder(
               physics: const BouncingScrollPhysics(),
@@ -871,7 +807,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                       margin: const EdgeInsets.symmetric(vertical: 4),
                       decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.06),
+                        color: Colors.white.withValues(alpha: 0.06),
                         borderRadius: BorderRadius.circular(14),
                       ),
                       child: Row(
@@ -899,9 +835,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     margin: const EdgeInsets.symmetric(vertical: 4),
                     constraints: const BoxConstraints(maxWidth: 320),
                     decoration: BoxDecoration(
-                      color: isUser ? AuraColors.getSoulPalette(_selectedSoul).primary.withOpacity(0.18) : Colors.white.withOpacity(0.06),
+                      color: isUser ? AuraColors.getSoulPalette(_selectedSoul).primary.withValues(alpha: 0.18) : Colors.white.withValues(alpha: 0.06),
                       borderRadius: BorderRadius.circular(14),
-                      border: Border.all(color: isUser ? AuraColors.getSoulPalette(_selectedSoul).primary.withOpacity(0.4) : Colors.transparent),
+                      border: Border.all(color: isUser ? AuraColors.getSoulPalette(_selectedSoul).primary.withValues(alpha: 0.4) : Colors.transparent),
                     ),
                     child: Text(
                       msg['text'] ?? '',
@@ -942,7 +878,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 decoration: BoxDecoration(
                   color: const Color(0xFF141217),
                   borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: Colors.white.withOpacity(0.12)),
+                  border: Border.all(color: Colors.white.withValues(alpha: 0.12)),
                 ),
                 child: TextField(
                   controller: _interviewInputController,
@@ -980,7 +916,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               child: OutlinedButton(
                 style: OutlinedButton.styleFrom(
                   foregroundColor: Colors.white,
-                  side: BorderSide(color: Colors.white.withOpacity(0.12)),
+                  side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
                   padding: const EdgeInsets.symmetric(vertical: 14),
                 ),
@@ -1032,7 +968,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         decoration: BoxDecoration(
           color: const Color(0xFF141217),
           borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: Colors.white.withOpacity(0.1)),
+          border: Border.all(color: Colors.white.withValues(alpha: 0.1)),
         ),
         child: Text(
           text,
@@ -1091,7 +1027,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
               child: OutlinedButton(
                 style: OutlinedButton.styleFrom(
                   foregroundColor: Colors.white,
-                  side: BorderSide(color: Colors.white.withOpacity(0.12)),
+                  side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(26)),
                   padding: const EdgeInsets.symmetric(vertical: 15),
                 ),
@@ -1150,7 +1086,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
             decoration: BoxDecoration(
               color: const Color(0xFF141217),
               borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: Colors.white.withOpacity(0.08)),
+              border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
             ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -1316,7 +1252,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       decoration: BoxDecoration(
         color: const Color(0xFF141217),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withOpacity(0.08)),
+        border: Border.all(color: Colors.white.withValues(alpha: 0.08)),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1339,7 +1275,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 8),
           decoration: BoxDecoration(
-            color: isSelected ? AuraColors.getSoulPalette(_selectedSoul).primary.withOpacity(0.12) : Colors.transparent,
+            color: isSelected ? AuraColors.getSoulPalette(_selectedSoul).primary.withValues(alpha: 0.12) : Colors.transparent,
             borderRadius: BorderRadius.circular(8),
             border: Border.all(color: isSelected ? AuraColors.getSoulPalette(_selectedSoul).primary : Colors.white12),
           ),
@@ -1369,16 +1305,16 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       child: Container(
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
-          color: isSelected ? AuraColors.getSoulPalette(_selectedSoul).primary.withOpacity(0.10) : const Color(0xFF141217),
+          color: isSelected ? AuraColors.getSoulPalette(_selectedSoul).primary.withValues(alpha: 0.10) : const Color(0xFF141217),
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: isSelected ? AuraColors.getSoulPalette(_selectedSoul).primary : Colors.white.withOpacity(0.08), width: isSelected ? 1.5 : 1.0),
+          border: Border.all(color: isSelected ? AuraColors.getSoulPalette(_selectedSoul).primary : Colors.white.withValues(alpha: 0.08), width: isSelected ? 1.5 : 1.0),
         ),
         child: Row(
           children: [
             Container(
               padding: const EdgeInsets.all(10),
               decoration: BoxDecoration(
-                color: isSelected ? AuraColors.getSoulPalette(_selectedSoul).primary.withOpacity(0.2) : Colors.white.withOpacity(0.04),
+                color: isSelected ? AuraColors.getSoulPalette(_selectedSoul).primary.withValues(alpha: 0.2) : Colors.white.withValues(alpha: 0.04),
                 shape: BoxShape.circle,
               ),
               child: Icon(icon, color: isSelected ? AuraColors.getSoulPalette(_selectedSoul).primary : Colors.white60, size: 20),
@@ -1407,9 +1343,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         decoration: BoxDecoration(
-          color: isSelected ? AuraColors.getSoulPalette(_selectedSoul).primary.withOpacity(0.15) : const Color(0xFF141217),
+          color: isSelected ? AuraColors.getSoulPalette(_selectedSoul).primary.withValues(alpha: 0.15) : const Color(0xFF141217),
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: isSelected ? AuraColors.getSoulPalette(_selectedSoul).primary : Colors.white.withOpacity(0.08)),
+          border: Border.all(color: isSelected ? AuraColors.getSoulPalette(_selectedSoul).primary : Colors.white.withValues(alpha: 0.08)),
         ),
         child: Text(
           label,
@@ -1431,8 +1367,8 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   }) {
     final isSelected = _selectedSoul == soul;
     final soulPalette = AuraColors.getSoulPalette(soul);
-    final borderColor = isSelected ? soulPalette.secondary : Colors.white.withOpacity(0.08);
-    final highlightColor = isSelected ? soulPalette.secondary.withOpacity(0.1) : Colors.transparent;
+    final borderColor = isSelected ? soulPalette.secondary : Colors.white.withValues(alpha: 0.08);
+    final highlightColor = isSelected ? soulPalette.secondary.withValues(alpha: 0.1) : Colors.transparent;
 
     return GestureDetector(
       onTap: () {
@@ -1561,9 +1497,9 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                         padding: const EdgeInsets.all(12),
                         margin: const EdgeInsets.only(bottom: 16),
                         decoration: BoxDecoration(
-                          color: Colors.red.withOpacity(0.12),
+                          color: Colors.red.withValues(alpha: 0.12),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: Colors.red.withOpacity(0.3)),
+                          border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
                         ),
                         child: Text(
                           errorMessage!,

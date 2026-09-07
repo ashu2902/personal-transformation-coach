@@ -8,7 +8,6 @@ import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'firebase_options.dart';
 
-import 'models/models.dart';
 import 'services/analytics_service.dart';
 import 'providers/analytics_provider.dart';
 import 'providers/transformation_state.dart';

@@ -1,7 +1,10 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import 'package:aura_transformation_engine/models/models.dart';
+import 'package:aura_transformation_engine/models/user_profile.dart';
+import 'package:aura_transformation_engine/models/workout.dart';
+import 'package:aura_transformation_engine/models/nutrition.dart';
+import 'package:aura_transformation_engine/models/recovery.dart';
 import 'package:aura_transformation_engine/theme/theme.dart';
 import 'package:aura_transformation_engine/providers/transformation_state.dart';
 
@@ -46,7 +49,7 @@ void main() {
   group('Workout History & Tracking State Tests', () {
     test('Differentiates completed workout vs skipped workout and resolves day status', () {
       final state = TransformationEngineState(
-        profile: UserProfile(
+        profile: const UserProfile(
           name: 'Ashutosh',
           age: 26,
           gender: 'male',
@@ -60,7 +63,7 @@ void main() {
           coachSoul: CoachSoul.pro,
           dietaryPreference: 'vegetarian',
         ),
-        workout: DailyWorkout(
+        workout: const DailyWorkout(
           id: 'w_today',
           date: '2026-08-20',
           title: 'Today Workout',
@@ -69,7 +72,7 @@ void main() {
           status: WorkoutStatus.scheduled,
           exercises: [],
         ),
-        nutrition: DailyNutrition(
+        nutrition: const DailyNutrition(
           date: '2026-08-20',
           targetCalories: 2000,
           targetProteinG: 150,
@@ -79,7 +82,7 @@ void main() {
           targetWaterMl: 3000,
           meals: [],
         ),
-        recovery: RecoveryCheckIn(
+        recovery: const RecoveryCheckIn(
           date: '2026-08-20',
           sleepHours: 7.5,
           sleepQuality: 80,
@@ -92,20 +95,20 @@ void main() {
         chatMessages: [],
         progressHistory: [
           // Mon: Skipped
-          ProgressEntry(
+          const ProgressEntry(
             date: '2026-08-17',
             weightKg: 72,
             notes: 'Marked skipped',
             workoutStatus: WorkoutStatus.skipped,
           ),
           // Tue: Skipped (Legacy notes fallback)
-          ProgressEntry(
+          const ProgressEntry(
             date: '2026-08-18',
             weightKg: 72,
             notes: 'Marked skipped',
           ),
           // Wed: Completed Workout
-          ProgressEntry(
+          const ProgressEntry(
             date: '2026-08-19',
             weightKg: 72,
             notes: 'Workout: Full Body Recomp Strength Session (5 exercises)',
@@ -113,7 +116,7 @@ void main() {
           ),
         ],
         recentWorkouts: {
-          '2026-08-19': DailyWorkout(
+          '2026-08-19': const DailyWorkout(
             id: 'w_wed',
             date: '2026-08-19',
             title: 'Full Body Recomp Strength Session',
@@ -159,7 +162,7 @@ void main() {
     });
 
     test('Goal Recalibration updates profile, calories, and protein targets appropriately', () {
-      final baseProfile = UserProfile(
+      const baseProfile = UserProfile(
         name: 'Test Athlete',
         age: 26,
         gender: 'male',
@@ -199,7 +202,7 @@ void main() {
     });
 
     test('MealItem supports item level modifications', () {
-      final meal = MealItem(name: 'Paneer Curry', calories: 350, proteinG: 22, carbsG: 15, fatG: 18);
+      const meal = MealItem(name: 'Paneer Curry', calories: 350, proteinG: 22, carbsG: 15, fatG: 18);
       final updated = MealItem(name: meal.name, calories: 300, proteinG: 25, carbsG: meal.carbsG, fatG: meal.fatG);
 
       expect(updated.name, 'Paneer Curry');
@@ -210,7 +213,7 @@ void main() {
     });
 
     test('DailyNutrition supports targeted meal filtering and removal', () {
-      final initial = DailyNutrition(
+      const initial = DailyNutrition(
         date: '2026-08-19',
         targetCalories: 2000,
         targetProteinG: 150,

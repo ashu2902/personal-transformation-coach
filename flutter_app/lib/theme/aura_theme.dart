@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
-import '../models/models.dart';
+import '../models/user_profile.dart';
 import 'aura_colors.dart';
 import 'aura_theme_extension.dart';
 

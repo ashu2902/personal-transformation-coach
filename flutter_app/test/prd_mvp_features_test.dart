@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:aura_transformation_engine/models/models.dart';
-import 'package:aura_transformation_engine/services/ai_service.dart';
 import 'package:aura_transformation_engine/providers/transformation_state.dart';
 import 'package:aura_transformation_engine/widgets/nutrition/nutrition_receipt_card.dart';
 
@@ -25,6 +24,10 @@ class MockTransformationRepository implements ITransformationRepository {
   Future<RecoveryCheckIn?> loadTodayRecovery(String dateStr) async => null;
   @override
   Future<void> saveTodayRecovery(RecoveryCheckIn recovery) async {}
+  @override
+  Future<WeeklyPlan?> loadWeeklyPlan() async => null;
+  @override
+  Future<void> saveWeeklyPlan(WeeklyPlan plan) async {}
   @override
   Future<List<ProgressEntry>> loadProgressHistory() async => [];
   @override
@@ -90,7 +93,7 @@ void main() {
 
   group('Domain Mutations & Telemetry Tests', () {
     test('updateSetTarget applies micro-deviation to target reps and weight', () {
-      final initialExercise = Exercise(
+      const initialExercise = Exercise(
         id: 'ex_1',
         name: 'Dumbbell Press',
         targetMuscle: 'Chest',
@@ -101,7 +104,7 @@ void main() {
         ],
       );
 
-      final initialWorkout = DailyWorkout(
+      const initialWorkout = DailyWorkout(
         id: 'w_1',
         date: '2026-08-23',
         title: 'Upper Body Hypertrophy',
@@ -139,8 +142,8 @@ void main() {
     testWidgets('NutritionReceiptCard renders items, macros, and handles edit tap', (tester) async {
       bool editTapped = false;
       final meals = [
-        MealItem(name: 'Scrambled Eggs & Toast', calories: 420, proteinG: 28, carbsG: 34, fatG: 16),
-        MealItem(name: 'Iced Protein Latte', calories: 180, proteinG: 20, carbsG: 8, fatG: 4),
+        const MealItem(name: 'Scrambled Eggs & Toast', calories: 420, proteinG: 28, carbsG: 34, fatG: 16),
+        const MealItem(name: 'Iced Protein Latte', calories: 180, proteinG: 20, carbsG: 8, fatG: 4),
       ];
 
       await tester.pumpWidget(
@@ -174,7 +177,7 @@ void main() {
         autoInit: false,
       );
 
-      notifier.addMeal(MealItem(
+      notifier.addMeal(const MealItem(
         name: 'Whey Protein Shake',
         calories: 140,
         proteinG: 25,

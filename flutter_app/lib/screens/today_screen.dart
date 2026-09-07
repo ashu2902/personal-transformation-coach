@@ -3,11 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
 import '../providers/transformation_state.dart';
-import '../models/models.dart';
+import '../models/user_profile.dart';
+import '../models/workout.dart';
+import '../models/weekly_plan.dart';
 import '../theme/theme.dart';
 import '../widgets/common/common.dart';
 import '../widgets/common/quick_coach_fab.dart';
-import 'widgets/aura_orb.dart';
 import 'weekly_plan_screen.dart';
 
 class TodayScreen extends ConsumerWidget {
@@ -212,7 +213,7 @@ class TodayScreen extends ConsumerWidget {
                             Container(
                               width: 4,
                               height: 4,
-                              decoration: BoxDecoration(
+                              decoration: const BoxDecoration(
                                 shape: BoxShape.circle,
                                 color: AuraColors.textTertiary,
                               ),
@@ -246,12 +247,18 @@ class TodayScreen extends ConsumerWidget {
                           Expanded(
                             child: Text(
                               isAdapted
-                                   ? state.adaptationNotice!
-                                  : (soul == CoachSoul.supporter
-                                      ? "You slept ${recovery.sleepHours.round()}h—wonderful! Focus on steady, enjoyable tempo to build consistency today."
-                                      : soul == CoachSoul.pro
-                                          ? "Energy state optimal. Execute each set with crisp control, focusing on progressive intensity."
-                                          : "Targeting compound muscular recruitment and joint stability based on your recovery baseline."),
+                                  ? state.adaptationNotice!
+                                  : workout.exercises.isEmpty
+                                      ? (soul == CoachSoul.supporter
+                                          ? "Today is a rest day! Focus on active recovery, stay hydrated, and let your muscles rebuild."
+                                          : soul == CoachSoul.pro
+                                              ? "Rest day. Recovery is part of the work. Optimize your sleep and nutrition today."
+                                              : "Muscles grow during rest. Today's protocol requires lowered mechanical strain to facilitate tissue synthesis.")
+                                      : (soul == CoachSoul.supporter
+                                          ? "You slept ${recovery.sleepHours.round()}h—wonderful! Focus on steady, enjoyable tempo to build consistency today."
+                                          : soul == CoachSoul.pro
+                                              ? "Energy state optimal. Execute each set with crisp control, focusing on progressive intensity."
+                                              : "Metabolic and nervous systems are primed based on ${recovery.sleepHours}h sleep. We target mechanical tension today."),
                               style: AuraTypography.bodySmall.copyWith(
                                 color: AuraColors.textPrimary.withValues(alpha: 0.95),
                                 height: 1.4,
@@ -590,9 +597,9 @@ class TodayScreen extends ConsumerWidget {
                               notifier.addWater(250);
                               ScaffoldMessenger.of(context).showSnackBar(
                                 SnackBar(
-                                  content: Text('Logged +250ml water!'),
+                                  content: const Text('Logged +250ml water!'),
                                   backgroundColor: Theme.of(context).colorScheme.primary,
-                                  duration: Duration(seconds: 1),
+                                  duration: const Duration(seconds: 1),
                                 ),
                               );
                             },
@@ -799,7 +806,7 @@ class TodayScreen extends ConsumerWidget {
                           Container(
                             width: 5,
                             height: 5,
-                            decoration: BoxDecoration(
+                            decoration: const BoxDecoration(
                               shape: BoxShape.circle,
                               color: AuraColors.textTertiary,
                             ),
@@ -887,7 +894,7 @@ class TodayScreen extends ConsumerWidget {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Icon(LucideIcons.check, size: 11, color: Theme.of(context).colorScheme.primary),
-                            SizedBox(width: 4),
+                            const SizedBox(width: 4),
                             Text(
                               'Completed',
                               style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary),

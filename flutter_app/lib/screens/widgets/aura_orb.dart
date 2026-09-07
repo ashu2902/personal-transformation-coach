@@ -1,6 +1,6 @@
 import 'dart:math' as math;
 import 'package:flutter/material.dart';
-import '../../models/models.dart';
+import '../../models/user_profile.dart';
 import '../../theme/theme.dart';
 
 enum OrbState { idle, pulsing, thinking, rippling, swirling, adapting, completed }

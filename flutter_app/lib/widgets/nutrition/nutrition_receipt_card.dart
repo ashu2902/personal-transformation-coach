@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
-import '../../models/models.dart';
+import '../../models/nutrition.dart';
 
 class NutritionReceiptCard extends StatelessWidget {
   final List<MealItem> meals;
@@ -28,10 +28,10 @@ class NutritionReceiptCard extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF16161D),
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFF00FFA3).withOpacity(0.3), width: 1),
+        border: Border.all(color: const Color(0xFF00FFA3).withValues(alpha: 0.3), width: 1),
         boxShadow: [
           BoxShadow(
-            color: const Color(0xFF00FFA3).withOpacity(0.06),
+            color: const Color(0xFF00FFA3).withValues(alpha: 0.06),
             blurRadius: 12,
             offset: const Offset(0, 4),
           ),
@@ -48,7 +48,7 @@ class NutritionReceiptCard extends StatelessWidget {
                   Container(
                     padding: const EdgeInsets.all(6),
                     decoration: BoxDecoration(
-                      color: const Color(0xFF00FFA3).withOpacity(0.15),
+                      color: const Color(0xFF00FFA3).withValues(alpha: 0.15),
                       shape: BoxShape.circle,
                     ),
                     child: const Icon(LucideIcons.receipt, color: Color(0xFF00FFA3), size: 16),
@@ -71,7 +71,7 @@ class NutritionReceiptCard extends StatelessWidget {
                   child: Container(
                     padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.08),
+                      color: Colors.white.withValues(alpha: 0.08),
                       borderRadius: BorderRadius.circular(12),
                       border: Border.all(color: Colors.white24),
                     ),
@@ -188,7 +188,7 @@ class NutritionReceiptCard extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
       decoration: BoxDecoration(
-        color: color.withOpacity(0.15),
+        color: color.withValues(alpha: 0.15),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(

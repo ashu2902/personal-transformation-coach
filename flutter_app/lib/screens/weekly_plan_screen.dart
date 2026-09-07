@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../providers/transformation_state.dart';
-import '../models/models.dart';
+import '../models/weekly_plan.dart';
 import '../theme/theme.dart';
 import '../widgets/common/common.dart';
 
@@ -252,19 +252,19 @@ class WeeklyPlanScreen extends ConsumerWidget {
                   color: Theme.of(context).colorScheme.primary,
                 )
               else if (isSkipped)
-                AuraStatBadge(
+                const AuraStatBadge(
                   label: 'SKIPPED',
                   icon: LucideIcons.minus,
                   color: AuraColors.textTertiary,
                 )
               else if (day.isRestDay)
                 AuraStatBadge(
-                  label: 'REST',
-                  icon: LucideIcons.moonStar,
-                  color: AuraColors.textTertiary,
+                  label: displayExercises.isNotEmpty ? 'ACTIVE RECOVERY' : 'REST',
+                  icon: displayExercises.isNotEmpty ? LucideIcons.activity : LucideIcons.moonStar,
+                  color: displayExercises.isNotEmpty ? auraTheme.secondary : AuraColors.textTertiary,
                 )
               else if (isPast)
-                AuraStatBadge(
+                const AuraStatBadge(
                   label: 'MISSED',
                   color: AuraColors.textTertiary,
                 ),
@@ -276,10 +276,10 @@ class WeeklyPlanScreen extends ConsumerWidget {
             displayTitle,
             style: AuraTypography.bodyLarge.copyWith(
               fontWeight: FontWeight.w600,
-              color: (day.isRestDay && !isCompleted) ? AuraColors.textDisabled : AuraColors.textPrimary.withValues(alpha: 0.85),
+              color: (day.isRestDay && !isCompleted && displayExercises.isEmpty) ? AuraColors.textDisabled : AuraColors.textPrimary.withValues(alpha: 0.85),
             ),
           ),
-          if (displayFocusArea.isNotEmpty && (!day.isRestDay || isCompleted)) ...[
+          if (displayFocusArea.isNotEmpty && (!day.isRestDay || isCompleted || displayExercises.isNotEmpty)) ...[
             const SizedBox(height: 4),
             Text(
               displayFocusArea,
@@ -287,7 +287,7 @@ class WeeklyPlanScreen extends ConsumerWidget {
             ),
           ],
           // Exercise chips
-          if (displayExercises.isNotEmpty && (!day.isRestDay || isCompleted)) ...[
+          if (displayExercises.isNotEmpty) ...[
             const SizedBox(height: 10),
             Wrap(
               spacing: 6,

@@ -2,8 +2,10 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     match /users/{userId} {
+      // Base user doc: client can read and write (profile, settings)
       allow read, write: if request.auth != null && request.auth.uid == userId;
-      
+
+      // All user subcollections (workouts, nutrition, recovery, progress, chats, pending_actions, weekly_plans, master_context, etc.)
       match /{document=**} {
         allow read, write: if request.auth != null && request.auth.uid == userId;
       }

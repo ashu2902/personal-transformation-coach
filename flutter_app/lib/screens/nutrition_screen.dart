@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../providers/transformation_state.dart';
-import '../models/models.dart';
+import '../models/nutrition.dart';
 import '../theme/theme.dart';
 import '../widgets/common/common.dart';
 
@@ -131,7 +131,7 @@ class NutritionScreen extends StatelessWidget {
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: auraTheme.waterAccent.withOpacity(0.12),
+                            color: auraTheme.waterAccent.withValues(alpha: 0.12),
                             borderRadius: BorderRadius.circular(12),
                           ),
                           child: Icon(LucideIcons.droplets, color: auraTheme.waterAccent, size: 20),

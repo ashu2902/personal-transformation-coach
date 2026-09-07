@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../models/models.dart';
+import '../../models/recovery.dart';
 import '../transformation_state.dart';
 
 /// Domain mutations for Recovery checks, sleep, soreness, and fatigue deload checks.

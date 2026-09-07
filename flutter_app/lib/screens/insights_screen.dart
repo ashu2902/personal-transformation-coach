@@ -4,7 +4,6 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import '../providers/transformation_state.dart';
 import '../models/models.dart';
-import '../services/ai_service.dart';
 import '../theme/theme.dart';
 import '../widgets/common/common.dart';
 import 'widgets/aura_orb.dart';
@@ -67,9 +66,11 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
         : (currentWeight > targetWeight ? currentWeight + 2.5 : currentWeight - 2.5);
     final totalGoalDelta = (targetWeight - startWeight).abs();
     final currentProgressDelta = (currentWeight - startWeight).abs();
-    final progressRatio = totalGoalDelta > 0
-        ? (currentProgressDelta / totalGoalDelta).clamp(0.08, 1.0)
-        : 1.0;
+    final progressRatio = state.profile.goal == GoalType.recomp
+        ? (state.progressHistory.length / 30.0).clamp(0.05, 1.0) // 30-day active tracker
+        : totalGoalDelta > 0
+            ? (currentProgressDelta / totalGoalDelta).clamp(0.05, 1.0)
+            : 1.0;
 
     return Scaffold(
       backgroundColor: auraTheme.scaffoldBackground,
@@ -136,7 +137,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                         decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.primary.withOpacity(0.15),
+                          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
                           borderRadius: BorderRadius.circular(20),
                         ),
                         child: Row(
@@ -284,7 +285,9 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
                           border: Border.all(color: AuraColors.borderSubtle),
                         ),
                         child: Text(
-                          '${diff.toStringAsFixed(1)} kg to target',
+                          state.profile.goal == GoalType.recomp
+                              ? 'Body Recomposition Focus'
+                              : '${diff.toStringAsFixed(1)} kg to target',
                           style: AuraTypography.bodySmall.copyWith(
                             color: auraTheme.primary,
                             fontWeight: FontWeight.bold,
@@ -337,7 +340,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
                         Container(
                           padding: const EdgeInsets.all(10),
                           decoration: BoxDecoration(
-                            color: auraTheme.primary.withOpacity(0.15),
+                            color: auraTheme.primary.withValues(alpha: 0.15),
                             borderRadius: BorderRadius.circular(10),
                           ),
                           child: Icon(LucideIcons.calendarDays, color: auraTheme.primary, size: 18),
@@ -377,7 +380,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
       return AuraCard(
         padding: const EdgeInsets.all(20),
         backgroundColor: auraTheme.surfaceCard,
-        borderColor: auraTheme.primary.withOpacity(0.3),
+        borderColor: auraTheme.primary.withValues(alpha: 0.3),
         child: Column(
           children: [
             const SizedBox(height: 16),
@@ -399,7 +402,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
     }
 
     final debrief = _debrief ??
-        WeeklyDebrief(
+        const WeeklyDebrief(
           headline: 'Weekly Synthesis & Trajectory',
           narrative: 'Your physical adaptations reflect steady commitment across this 7-day cycle. Recovery balance and nutrition compliance are stabilizing as your body integrates the weekly training volume.',
           keyAchievement: 'Consistent routine compliance',
@@ -410,7 +413,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
     return AuraCard(
       padding: const EdgeInsets.all(20),
       backgroundColor: auraTheme.surfaceCard,
-      borderColor: auraTheme.primary.withOpacity(0.35),
+      borderColor: auraTheme.primary.withValues(alpha: 0.35),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -422,7 +425,7 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
                   Container(
                     padding: const EdgeInsets.all(8),
                     decoration: BoxDecoration(
-                      color: auraTheme.primary.withOpacity(0.15),
+                      color: auraTheme.primary.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(10),
                     ),
                     child: Icon(LucideIcons.sparkles, color: auraTheme.primary, size: 18),
@@ -483,9 +486,9 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
                 child: Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF00FFA3).withOpacity(0.1),
+                    color: const Color(0xFF00FFA3).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFF00FFA3).withOpacity(0.25)),
+                    border: Border.all(color: const Color(0xFF00FFA3).withValues(alpha: 0.25)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -516,9 +519,9 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
                 child: Container(
                   padding: const EdgeInsets.all(10),
                   decoration: BoxDecoration(
-                    color: const Color(0xFF60A5FA).withOpacity(0.1),
+                    color: const Color(0xFF60A5FA).withValues(alpha: 0.1),
                     borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: const Color(0xFF60A5FA).withOpacity(0.25)),
+                    border: Border.all(color: const Color(0xFF60A5FA).withValues(alpha: 0.25)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -559,8 +562,8 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
     Widget icon = Text(day, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AuraColors.textSecondary));
 
     if (completed == true) {
-      bg = Theme.of(context).colorScheme.primary.withOpacity(0.2);
-      border = Theme.of(context).colorScheme.primary.withOpacity(0.6);
+      bg = Theme.of(context).colorScheme.primary.withValues(alpha: 0.2);
+      border = Theme.of(context).colorScheme.primary.withValues(alpha: 0.6);
       icon = Icon(LucideIcons.check, size: 14, color: Theme.of(context).colorScheme.primary);
     } else if (completed == false) {
       bg = theme.surfaceLight;
