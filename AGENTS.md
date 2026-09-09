@@ -110,7 +110,7 @@ All Mixpanel events in AURA follow strict conventions:
 
 ### Super Properties (Auto-attached to every event):
 - `platform`: `'flutter_pwa'` / `'ios'` / `'android'`
-- `app_version`: `'1.0.0'`
+- `app_version`: `'1.0.1'`
 - `coach_soul`: Active coach persona (`'supporter'`, `'pro'`, `'teacher'`)
 - `goal_type`: Primary goal (`'fat_loss'`, `'muscle_gain'`, `'recomp'`)
 

@@ -271,8 +271,17 @@ class TransformationEngineState {
 
       final dayName = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][d.weekday - 1];
 
-      final isTracked = isProgressTrackedForDate(dateStr);
-      if (!isTracked) {
+      // Exclude days designated as rest days in the weekly plan
+      final planDay = (weeklyPlan != null && i < weeklyPlan!.days.length)
+          ? weeklyPlan!.days[i]
+          : null;
+      if (planDay != null && planDay.isRestDay) {
+        continue;
+      }
+
+      final isCompleted = isWorkoutCompletedForDate(dateStr);
+      final isSkipped = isWorkoutSkippedForDate(dateStr);
+      if (!isCompleted && !isSkipped) {
         unlogged.add({
           'date': dateStr,
           'dayName': dayName,
@@ -1168,6 +1177,142 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
     if (uid != null) {
       await _firestore.saveProgress(uid, dateStr, entry);
       await _firestore.saveDailyWorkout(uid, dateStr, skippedWorkout);
+    }
+  }
+
+  Future<void> markPastWorkoutCompleted(String dateStr, {WeeklyDayPlan? planDay, String? notes}) async {
+    debugPrint('[AURA STATE] Marking past workout for $dateStr as completed');
+    final isToday = dateStr == DateTime.now().toIso8601String().split('T')[0];
+
+    DailyWorkout? existing = state.recentWorkouts[dateStr];
+    if (existing == null && isToday && state.workout.exercises.isNotEmpty) {
+      existing = state.workout;
+    }
+
+    DailyWorkout completedWorkout;
+    if (existing != null && existing.exercises.isNotEmpty) {
+      final updatedExercises = existing.exercises.map((ex) {
+        final updatedSets = ex.sets.map((s) => s.copyWith(completed: true)).toList();
+        return ex.copyWith(sets: updatedSets);
+      }).toList();
+      completedWorkout = existing.copyWith(
+        exercises: updatedExercises,
+        status: WorkoutStatus.completed,
+      );
+    } else {
+      WeeklyDayPlan? plan = planDay;
+      if (plan == null && state.weeklyPlan != null) {
+        try {
+          plan = state.weeklyPlan!.days.firstWhere((d) => d.date == dateStr);
+        } catch (_) {
+          plan = null;
+        }
+      }
+
+      final exerciseNames = (plan != null && plan.exerciseNames.isNotEmpty)
+          ? plan.exerciseNames
+          : const ['Push-Ups', 'Bodyweight Squats', 'Plank'];
+
+      final exercises = exerciseNames.map((exName) {
+        final exId = exName.toLowerCase().replaceAll(' ', '_');
+        return Exercise(
+          id: exId,
+          name: exName,
+          targetMuscle: plan?.focusArea ?? 'Full Body',
+          equipmentRequired: 'Bodyweight',
+          sets: const [
+            ExerciseSet(setNumber: 1, targetReps: 10, targetWeightKg: 0, completed: true),
+            ExerciseSet(setNumber: 2, targetReps: 10, targetWeightKg: 0, completed: true),
+            ExerciseSet(setNumber: 3, targetReps: 10, targetWeightKg: 0, completed: true),
+          ],
+        );
+      }).toList();
+
+      completedWorkout = DailyWorkout(
+        id: 'workout_$dateStr',
+        date: dateStr,
+        title: plan?.title ?? 'Prescribed Workout',
+        focusArea: plan?.focusArea ?? 'Full Body',
+        estimatedDurationMin: 40,
+        status: WorkoutStatus.completed,
+        exercises: exercises,
+      );
+    }
+
+    final updatedRecent = Map<String, DailyWorkout>.from(state.recentWorkouts)
+      ..[dateStr] = completedWorkout;
+
+    final entry = ProgressEntry(
+      date: dateStr,
+      weightKg: state.profile.weightKg,
+      notes: notes ?? 'Completed: ${completedWorkout.title}',
+      workoutStatus: WorkoutStatus.completed,
+    );
+    final newHistory = List<ProgressEntry>.from(state.progressHistory)
+      ..removeWhere((p) => p.date == dateStr)
+      ..add(entry);
+
+    state = state.copyWith(
+      workout: isToday ? completedWorkout : state.workout,
+      recentWorkouts: updatedRecent,
+      progressHistory: newHistory,
+    );
+
+    final uid = _auth.uid;
+    if (uid != null) {
+      await _firestore.saveDailyWorkout(uid, dateStr, completedWorkout);
+      await _firestore.saveProgress(uid, dateStr, entry);
+    }
+    _repository.saveProgressEntry(entry);
+
+    final totalSets = completedWorkout.exercises.fold<int>(0, (sum, ex) => sum + ex.sets.length);
+    _analytics.logEvent(
+      AuraAnalyticsEvents.prescriptionCompleted,
+      properties: {
+        'workout_type': completedWorkout.title,
+        'focus_area': completedWorkout.focusArea,
+        'estimated_duration_min': completedWorkout.estimatedDurationMin,
+        'exercise_count': completedWorkout.exercises.length,
+        'total_sets': totalSets,
+        'is_adapted': completedWorkout.adaptationNote != null && completedWorkout.adaptationNote!.isNotEmpty,
+        'is_backfill': !isToday,
+        'coach_soul': state.profile.coachSoul.name,
+      },
+    );
+  }
+
+  Future<void> undoPastWorkoutStatus(String dateStr) async {
+    debugPrint('[AURA STATE] Undoing past workout status for $dateStr');
+    final isToday = dateStr == DateTime.now().toIso8601String().split('T')[0];
+
+    final updatedRecent = Map<String, DailyWorkout>.from(state.recentWorkouts);
+    if (updatedRecent.containsKey(dateStr)) {
+      final w = updatedRecent[dateStr]!;
+      final resetExercises = w.exercises.map((ex) {
+        final resetSets = ex.sets.map((s) => s.copyWith(completed: false)).toList();
+        return ex.copyWith(sets: resetSets);
+      }).toList();
+      updatedRecent[dateStr] = w.copyWith(
+        status: WorkoutStatus.scheduled,
+        exercises: resetExercises,
+      );
+    }
+
+    final newHistory = List<ProgressEntry>.from(state.progressHistory)
+      ..removeWhere((p) => p.date == dateStr);
+
+    state = state.copyWith(
+      workout: isToday ? (state.workout.copyWith(status: WorkoutStatus.scheduled)) : state.workout,
+      recentWorkouts: updatedRecent,
+      progressHistory: newHistory,
+    );
+
+    final uid = _auth.uid;
+    if (uid != null) {
+      if (updatedRecent.containsKey(dateStr)) {
+        await _firestore.saveDailyWorkout(uid, dateStr, updatedRecent[dateStr]!);
+      }
+      await _firestore.deleteProgress(uid, dateStr);
     }
   }
 

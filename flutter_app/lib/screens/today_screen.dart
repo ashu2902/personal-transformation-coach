@@ -9,7 +9,9 @@ import '../models/weekly_plan.dart';
 import '../theme/theme.dart';
 import '../widgets/common/common.dart';
 import '../widgets/common/quick_coach_fab.dart';
+import 'widgets/workout_day_detail_modal.dart';
 import 'weekly_plan_screen.dart';
+import '../services/app_version_service.dart';
 
 class TodayScreen extends ConsumerWidget {
   final Function(int tabIndex, {int subIndex})? onNavigateToTab;
@@ -98,6 +100,7 @@ class TodayScreen extends ConsumerWidget {
               // 2. PILLAR 1 TOP: 7-DAY INTERACTIVE HORIZONTAL WEEK STRIP
               _buildInteractiveWeekStrip(
                 context: context,
+                ref: ref,
                 state: state,
                 weeklyPlan: weeklyPlan,
                 recentTracking: recentTracking,
@@ -453,7 +456,7 @@ class TodayScreen extends ConsumerWidget {
               NaturalWorkoutQuickLogCard(
                 auraTheme: auraTheme,
                 onWorkoutParsed: (parsed, {targetDate}) {
-                  _showWorkoutConfirmationSheet(context, ref, parsed, targetDate: targetDate);
+                  showWorkoutConfirmationSheet(context, ref, parsed, targetDate: targetDate);
                 },
               ),
               const SizedBox(height: 20),
@@ -638,13 +641,170 @@ class TodayScreen extends ConsumerWidget {
                   ],
                 ),
               ),
-              const SizedBox(height: 40),
+              const SizedBox(height: 24),
+
+              // 7. DASHBOARD LATEST VERSION FOOTER
+              _buildVersionFooter(context, ref, auraTheme),
+              const SizedBox(height: 48),
             ],
           ),
         ),
       ),
     ),
   );
+  }
+
+  Widget _buildVersionFooter(BuildContext context, WidgetRef ref, AuraThemeExtension auraTheme) {
+    final versionAsync = ref.watch(appVersionCheckProvider);
+
+    return versionAsync.when(
+      data: (result) {
+        final isUpToDate = result.type == UpdateType.none;
+        final displayVersion = result.latestVersion.isNotEmpty ? result.latestVersion : '1.0.1';
+
+        return Center(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 8.0, bottom: 8.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isUpToDate)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: auraTheme.surfaceLight.withValues(alpha: 0.5),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: AuraColors.borderSubtle),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Container(
+                          width: 6,
+                          height: 6,
+                          decoration: const BoxDecoration(
+                            shape: BoxShape.circle,
+                            color: AuraColors.actionGreen,
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          'Latest Version: v$displayVersion',
+                          style: AuraTypography.bodySmall.copyWith(
+                            color: AuraColors.textTertiary,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                            letterSpacing: 0.3,
+                          ),
+                        ),
+                      ],
+                    ),
+                  )
+                else
+                  InkWell(
+                    onTap: () => AppVersionService.performUpdate(result.storeUrl),
+                    borderRadius: BorderRadius.circular(20),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AuraColors.actionGreen.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: AuraColors.actionGreen.withValues(alpha: 0.4)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(LucideIcons.arrowUpCircle, size: 13, color: AuraColors.actionGreen),
+                          const SizedBox(width: 6),
+                          Text(
+                            'Update available: v${result.latestVersion} (Tap to update)',
+                            style: AuraTypography.bodySmall.copyWith(
+                              color: AuraColors.actionGreen,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                const SizedBox(height: 6),
+                Text(
+                  'AURA Adaptive Wellness Coach',
+                  style: AuraTypography.bodySmall.copyWith(
+                    color: AuraColors.textTertiary.withValues(alpha: 0.45),
+                    fontSize: 10,
+                    letterSpacing: 0.4,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+      loading: () => Center(
+        child: Padding(
+          padding: const EdgeInsets.only(top: 8.0, bottom: 8.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+                decoration: BoxDecoration(
+                  color: auraTheme.surfaceLight.withValues(alpha: 0.5),
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: AuraColors.borderSubtle),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Container(
+                      width: 6,
+                      height: 6,
+                      decoration: const BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: AuraColors.actionGreen,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    Text(
+                      'Latest Version: v1.0.1',
+                      style: AuraTypography.bodySmall.copyWith(
+                        color: AuraColors.textTertiary,
+                        fontSize: 11,
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                'AURA Adaptive Wellness Coach',
+                style: AuraTypography.bodySmall.copyWith(
+                  color: AuraColors.textTertiary.withValues(alpha: 0.45),
+                  fontSize: 10,
+                  letterSpacing: 0.4,
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+      error: (_, __) => Center(
+        child: Padding(
+          padding: const EdgeInsets.only(top: 8.0),
+          child: Text(
+            'AURA Coach • v1.0.1',
+            style: AuraTypography.bodySmall.copyWith(
+              color: AuraColors.textTertiary.withValues(alpha: 0.5),
+              fontSize: 11,
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   Widget _buildCoachPromptChip({
@@ -684,6 +844,7 @@ class TodayScreen extends ConsumerWidget {
   // ─── 7-DAY INTERACTIVE WEEK STRIP ───
   Widget _buildInteractiveWeekStrip({
     required BuildContext context,
+    required WidgetRef ref,
     required TransformationEngineState state,
     required WeeklyPlan? weeklyPlan,
     required List<DayTrackingStatus> recentTracking,
@@ -757,7 +918,18 @@ class TodayScreen extends ConsumerWidget {
                 child: GestureDetector(
                   onTap: () {
                     final actualWorkout = state.getWorkoutForDate(dayDateStr);
-                    _showDayDetailModal(context, planDay, actualWorkout, isToday, isCompleted, isSkipped, dayDateStr, auraTheme);
+                    showWorkoutDayDetailSheet(
+                      context: context,
+                      ref: ref,
+                      planDay: planDay,
+                      actualWorkout: actualWorkout,
+                      isToday: isToday,
+                      isCompleted: isCompleted,
+                      isSkipped: isSkipped,
+                      dateStr: dayDateStr,
+                      auraTheme: auraTheme,
+                      onOpenWorkout: onOpenWorkout,
+                    );
                   },
                   child: Container(
                     margin: const EdgeInsets.symmetric(horizontal: 2),
@@ -834,218 +1006,6 @@ class TodayScreen extends ConsumerWidget {
           ),
         ],
       ),
-    );
-  }
-
-  void _showDayDetailModal(
-    BuildContext context,
-    WeeklyDayPlan? planDay,
-    DailyWorkout? actualWorkout,
-    bool isToday,
-    bool isCompleted,
-    bool isSkipped,
-    String dateStr,
-    AuraThemeExtension auraTheme,
-  ) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AuraColors.surface1,
-      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
-      builder: (ctx) {
-        final title = (isCompleted && actualWorkout != null)
-            ? actualWorkout.title
-            : (planDay?.title ?? (isSkipped ? 'Rest / Skipped Session' : 'Scheduled Session'));
-        final focusArea = (isCompleted && actualWorkout != null)
-            ? actualWorkout.focusArea
-            : (planDay?.focusArea ?? (isSkipped ? 'Rest' : 'Workout'));
-        final isRest = planDay?.isRestDay ?? false;
-
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Text(
-                      (planDay?.dayName ?? dateStr).toUpperCase(),
-                      style: AuraTypography.sectionHeader.copyWith(color: auraTheme.primary),
-                    ),
-                    if (isToday)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: auraTheme.primary.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: auraTheme.primary.withValues(alpha: 0.3)),
-                        ),
-                        child: Text(
-                          'Active Day',
-                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: auraTheme.primary),
-                        ),
-                      )
-                    else if (isCompleted)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.15),
-                          borderRadius: BorderRadius.circular(6),
-                          border: Border.all(color: Theme.of(context).colorScheme.primary.withValues(alpha: 0.3)),
-                        ),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Icon(LucideIcons.check, size: 11, color: Theme.of(context).colorScheme.primary),
-                            const SizedBox(width: 4),
-                            Text(
-                              'Completed',
-                              style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Theme.of(context).colorScheme.primary),
-                            ),
-                          ],
-                        ),
-                      )
-                    else if (isSkipped)
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: AuraColors.surface2,
-                          borderRadius: BorderRadius.circular(6),
-                        ),
-                        child: const Text(
-                          'Skipped',
-                          style: TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: AuraColors.textTertiary),
-                        ),
-                      ),
-                  ],
-                ),
-                const SizedBox(height: 8),
-                Text(title, style: AuraTypography.displaySmall),
-                if (focusArea.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(focusArea, style: AuraTypography.bodyMedium.copyWith(color: AuraColors.textSecondary)),
-                ],
-                const SizedBox(height: 16),
-                if (isCompleted && actualWorkout != null && actualWorkout.exercises.isNotEmpty)
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text(
-                        'Logged Workout Sets:',
-                        style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AuraColors.textSecondary),
-                      ),
-                      const SizedBox(height: 8),
-                      ...actualWorkout.exercises.map((ex) {
-                        final setsStr = ex.sets
-                            .map((s) => '${s.targetWeightKg > 0 ? "${s.targetWeightKg.toStringAsFixed(s.targetWeightKg % 1 == 0 ? 0 : 1)}kg × " : ""}${s.targetReps} reps')
-                            .join(', ');
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 6),
-                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: AuraColors.surface2,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: AuraColors.borderSubtle),
-                          ),
-                          child: Row(
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: [
-                              Expanded(
-                                child: Text(
-                                  ex.name,
-                                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AuraColors.textPrimary),
-                                ),
-                              ),
-                              Text(
-                                setsStr,
-                                style: TextStyle(fontSize: 12, color: auraTheme.primary, fontWeight: FontWeight.w500),
-                              ),
-                            ],
-                          ),
-                        );
-                      }),
-                    ],
-                  )
-                else if (isRest && !isCompleted)
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AuraColors.recovery.withValues(alpha: 0.12),
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(LucideIcons.moon, size: 18, color: AuraColors.recovery),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            'Rest & Recovery Protocol: High hydration, light walking, and mobility.',
-                            style: AuraTypography.bodySmall.copyWith(color: AuraColors.textPrimary),
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                else if (isSkipped)
-                  Container(
-                    padding: const EdgeInsets.all(12),
-                    decoration: BoxDecoration(
-                      color: AuraColors.surface2,
-                      borderRadius: BorderRadius.circular(10),
-                    ),
-                    child: Row(
-                      children: [
-                        const Icon(LucideIcons.minus, size: 18, color: AuraColors.textTertiary),
-                        const SizedBox(width: 10),
-                        Expanded(
-                          child: Text(
-                            'Session was marked as skipped for this day.',
-                            style: AuraTypography.bodySmall.copyWith(color: AuraColors.textSecondary),
-                          ),
-                        ),
-                      ],
-                    ),
-                  )
-                else if (planDay != null)
-                  Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Text('Planned Exercises:', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: AuraColors.textSecondary)),
-                      const SizedBox(height: 8),
-                      Wrap(
-                        spacing: 8,
-                        runSpacing: 6,
-                        children: planDay.exerciseNames.map((name) {
-                          return Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                            decoration: BoxDecoration(
-                              color: AuraColors.surface2,
-                              borderRadius: BorderRadius.circular(8),
-                              border: Border.all(color: AuraColors.borderSubtle),
-                            ),
-                            child: Text(name, style: const TextStyle(fontSize: 12, color: AuraColors.textPrimary)),
-                          );
-                        }).toList(),
-                      ),
-                    ],
-                  ),
-                const SizedBox(height: 20),
-                if (isToday && !isRest)
-                  AuraButton(
-                    text: 'Start Workout',
-                    variant: AuraButtonVariant.primary,
-                    onPressed: () {
-                      Navigator.of(context).pop();
-                      onOpenWorkout?.call();
-                    },
-                  ),
-              ],
-            ),
-          ),
-        );
-      },
     );
   }
 
@@ -1147,11 +1107,24 @@ class TodayScreen extends ConsumerWidget {
                         const SizedBox(width: 8),
                         InkWell(
                           onTap: () {
-                            _showNaturalWorkoutLogModal(
-                              context,
-                              ref,
-                              targetDate: dateStr,
-                              initialDayName: day['dayName'],
+                            final state = ref.read(transformationEngineProvider);
+                            final actualWorkout = state.getWorkoutForDate(dateStr);
+                            final d = DateTime.tryParse(dateStr);
+                            final weekdayIdx = d != null ? (d.weekday - 1).clamp(0, 6) : 0;
+                            final planDay = (state.weeklyPlan != null && weekdayIdx < state.weeklyPlan!.days.length)
+                                ? state.weeklyPlan!.days[weekdayIdx]
+                                : null;
+                            showWorkoutDayDetailSheet(
+                              context: context,
+                              ref: ref,
+                              planDay: planDay,
+                              actualWorkout: actualWorkout,
+                              isToday: false,
+                              isCompleted: false,
+                              isSkipped: false,
+                              dateStr: dateStr,
+                              auraTheme: auraTheme,
+                              onOpenWorkout: onOpenWorkout,
                             );
                           },
                           borderRadius: BorderRadius.circular(6),
@@ -1187,323 +1160,6 @@ class TodayScreen extends ConsumerWidget {
           ),
         ],
       ),
-    );
-  }
-
-  void _showNaturalWorkoutLogModal(
-    BuildContext context,
-    WidgetRef ref, {
-    String? targetDate,
-    String? initialDayName,
-  }) {
-    final auraTheme = context.auraTheme;
-    final controller = TextEditingController();
-    bool isParsing = false;
-
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AuraColors.surface1,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (sheetCtx) {
-        return StatefulBuilder(
-          builder: (context, setModalState) {
-            return Padding(
-              padding: EdgeInsets.only(
-                left: 24,
-                right: 24,
-                top: 20,
-                bottom: MediaQuery.of(context).viewInsets.bottom + 24,
-              ),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                              color: auraTheme.primary.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Icon(LucideIcons.sparkles, size: 16, color: auraTheme.primary),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            initialDayName != null
-                                ? 'LOG WORKOUT FOR $initialDayName'
-                                : 'EXPRESS AI WORKOUT LOG',
-                            style: AuraTypography.sectionHeader.copyWith(
-                              color: auraTheme.primary,
-                              letterSpacing: 1.1,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ],
-                      ),
-                      IconButton(
-                        icon: const Icon(LucideIcons.x, size: 18, color: AuraColors.textSecondary),
-                        onPressed: () => Navigator.of(sheetCtx).pop(),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Type your exercises, weights, and reps in natural language.',
-                    style: AuraTypography.bodySmall.copyWith(color: AuraColors.textSecondary),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: controller,
-                    maxLines: 3,
-                    autofocus: true,
-                    style: const TextStyle(color: AuraColors.textPrimary, fontSize: 14),
-                    decoration: InputDecoration(
-                      hintText: 'e.g. 4 sets bench press 60kg for 10 reps, 3 sets pull-ups 8 reps, 20 mins incline treadmill walk',
-                      hintStyle: const TextStyle(color: AuraColors.textTertiary, fontSize: 12),
-                      filled: true,
-                      fillColor: AuraColors.surface2,
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: const BorderSide(color: AuraColors.borderSubtle),
-                      ),
-                      focusedBorder: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(12),
-                        borderSide: BorderSide(color: auraTheme.primary),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  AuraButton(
-                    text: isParsing ? 'Analyzing with AI...' : 'Parse & Review',
-                    icon: isParsing ? null : LucideIcons.arrowRight,
-                    variant: AuraButtonVariant.primary,
-                    backgroundColor: auraTheme.primary,
-                    textColor: Colors.black,
-                    width: double.infinity,
-                    onPressed: isParsing
-                        ? null
-                        : () async {
-                            final text = controller.text.trim();
-                            if (text.isEmpty) return;
-
-                            setModalState(() => isParsing = true);
-                            try {
-                              final parsed = await ref
-                                  .read(transformationEngineProvider.notifier)
-                                  .parseWorkoutFromText(text, targetDate: targetDate);
-                              if (sheetCtx.mounted) {
-                                Navigator.of(sheetCtx).pop();
-                                _showWorkoutConfirmationSheet(
-                                  context,
-                                  ref,
-                                  parsed,
-                                  targetDate: targetDate,
-                                );
-                              }
-                            } catch (e) {
-                              setModalState(() => isParsing = false);
-                              if (sheetCtx.mounted) {
-                                ScaffoldMessenger.of(sheetCtx).showSnackBar(
-                                  SnackBar(
-                                    content: Text('Failed to parse workout: $e'),
-                                    backgroundColor: AuraColors.error,
-                                  ),
-                                );
-                              }
-                            }
-                          },
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-
-  void _showWorkoutConfirmationSheet(
-    BuildContext context,
-    WidgetRef ref,
-    DailyWorkout workout, {
-    String? targetDate,
-  }) {
-    final auraTheme = context.auraTheme;
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: AuraColors.surface1,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-      ),
-      builder: (ctx) {
-        return StatefulBuilder(
-          builder: (context, setSheetState) {
-            return Container(
-              constraints: BoxConstraints(
-                maxHeight: MediaQuery.of(context).size.height * 0.85,
-              ),
-              padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Row(
-                        children: [
-                          Container(
-                            padding: const EdgeInsets.all(6),
-                            decoration: BoxDecoration(
-                              color: auraTheme.primary.withValues(alpha: 0.15),
-                              borderRadius: BorderRadius.circular(8),
-                            ),
-                            child: Icon(LucideIcons.sparkles, size: 16, color: auraTheme.primary),
-                          ),
-                          const SizedBox(width: 8),
-                          Text(
-                            'CONFIRM & COMMIT WORKOUT',
-                            style: AuraTypography.sectionHeader.copyWith(
-                              color: auraTheme.primary,
-                              letterSpacing: 1.1,
-                              fontSize: 11,
-                            ),
-                          ),
-                        ],
-                      ),
-                      IconButton(
-                        icon: const Icon(LucideIcons.x, size: 18, color: AuraColors.textSecondary),
-                        onPressed: () => Navigator.of(ctx).pop(),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 12),
-                  Text(
-                    workout.title,
-                    style: AuraTypography.displaySmall.copyWith(fontSize: 20),
-                  ),
-                  const SizedBox(height: 4),
-                  Text(
-                    '${workout.focusArea} • ${workout.exercises.length} Exercises • ~${workout.estimatedDurationMin} min',
-                    style: AuraTypography.bodySmall.copyWith(color: AuraColors.textSecondary),
-                  ),
-                  const SizedBox(height: 14),
-                  const Divider(color: AuraColors.borderSubtle),
-                  const SizedBox(height: 8),
-                  Expanded(
-                    child: ListView.builder(
-                      shrinkWrap: true,
-                      physics: const BouncingScrollPhysics(),
-                      itemCount: workout.exercises.length,
-                      itemBuilder: (context, index) {
-                        final ex = workout.exercises[index];
-                        return Container(
-                          margin: const EdgeInsets.only(bottom: 12),
-                          padding: const EdgeInsets.all(12),
-                          decoration: BoxDecoration(
-                            color: auraTheme.surfaceCard,
-                            borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: AuraColors.borderSubtle),
-                          ),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Row(
-                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                children: [
-                                  Text(
-                                    ex.name,
-                                    style: const TextStyle(
-                                      fontWeight: FontWeight.bold,
-                                      fontSize: 14,
-                                      color: AuraColors.textPrimary,
-                                    ),
-                                  ),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                    decoration: BoxDecoration(
-                                      color: AuraColors.surface2,
-                                      borderRadius: BorderRadius.circular(6),
-                                    ),
-                                    child: Text(
-                                      ex.targetMuscle,
-                                      style: const TextStyle(fontSize: 10, color: AuraColors.textSecondary),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                              const SizedBox(height: 8),
-                              Wrap(
-                                spacing: 6,
-                                runSpacing: 6,
-                                children: ex.sets.map((s) {
-                                  final weightStr =
-                                      s.targetWeightKg > 0 ? '${s.targetWeightKg.toStringAsFixed(0)}kg × ' : '';
-                                  return Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: auraTheme.primary.withValues(alpha: 0.12),
-                                      borderRadius: BorderRadius.circular(6),
-                                      border: Border.all(color: auraTheme.primary.withValues(alpha: 0.3)),
-                                    ),
-                                    child: Text(
-                                      'Set ${s.setNumber}: $weightStr${s.targetReps} reps',
-                                      style: TextStyle(
-                                        fontSize: 11,
-                                        fontWeight: FontWeight.w600,
-                                        color: auraTheme.primary,
-                                      ),
-                                    ),
-                                  );
-                                }).toList(),
-                              ),
-                            ],
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  AuraButton(
-                    text: 'Confirm & Save Workout',
-                    icon: LucideIcons.checkCheck,
-                    variant: AuraButtonVariant.primary,
-                    backgroundColor: auraTheme.primary,
-                    textColor: Colors.black,
-                    width: double.infinity,
-                    height: 50,
-                    onPressed: () async {
-                      await ref
-                          .read(transformationEngineProvider.notifier)
-                          .confirmAndSaveParsedWorkout(workout, targetDate: targetDate);
-                      if (ctx.mounted) {
-                        Navigator.of(ctx).pop();
-                      }
-                      if (context.mounted) {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          SnackBar(
-                            content: Text('Logged "${workout.title}" successfully!'),
-                            backgroundColor: Theme.of(context).colorScheme.primary,
-                            behavior: SnackBarBehavior.floating,
-                          ),
-                        );
-                      }
-                    },
-                  ),
-                ],
-              ),
-            );
-          },
-        );
-      },
     );
   }
 }

@@ -295,6 +295,22 @@ class FirebaseFirestoreService {
     }
   }
 
+  Future<void> deleteDailyWorkout(String uid, String dateStr) async {
+    try {
+      if (_db != null) {
+        await _db!
+            .collection('users')
+            .doc(uid)
+            .collection('workouts')
+            .doc(dateStr)
+            .delete()
+            .timeout(const Duration(seconds: 15));
+      }
+    } catch (e) {
+      debugPrint('[FIRESTORE ERROR] deleteDailyWorkout failed: $e');
+    }
+  }
+
   Future<void> updateDailyWorkoutField(String uid, String dateStr, Map<String, dynamic> fields) async {
     try {
       if (_db != null) {
@@ -507,6 +523,22 @@ class FirebaseFirestoreService {
       }
     } catch (e) {
       debugPrint('[FIRESTORE ERROR] saveProgress failed: $e');
+    }
+  }
+
+  Future<void> deleteProgress(String uid, String dateStr) async {
+    try {
+      if (_db != null) {
+        await _db!
+            .collection('users')
+            .doc(uid)
+            .collection('progress')
+            .doc(dateStr)
+            .delete()
+            .timeout(const Duration(seconds: 15));
+      }
+    } catch (e) {
+      debugPrint('[FIRESTORE ERROR] deleteProgress failed: $e');
     }
   }
 

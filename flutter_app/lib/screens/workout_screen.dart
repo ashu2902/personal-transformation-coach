@@ -5,8 +5,6 @@ import 'package:lucide_icons/lucide_icons.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../providers/transformation_state.dart';
-import '../providers/analytics_provider.dart';
-import '../services/analytics_service.dart';
 import '../models/models.dart';
 import '../theme/theme.dart';
 import '../widgets/common/common.dart';

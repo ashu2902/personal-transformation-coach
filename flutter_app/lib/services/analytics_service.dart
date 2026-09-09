@@ -70,7 +70,7 @@ class MixpanelAnalyticsService implements IAnalyticsService {
         // Register baseline super properties
         await registerSuperProperties({
           'platform': kIsWeb ? 'flutter_pwa' : (defaultTargetPlatform == TargetPlatform.iOS ? 'ios' : 'android'),
-          'app_version': '1.0.0',
+          'app_version': '1.0.1',
           'sdk': 'mixpanel_flutter',
         });
 
