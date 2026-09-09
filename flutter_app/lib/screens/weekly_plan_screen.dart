@@ -30,9 +30,20 @@ class WeeklyPlanScreen extends ConsumerWidget {
       body: Center(
         child: ConstrainedBox(
           constraints: BoxConstraints(maxWidth: context.maxFluidContentWidth),
-          child: plan == null
-              ? _buildEmptyState(context, ref, isLoading)
-              : _buildPlanView(context, ref, plan, todayStr, isLoading),
+          child: RefreshIndicator(
+            color: auraTheme.primary,
+            backgroundColor: auraTheme.surfaceCard,
+            onRefresh: () => ref.read(transformationEngineProvider.notifier).refreshState(),
+            child: plan == null
+                ? SingleChildScrollView(
+                    physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                    child: SizedBox(
+                      height: MediaQuery.of(context).size.height * 0.7,
+                      child: _buildEmptyState(context, ref, isLoading),
+                    ),
+                  )
+                : _buildPlanView(context, ref, plan, todayStr, isLoading),
+          ),
         ),
       ),
     );
@@ -91,7 +102,7 @@ class WeeklyPlanScreen extends ConsumerWidget {
     final auraTheme = context.auraTheme;
 
     return CustomScrollView(
-      physics: const BouncingScrollPhysics(),
+      physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
       slivers: [
         // Header
         SliverToBoxAdapter(

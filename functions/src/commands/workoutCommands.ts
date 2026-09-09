@@ -194,29 +194,33 @@ export const workoutSubstituteExerciseCommand: CommandDefinition<
 const adjustVolumeInputSchema = z.object({
   targetExercise: z
     .string()
-    .optional()
+    .nullish()
     .describe("Name, ordinal, or pronoun ('it', 'this exercise') to adjust"),
   targetSetIndex: z
     .union([z.number(), z.string()])
-    .optional()
+    .nullish()
     .describe("Specific set number (1-indexed or 'last set') or all sets if omitted"),
   deltaWeightKg: z
     .number()
-    .optional()
+    .nullish()
     .describe("Weight difference in kg to add or subtract (e.g. 5 for +5kg, -5 for -5kg)"),
+  targetWeightKg: z
+    .number()
+    .nullish()
+    .describe("Absolute target weight in kg to set (e.g. 15 for 15kg)"),
   deltaSets: z
     .number()
-    .optional()
+    .nullish()
     .describe("Number of sets to add or subtract (e.g. -1 for 1 fewer set)"),
   deltaReps: z
     .number()
-    .optional()
+    .nullish()
     .describe("Number of reps to add or subtract"),
   scaleFactor: z
     .number()
-    .optional()
+    .nullish()
     .describe("Scaling factor for sets or weight (e.g. 0.8 for 20% reduction)"),
-  reason: z.string().optional(),
+  reason: z.string().nullish(),
 });
 
 interface ResolvedVolumeAdjustment {
@@ -239,7 +243,7 @@ export const workoutAdjustVolumeCommand: CommandDefinition<
 
   resolve: async (input, ctx: ResolutionContext): Promise<ResolvedVolumeAdjustment> => {
     const workoutDate = ctx.resolveWorkoutTarget();
-    let res = ctx.resolveExerciseTarget(input.targetExercise);
+    let res = ctx.resolveExerciseTarget(input.targetExercise || undefined);
 
     const workout = ctx.userState.workout || {};
     let exercises: any[] = Array.isArray(workout.exercises) ? [...workout.exercises] : [];
@@ -268,14 +272,27 @@ export const workoutAdjustVolumeCommand: CommandDefinition<
     const oldEx = res.exercise;
     const sets = Array.isArray(oldEx.sets) ? oldEx.sets.map((s: any) => ({ ...s })) : [];
     let setIdx: number | null = null;
-    if (input.targetSetIndex !== undefined) {
+    if (input.targetSetIndex != null) {
       setIdx = ctx.resolveSetTarget(input.targetSetIndex, res.index);
     }
 
     const changeDescriptions: string[] = [];
 
-    // 1. Weight Adjustment
-    if (input.deltaWeightKg !== undefined && input.deltaWeightKg !== 0) {
+    // 1. Weight Adjustment (delta or absolute)
+    if (input.targetWeightKg !== undefined && input.targetWeightKg !== null) {
+      const newW = Math.max(0, input.targetWeightKg);
+      if (setIdx !== null && setIdx >= 0 && setIdx < sets.length) {
+        const oldW = sets[setIdx].targetWeightKg || 0;
+        sets[setIdx].targetWeightKg = newW;
+        changeDescriptions.push(`Set #${setIdx + 1} weight: ${oldW}kg -> ${newW}kg`);
+      } else {
+        const oldW = sets[0]?.targetWeightKg || 0;
+        for (const s of sets) {
+          s.targetWeightKg = newW;
+        }
+        changeDescriptions.push(`Weight: ${oldW}kg -> ${newW}kg across sets`);
+      }
+    } else if (input.deltaWeightKg !== undefined && input.deltaWeightKg !== null && input.deltaWeightKg !== 0) {
       const sign = input.deltaWeightKg > 0 ? "+" : "";
       if (setIdx !== null && setIdx >= 0 && setIdx < sets.length) {
         const oldW = sets[setIdx].targetWeightKg || 0;
@@ -293,33 +310,35 @@ export const workoutAdjustVolumeCommand: CommandDefinition<
     }
 
     // 2. Reps Adjustment
-    if (input.deltaReps !== undefined && input.deltaReps !== 0) {
-      const sign = input.deltaReps > 0 ? "+" : "";
+    if (input.deltaReps != null && input.deltaReps !== 0) {
+      const deltaR = input.deltaReps;
+      const sign = deltaR > 0 ? "+" : "";
       if (setIdx !== null && setIdx >= 0 && setIdx < sets.length) {
         const oldR = sets[setIdx].targetReps || 10;
-        const newR = Math.max(1, oldR + input.deltaReps);
+        const newR = Math.max(1, oldR + deltaR);
         sets[setIdx].targetReps = newR;
-        changeDescriptions.push(`Set #${setIdx + 1} reps: ${oldR} -> ${newR} (${sign}${input.deltaReps})`);
+        changeDescriptions.push(`Set #${setIdx + 1} reps: ${oldR} -> ${newR} (${sign}${deltaR})`);
       } else {
         const oldR = sets[0]?.targetReps || 10;
-        const newR = Math.max(1, oldR + input.deltaReps);
+        const newR = Math.max(1, oldR + deltaR);
         for (const s of sets) {
-          s.targetReps = Math.max(1, (s.targetReps || 10) + input.deltaReps);
+          s.targetReps = Math.max(1, (s.targetReps || 10) + deltaR);
         }
-        changeDescriptions.push(`Reps: ${oldR} -> ${newR} (${sign}${input.deltaReps})`);
+        changeDescriptions.push(`Reps: ${oldR} -> ${newR} (${sign}${deltaR})`);
       }
     }
 
     // 3. Set Count Adjustment
-    if (input.deltaSets !== undefined && input.deltaSets !== 0) {
-      if (input.deltaSets < 0) {
-        const removeCount = Math.abs(input.deltaSets);
+    if (input.deltaSets != null && input.deltaSets !== 0) {
+      const deltaS = input.deltaSets;
+      if (deltaS < 0) {
+        const removeCount = Math.abs(deltaS);
         const newLength = Math.max(1, sets.length - removeCount);
         sets.length = newLength;
         changeDescriptions.push(`Reduced volume from ${oldEx.sets.length} to ${newLength} sets`);
-      } else if (input.deltaSets > 0) {
+      } else if (deltaS > 0) {
         const lastSet = sets[sets.length - 1] || { targetReps: 10, targetWeightKg: 0 };
-        for (let i = 0; i < input.deltaSets; i++) {
+        for (let i = 0; i < deltaS; i++) {
           sets.push({
             setNumber: sets.length + 1,
             targetReps: lastSet.targetReps || 10,
@@ -327,16 +346,17 @@ export const workoutAdjustVolumeCommand: CommandDefinition<
             completed: false,
           });
         }
-        changeDescriptions.push(`Added ${input.deltaSets} set(s) (Total: ${sets.length} sets)`);
+        changeDescriptions.push(`Added ${deltaS} set(s) (Total: ${sets.length} sets)`);
       }
     }
 
     // 4. Scale Factor (e.g. 0.8 for deload)
-    if (input.scaleFactor !== undefined && input.scaleFactor > 0 && input.scaleFactor !== 1) {
-      const pct = Math.round((1 - input.scaleFactor) * 100);
-      if (input.scaleFactor < 1) {
+    if (input.scaleFactor != null && input.scaleFactor > 0 && input.scaleFactor !== 1) {
+      const scale = input.scaleFactor;
+      const pct = Math.round((1 - scale) * 100);
+      if (scale < 1) {
         for (const s of sets) {
-          s.targetWeightKg = Math.round((s.targetWeightKg || 0) * input.scaleFactor * 2) / 2; // round to 0.5kg
+          s.targetWeightKg = Math.round((s.targetWeightKg || 0) * scale * 2) / 2; // round to 0.5kg
         }
         changeDescriptions.push(`Applied ${pct}% deload reduction to target load`);
       }
@@ -416,15 +436,19 @@ export const workoutAdjustVolumeCommand: CommandDefinition<
 const adaptInputSchema = z.object({
   reason: z
     .string()
-    .describe("Reason for adaptation, e.g. 'exhausted', 'only 30 minutes', 'low energy'"),
+    .describe("Reason for adaptation, e.g. 'exhausted', 'only 30 minutes', 'add weights', 'missing weights'"),
   timeLimitMin: z
     .number()
-    .optional()
+    .nullish()
     .describe("User's available time in minutes"),
   intensityReduction: z
     .number()
-    .optional()
+    .nullish()
     .describe("Percentage reduction (e.g. 20 for 20% drop)"),
+  prescribeWeights: z
+    .boolean()
+    .nullish()
+    .describe("Whether to assign recommended starting weights to exercises with 0kg or missing weights"),
 });
 
 interface ResolvedWorkoutAdaptation {
@@ -464,9 +488,9 @@ export const workoutAdaptCommand: CommandDefinition<
             targetMuscle: "Full Body",
             equipmentRequired: "free_weight",
             sets: [
-              { setNumber: 1, targetReps: 10, targetWeightKg: 20, completed: false },
-              { setNumber: 2, targetReps: 10, targetWeightKg: 20, completed: false },
-              { setNumber: 3, targetReps: 10, targetWeightKg: 20, completed: false },
+              { setNumber: 1, targetReps: 10, targetWeightKg: 0, completed: false },
+              { setNumber: 2, targetReps: 10, targetWeightKg: 0, completed: false },
+              { setNumber: 3, targetReps: 10, targetWeightKg: 0, completed: false },
             ],
           },
         ];
@@ -484,6 +508,13 @@ export const workoutAdaptCommand: CommandDefinition<
       lowerReason.includes("fatigue") ||
       lowerReason.includes("take it easy") ||
       lowerReason.includes("sore");
+
+    const isWeightRequest =
+      input.prescribeWeights ||
+      lowerReason.includes("weight") ||
+      lowerReason.includes("how much") ||
+      lowerReason.includes("lifting") ||
+      lowerReason.includes("add weight");
 
     // Case 1: Time restriction
     if (input.timeLimitMin && input.timeLimitMin > 0) {
@@ -516,6 +547,58 @@ export const workoutAdaptCommand: CommandDefinition<
         }
       }
       summaryText = `Applied ${reduction}% volume deload and trimmed fatigue load`;
+    }
+    // Case 3: Prescribe baseline weights across exercises
+    else if (isWeightRequest) {
+      const addedWeights: string[] = [];
+      for (const ex of adaptedExercises) {
+        const exName = (ex.name || "").toLowerCase();
+        const equip = (ex.equipmentRequired || "").toLowerCase();
+        const isBodyweight =
+          exName.includes("push-up") ||
+          exName.includes("pushup") ||
+          exName.includes("pull-up") ||
+          exName.includes("pullup") ||
+          exName.includes("plank") ||
+          exName.includes("crunch") ||
+          exName.includes("bodyweight") ||
+          exName.includes("jumping") ||
+          exName.includes("burpee") ||
+          exName.includes("stretch") ||
+          equip === "bodyweight" ||
+          equip === "none";
+
+        let baselineWeight = 0;
+        if (!isBodyweight) {
+          if (exName.includes("deadlift") || exName.includes("romanian") || exName.includes("rdl")) {
+            baselineWeight = 20;
+          } else if (exName.includes("squat") || exName.includes("leg press") || exName.includes("lunge") || exName.includes("split squat") || exName.includes("hip thrust")) {
+            baselineWeight = 12;
+          } else if (exName.includes("bench") || exName.includes("chest") || exName.includes("press") || exName.includes("row")) {
+            baselineWeight = 10;
+          } else if (exName.includes("lateral") || exName.includes("delt") || exName.includes("curl") || exName.includes("tricep") || exName.includes("extension") || exName.includes("raise")) {
+            baselineWeight = 6;
+          } else {
+            baselineWeight = 10;
+          }
+        }
+
+        let exUpdated = false;
+        for (const s of ex.sets) {
+          if (!s.targetWeightKg || s.targetWeightKg <= 0) {
+            s.targetWeightKg = baselineWeight;
+            exUpdated = true;
+          }
+        }
+        if (exUpdated && baselineWeight > 0) {
+          addedWeights.push(`${ex.name} (${baselineWeight}kg)`);
+        }
+      }
+      if (addedWeights.length > 0) {
+        summaryText = `Calibrated starting weights: ${addedWeights.join(", ")}`;
+      } else {
+        summaryText = `Reviewed exercises—all weighted movements have prescribed target loads.`;
+      }
     } else {
       summaryText = `Adapted session for: "${input.reason}"`;
     }
@@ -612,13 +695,25 @@ export const workoutUpdateStatusCommand: CommandDefinition<
 
   execute: async (resolved, ctx: ExecutionContext) => {
     const workoutRef = ctx.db.collection("users").doc(ctx.uid).collection("workouts").doc(resolved.workoutDate);
-    await workoutRef.set(
-      {
-        status: resolved.status,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-      },
-      { merge: true }
-    );
+    const doc = await workoutRef.get();
+    const updateData: any = {
+      status: resolved.status,
+      updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+    };
+
+    if (resolved.status === "completed" && doc.exists) {
+      const data = doc.data() || {};
+      if (Array.isArray(data.exercises)) {
+        updateData.exercises = data.exercises.map((ex: any) => ({
+          ...ex,
+          sets: Array.isArray(ex.sets)
+            ? ex.sets.map((s: any) => ({ ...s, completed: true }))
+            : ex.sets,
+        }));
+      }
+    }
+
+    await workoutRef.set(updateData, { merge: true });
     return { success: true };
   },
 };

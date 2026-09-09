@@ -32,7 +32,7 @@ graph TB
     end
 
     subgraph "External Intelligence & APIs"
-        Gemini["Google Gemini API<br/>(2.5-flash-lite -> 2.5-flash -> 2.0-flash -> 1.5-flash)"]
+        Gemini["Google Gemini API<br/>(3.5-flash-lite -> 3.1-flash-lite -> 3.8-flash -> 3.6-flash)"]
         Mixpanel["Mixpanel Platform<br/>(Product & Lifecycle Telemetry)"]
         OpenFoodFacts["OpenFoodFacts REST API<br/>(Nutrition Enrichment)"]
     end
@@ -340,7 +340,8 @@ sequenceDiagram
 1. **Gemini Multi-Model Fallback Chain**:
    `functions/src/gemini.ts` (lines 27-100)  
    Sequentially attempts:
-   `gemini-2.5-flash-lite` $\rightarrow$ `gemini-2.5-flash` $\rightarrow$ `gemini-2.0-flash` $\rightarrow$ `gemini-1.5-flash`.
+   `gemini-3.5-flash-lite` $\rightarrow$ `gemini-3.1-flash-lite` $\rightarrow$ `gemini-3.8-flash` $\rightarrow$ `gemini-3.6-flash`.
+   High-value structural plans (weekly plan, metabolic baseline) prioritize `gemini-3.8-flash`.
    Each model is attempted up to 2 times with exponential backoff on HTTP 429/503. If a model returns 404, it immediately falls forward to the next candidate.
 2. **Prompt Injection Sanitizer**:
    `functions/src/gemini.ts` (lines 10-15)  

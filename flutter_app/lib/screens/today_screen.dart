@@ -55,10 +55,14 @@ class TodayScreen extends ConsumerWidget {
     return Center(
       child: ConstrainedBox(
         constraints: BoxConstraints(maxWidth: context.maxFluidContentWidth),
-        child: SingleChildScrollView(
-          physics: const BouncingScrollPhysics(),
-          padding: const EdgeInsets.fromLTRB(20.0, 12.0, 20.0, 120.0),
-          child: Column(
+        child: RefreshIndicator(
+          color: auraTheme.primary,
+          backgroundColor: auraTheme.surfaceCard,
+          onRefresh: () => ref.read(transformationEngineProvider.notifier).refreshState(),
+          child: SingleChildScrollView(
+            physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+            padding: const EdgeInsets.fromLTRB(20.0, 12.0, 20.0, 120.0),
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               // 1. TOP BAR: Date, Greeting, Ambient AURA Orb
@@ -639,7 +643,8 @@ class TodayScreen extends ConsumerWidget {
           ),
         ),
       ),
-    );
+    ),
+  );
   }
 
   Widget _buildCoachPromptChip({

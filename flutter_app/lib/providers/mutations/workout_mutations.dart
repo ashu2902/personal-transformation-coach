@@ -18,11 +18,14 @@ mixin WorkoutMutations on StateNotifier<TransformationEngineState> {
     final anyCompleted = updatedExercises.any((ex) => ex.sets.any((s) => s.completed));
     final allCompleted = updatedExercises.every((ex) => ex.sets.every((s) => s.completed));
 
-    WorkoutStatus newStatus = state.workout.status;
     if (allCompleted) {
-      newStatus = WorkoutStatus.completed;
       debugPrint('[AURA STATE] Workout completed! All sets marked done.');
-    } else if (anyCompleted && state.workout.status == WorkoutStatus.skipped) {
+      completeWorkout();
+      return;
+    }
+
+    WorkoutStatus newStatus = state.workout.status;
+    if (anyCompleted && state.workout.status == WorkoutStatus.skipped) {
       newStatus = WorkoutStatus.scheduled;
     }
 
@@ -30,9 +33,17 @@ mixin WorkoutMutations on StateNotifier<TransformationEngineState> {
       exercises: updatedExercises,
       status: newStatus,
     );
-    state = state.copyWith(workout: updatedWorkout);
+    final updatedRecent = Map<String, DailyWorkout>.from(state.recentWorkouts)
+      ..[state.workout.date] = updatedWorkout;
+    state = state.copyWith(
+      workout: updatedWorkout,
+      recentWorkouts: updatedRecent,
+    );
 
-    saveWorkoutToRemote(updatedWorkout);
+    updateWorkoutFieldsToRemote({
+      'exercises': updatedExercises.map((e) => e.toJson()).toList(),
+      'status': newStatus.name,
+    });
   }
 
   /// Workout Micro-Deviations (PRD Phase 3):
@@ -60,7 +71,12 @@ mixin WorkoutMutations on StateNotifier<TransformationEngineState> {
     }).toList();
 
     final updatedWorkout = state.workout.copyWith(exercises: updatedExercises);
-    state = state.copyWith(workout: updatedWorkout);
+    final updatedRecent = Map<String, DailyWorkout>.from(state.recentWorkouts)
+      ..[state.workout.date] = updatedWorkout;
+    state = state.copyWith(
+      workout: updatedWorkout,
+      recentWorkouts: updatedRecent,
+    );
     updateWorkoutFieldsToRemote({
       'exercises': updatedExercises.map((e) => e.toJson()).toList(),
     });
@@ -68,17 +84,7 @@ mixin WorkoutMutations on StateNotifier<TransformationEngineState> {
 
   void markAllExercisesCompleted() {
     debugPrint('[AURA STATE] Marking all workout exercises & sets completed in bulk');
-    final updatedExercises = state.workout.exercises.map((ex) {
-      final updatedSets = ex.sets.map((s) => s.copyWith(completed: true)).toList();
-      return ex.copyWith(sets: updatedSets);
-    }).toList();
-
-    final updatedWorkout = state.workout.copyWith(
-      exercises: updatedExercises,
-      status: WorkoutStatus.completed,
-    );
-    state = state.copyWith(workout: updatedWorkout);
-    saveWorkoutToRemote(updatedWorkout);
+    completeWorkout();
   }
 
   void substituteExercise(String exerciseId, ExerciseDefinition newDefinition) {
@@ -94,16 +100,28 @@ mixin WorkoutMutations on StateNotifier<TransformationEngineState> {
     }).toList();
 
     final updatedWorkout = state.workout.copyWith(exercises: updatedExercises);
-    state = state.copyWith(workout: updatedWorkout);
-    updateWorkoutFieldsToRemote({
-      'exercises': updatedExercises.map((e) => e.toJson()).toList(),
-    });
+    final updatedRecent = Map<String, DailyWorkout>.from(state.recentWorkouts)
+      ..[state.workout.date] = updatedWorkout;
+    state = state.copyWith(
+      workout: updatedWorkout,
+      recentWorkouts: updatedRecent,
+    );
+    saveWorkoutToRemote(updatedWorkout);
   }
 
   void updateWorkoutStatus(WorkoutStatus status) {
     debugPrint('[AURA STATE] Updating workout status: ${status.name}');
+    if (status == WorkoutStatus.completed) {
+      completeWorkout();
+      return;
+    }
     final updatedWorkout = state.workout.copyWith(status: status);
-    state = state.copyWith(workout: updatedWorkout);
+    final updatedRecent = Map<String, DailyWorkout>.from(state.recentWorkouts)
+      ..[state.workout.date] = updatedWorkout;
+    state = state.copyWith(
+      workout: updatedWorkout,
+      recentWorkouts: updatedRecent,
+    );
     updateWorkoutFieldsToRemote({
       'status': status.name,
     });
@@ -113,4 +131,6 @@ mixin WorkoutMutations on StateNotifier<TransformationEngineState> {
   void saveWorkoutToRemote(DailyWorkout workout);
 
   void updateWorkoutFieldsToRemote(Map<String, dynamic> fields);
+
+  void completeWorkout({String? dateStr, String? notes});
 }

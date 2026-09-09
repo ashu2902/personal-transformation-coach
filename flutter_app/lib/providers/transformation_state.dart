@@ -8,6 +8,8 @@ import '../models/models.dart';
 import '../services/transformation_repository.dart';
 import '../services/ai_service.dart';
 import '../services/firebase_service.dart';
+import '../services/analytics_service.dart';
+import 'analytics_provider.dart';
 import 'mutations/workout_mutations.dart';
 import 'mutations/nutrition_mutations.dart';
 import 'mutations/recovery_mutations.dart';
@@ -144,13 +146,24 @@ class TransformationEngineState {
 
   /// Evaluates if progress is accounted for (logged or marked skipped) for a given date
   bool isProgressTrackedForDate(String dateStr) {
-    final hasProgressEntry = progressHistory.any((p) => p.date == dateStr);
-    final hasRecentWorkout = recentWorkouts.containsKey(dateStr);
+    final hasProgressEntry = progressHistory.any((p) {
+      if (p.date != dateStr) return false;
+      if (p.workoutStatus == WorkoutStatus.completed || p.workoutStatus == WorkoutStatus.skipped) {
+        return true;
+      }
+      final notes = (p.notes ?? '').toLowerCase();
+      return notes.contains('skipped') || notes.contains('workout') || notes.contains('session');
+    });
+    final recent = recentWorkouts[dateStr];
+    final hasRecentCompletedOrSkipped = recent != null &&
+        (recent.status == WorkoutStatus.completed ||
+            recent.status == WorkoutStatus.skipped ||
+            recent.exercises.any((ex) => ex.sets.any((s) => s.completed)));
     final hasWorkoutActivity = workout.date == dateStr &&
         (workout.status == WorkoutStatus.completed ||
             workout.status == WorkoutStatus.skipped ||
             workout.exercises.any((ex) => ex.sets.any((s) => s.completed)));
-    return hasProgressEntry || hasRecentWorkout || hasWorkoutActivity;
+    return hasProgressEntry || hasRecentCompletedOrSkipped || hasWorkoutActivity;
   }
 
   /// Determines if a workout was specifically completed (not skipped) on a date
@@ -204,8 +217,13 @@ class TransformationEngineState {
     return recentWorkouts[dateStr];
   }
 
-  /// Calculates effective workout status (if progress is untracked, treat as skipped/did not work out)
+  /// Calculates effective workout status (if progress is untracked for past days, treat as skipped/did not work out)
   WorkoutStatus get effectiveTodayWorkoutStatus {
+    final todayStr = DateTime.now().toIso8601String().split('T')[0];
+    // Today's workout is actively scheduled or in-progress, never falsely evaluate to skipped
+    if (workout.date == todayStr) {
+      return workout.status;
+    }
     final isTracked = isProgressTrackedForDate(workout.date);
     if (!isTracked && workout.status != WorkoutStatus.completed) {
       return WorkoutStatus.skipped;
@@ -308,6 +326,7 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
   final FirebaseFirestoreService _firestore;
   final FirebaseAuthService _auth;
   final AIService _aiService;
+  final IAnalyticsService _analytics;
   AIService get aiService => _aiService;
 
   StreamSubscription<DocumentSnapshot>? _workoutSubscription;
@@ -323,17 +342,19 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
     FirebaseFirestoreService? firestore,
     FirebaseAuthService? auth,
     AIService? aiService,
+    IAnalyticsService? analytics,
     bool autoInit = true,
   })  : _repository = repository ?? LocalTransformationRepository(),
         _firestore = firestore ?? FirebaseFirestoreService(),
         _auth = auth ?? FirebaseAuthService(),
         _aiService = aiService ?? GeminiAIProvider(),
+        _analytics = analytics ?? MixpanelAnalyticsService(),
         super(_initialState()) {
     if (autoInit) {
       initFromRepository();
       _authSubscription = _auth.authStateChanges.listen((user) {
-        if (user != null && state.isOnboardingComplete) {
-          setupSubscriptions(user.uid);
+        if (user != null) {
+          initFromRepository();
         }
       });
     }
@@ -397,13 +418,19 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
   }
 
 
+  bool _isInitializingFromRepo = false;
+
   Future<void> initFromRepository() async {
+    if (_isInitializingFromRepo) return;
+    _isInitializingFromRepo = true;
+
     debugPrint('[AURA STATE] Initializing state from online Firestore...');
 
     final uid = _auth.uid;
     if (uid == null) {
       debugPrint('[AURA STATE] No authenticated Firebase user. Setting isOnboardingComplete = false');
       state = state.copyWith(isOnboardingComplete: false, isInitializing: false);
+      _isInitializingFromRepo = false;
       return;
     }
 
@@ -456,7 +483,15 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
     } catch (e) {
       debugPrint('[AURA STATE] initFromRepository error: $e');
       state = state.copyWith(isInitializing: false);
+    } finally {
+      _isInitializingFromRepo = false;
     }
+  }
+
+  /// Pull-to-refresh hook to fetch the latest state from Firestore across all systems
+  Future<void> refreshState() async {
+    debugPrint('[AURA STATE] Pull-to-refresh: fetching latest state from remote repository...');
+    await initFromRepository();
   }
 
   void _syncTodayWorkoutWithWeeklyPlan(WeeklyPlan plan) {
@@ -555,7 +590,12 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
       ],
     );
 
-    state = state.copyWith(workout: derivedWorkout);
+    final updatedRecent = Map<String, DailyWorkout>.from(state.recentWorkouts)
+      ..[todayStr] = derivedWorkout;
+    state = state.copyWith(
+      workout: derivedWorkout,
+      recentWorkouts: updatedRecent,
+    );
     await _firestore.saveDailyWorkout(uid, todayStr, derivedWorkout);
     debugPrint('[AURA STATE] Auto-derived workout saved for $todayStr: ${derivedWorkout.title}');
   }
@@ -577,7 +617,29 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
       if (doc.exists && doc.data() != null) {
         final data = doc.data() as Map<String, dynamic>;
         final remoteWorkout = _firestore.workoutFromMap(data);
-        state = state.copyWith(workout: remoteWorkout);
+
+        // Guard against stale stream snapshot overwrite if local state has newer completed sets or status
+        final localCompletedCount = state.workout.exercises.fold<int>(
+          0, (sum, ex) => sum + ex.sets.where((s) => s.completed).length,
+        );
+        final remoteCompletedCount = remoteWorkout.exercises.fold<int>(
+          0, (sum, ex) => sum + ex.sets.where((s) => s.completed).length,
+        );
+
+        if (remoteWorkout.date == state.workout.date &&
+            localCompletedCount > remoteCompletedCount &&
+            remoteWorkout.status != WorkoutStatus.completed &&
+            state.workout.status != WorkoutStatus.completed) {
+          debugPrint('[AURA STATE] Ignored stale remote workout stream snapshot (local: $localCompletedCount vs remote: $remoteCompletedCount)');
+          return;
+        }
+
+        final updatedRecent = Map<String, DailyWorkout>.from(state.recentWorkouts)
+          ..[remoteWorkout.date] = remoteWorkout;
+        state = state.copyWith(
+          workout: remoteWorkout,
+          recentWorkouts: updatedRecent,
+        );
       } else {
         // Auto-derive today's workout if none exists yet
         _autoDeriveTodayWorkoutIfMissing(uid, todayStr);
@@ -996,112 +1058,83 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
   }
 
   @override
-  void updateExerciseSet(String exerciseId, int setIndex, bool completed) {
-    debugPrint('[AURA STATE] Updating exercise set: $exerciseId (Set #${setIndex + 1} completed: $completed)');
-    final updatedExercises = state.workout.exercises.map((ex) {
-      if (ex.id != exerciseId) return ex;
-      final updatedSets = List<ExerciseSet>.from(ex.sets);
-      updatedSets[setIndex] = updatedSets[setIndex].copyWith(completed: completed);
-      return ex.copyWith(sets: updatedSets);
-    }).toList();
+  void completeWorkout({String? dateStr, String? notes}) {
+    final targetDate = dateStr ?? state.workout.date;
+    debugPrint('[AURA STATE] Completing workout for $targetDate');
 
-    final anyCompleted = updatedExercises.any((ex) => ex.sets.any((s) => s.completed));
-    final allCompleted = updatedExercises.every((ex) => ex.sets.every((s) => s.completed));
-
-    WorkoutStatus newStatus = state.workout.status;
-    if (allCompleted) {
-      newStatus = WorkoutStatus.completed;
-      debugPrint('[AURA STATE] Workout completed! All sets marked done.');
-    } else if (anyCompleted && state.workout.status == WorkoutStatus.skipped) {
-      newStatus = WorkoutStatus.scheduled;
-    }
-
-    final updatedWorkout = state.workout.copyWith(
-      exercises: updatedExercises,
-      status: newStatus,
-    );
-    state = state.copyWith(workout: updatedWorkout);
-
-    final uid = _auth.uid;
-    if (uid != null) {
-      _firestore.updateDailyWorkoutField(uid, state.workout.date, {
-        'exercises': updatedExercises.map((e) => e.toJson()).toList(),
-        'status': newStatus.name,
-      });
-    }
-  }
-
-  @override
-  void markAllExercisesCompleted() {
-    debugPrint('[AURA STATE] Marking all workout exercises & sets completed in bulk');
     final updatedExercises = state.workout.exercises.map((ex) {
       final updatedSets = ex.sets.map((s) => s.copyWith(completed: true)).toList();
       return ex.copyWith(sets: updatedSets);
     }).toList();
 
-    final updatedWorkout = state.workout.copyWith(
+    final completedWorkout = state.workout.copyWith(
       exercises: updatedExercises,
       status: WorkoutStatus.completed,
     );
-    state = state.copyWith(workout: updatedWorkout);
+
+    final updatedRecent = Map<String, DailyWorkout>.from(state.recentWorkouts)
+      ..[targetDate] = completedWorkout;
+
+    final progressEntry = ProgressEntry(
+      date: targetDate,
+      weightKg: state.profile.weightKg,
+      notes: notes ?? 'Completed: ${completedWorkout.title}',
+      workoutStatus: WorkoutStatus.completed,
+    );
+    final newHistory = List<ProgressEntry>.from(state.progressHistory)
+      ..removeWhere((p) => p.date == targetDate)
+      ..add(progressEntry);
+
+    state = state.copyWith(
+      workout: targetDate == state.workout.date ? completedWorkout : state.workout,
+      recentWorkouts: updatedRecent,
+      progressHistory: newHistory,
+    );
 
     final uid = _auth.uid;
     if (uid != null) {
-      _firestore.updateDailyWorkoutField(uid, state.workout.date, {
-        'exercises': updatedExercises.map((e) => e.toJson()).toList(),
-        'status': WorkoutStatus.completed.name,
-      });
+      _firestore.saveDailyWorkout(uid, targetDate, completedWorkout);
+      _firestore.saveProgress(uid, targetDate, progressEntry);
     }
-  }
+    _repository.saveProgressEntry(progressEntry);
 
-  @override
-  void substituteExercise(String exerciseId, ExerciseDefinition newDefinition) {
-    debugPrint('[AURA STATE] Substituting exercise $exerciseId -> ${newDefinition.name}');
-    final updatedExercises = state.workout.exercises.map((ex) {
-      if (ex.id != exerciseId) return ex;
-      return ex.copyWith(
-        name: newDefinition.name,
-        targetMuscle: newDefinition.targetMuscle,
-        equipmentRequired: newDefinition.equipment.name,
-        notes: 'Substituted for ${ex.name}',
-      );
-    }).toList();
-
-    final updatedWorkout = state.workout.copyWith(exercises: updatedExercises);
-    state = state.copyWith(workout: updatedWorkout);
-    final uid = _auth.uid;
-    if (uid != null) {
-      _firestore.saveDailyWorkout(uid, state.workout.date, updatedWorkout);
-    }
+    // Mixpanel event: prescription_completed (Core Value Moment)
+    final totalSets = completedWorkout.exercises.fold<int>(0, (sum, ex) => sum + ex.sets.length);
+    _analytics.logEvent(
+      AuraAnalyticsEvents.prescriptionCompleted,
+      properties: {
+        'workout_type': completedWorkout.title,
+        'focus_area': completedWorkout.focusArea,
+        'estimated_duration_min': completedWorkout.estimatedDurationMin,
+        'exercise_count': completedWorkout.exercises.length,
+        'total_sets': totalSets,
+        'is_adapted': completedWorkout.adaptationNote != null && completedWorkout.adaptationNote!.isNotEmpty,
+        'coach_soul': state.profile.coachSoul.name,
+      },
+    );
   }
 
   void trackProgressForToday() {
     debugPrint('[AURA STATE] Marking daily progress tracked for today');
     final todayStr = DateTime.now().toIso8601String().split('T')[0];
-    final existing = state.progressHistory.any((p) => p.date == todayStr);
 
     final todayEntry = ProgressEntry(
       date: todayStr,
       weightKg: state.profile.weightKg,
       notes: 'Quick daily check-in',
+      workoutStatus: state.workout.status,
     );
 
-    if (!existing) {
-      final newHistory = List<ProgressEntry>.from(state.progressHistory)..add(todayEntry);
-      state = state.copyWith(progressHistory: newHistory);
-      _repository.saveProgressEntry(todayEntry);
-    }
+    final newHistory = List<ProgressEntry>.from(state.progressHistory)
+      ..removeWhere((p) => p.date == todayStr)
+      ..add(todayEntry);
+    state = state.copyWith(progressHistory: newHistory);
 
-    WorkoutStatus updatedWorkoutStatus = state.workout.status;
-    if (updatedWorkoutStatus == WorkoutStatus.skipped) {
-      updatedWorkoutStatus = WorkoutStatus.scheduled;
-    }
-
-    final updatedWorkout = state.workout.copyWith(status: updatedWorkoutStatus);
     final uid = _auth.uid;
     if (uid != null) {
-      _firestore.saveDailyWorkout(uid, todayStr, updatedWorkout);
+      _firestore.saveProgress(uid, todayStr, todayEntry);
     }
+    _repository.saveProgressEntry(todayEntry);
   }
 
   Future<void> markPastWorkoutSkipped(String dateStr) async {
@@ -1683,16 +1716,7 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
     await addChatMessage(preview.inverseCommand!);
   }
 
-  @override
-  void updateWorkoutStatus(WorkoutStatus status) {
-    debugPrint('[AURA STATE] Updating workout status: ${status.name}');
-    final updatedWorkout = state.workout.copyWith(status: status);
-    state = state.copyWith(workout: updatedWorkout);
-    final uid = _auth.uid;
-    if (uid != null) {
-      _firestore.saveDailyWorkout(uid, state.workout.date, updatedWorkout);
-    }
-  }
+
 
   void updateProfile(UserProfile updatedProfile) {
     debugPrint('[AURA STATE] Profile updated directly');
@@ -1986,5 +2010,6 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
 
 final transformationEngineProvider =
     StateNotifierProvider<TransformationEngineNotifier, TransformationEngineState>((ref) {
-  return TransformationEngineNotifier();
+  final analytics = ref.watch(analyticsServiceProvider);
+  return TransformationEngineNotifier(analytics: analytics);
 });

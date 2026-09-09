@@ -327,4 +327,95 @@ describe("AURA Unified Command Orchestrator Tests", () => {
     assert.equal(result.exercises[1].sets[0].targetWeightKg, 21);
     assert.ok(preview.changes[0].description.includes("+5kg"));
   });
+
+  // ─── Test Scenario 6: Robust LLM Null-Value Sanitization ─────────
+  test("Test 6: LLM returns null properties (e.g. targetDate: null) and empty meals array", async () => {
+    const mockDb = createMockFirestore() as any;
+    const resCtx = buildResolutionContext(mockUid, todayStr, baselineState, undefined, mockDb);
+    const execCtx: ExecutionContext = { uid: mockUid, db: mockDb, todayStr, userState: baselineState };
+
+    const { preview, result } = await defaultCommandRegistry.executeCommand(
+      "nutrition.logMeal",
+      {
+        meals: [],
+        waterMl: 750,
+        targetDate: null,
+      },
+      resCtx,
+      execCtx
+    );
+
+    assert.equal(preview.commandName, "nutrition.logMeal");
+    assert.equal(result.waterMl, 750);
+    assert.equal(result.meals.length, 0);
+    assert.ok(preview.changes.some((c) => c.target === "Hydration" && c.description.includes("+750ml")));
+  });
+
+  // ─── Test Scenario 7: Weight Calibration Prescription ────────────
+  test("Test 7: Prompt: 'My workouts don\\'t show what weight i should be lifting. Add weights.'", async () => {
+    const mockDb = createMockFirestore() as any;
+    const workoutWithZeroWeights = {
+      date: todayStr,
+      title: "Full Body Starter",
+      estimatedDurationMin: 45,
+      exercises: [
+        {
+          id: "ex_bench",
+          name: "Dumbbell Bench Press",
+          targetMuscle: "Chest",
+          equipmentRequired: "dumbbells",
+          sets: [
+            { setNumber: 1, targetReps: 10, targetWeightKg: 0, completed: false },
+            { setNumber: 2, targetReps: 10, targetWeightKg: 0, completed: false },
+          ],
+        },
+        {
+          id: "ex_squat",
+          name: "Goblet Squat",
+          targetMuscle: "Quads",
+          equipmentRequired: "dumbbells",
+          sets: [
+            { setNumber: 1, targetReps: 12, targetWeightKg: 0, completed: false },
+          ],
+        },
+        {
+          id: "ex_plank",
+          name: "Plank Hold",
+          targetMuscle: "Core",
+          equipmentRequired: "bodyweight",
+          sets: [
+            { setNumber: 1, targetReps: 45, targetWeightKg: 0, completed: false },
+          ],
+        },
+      ],
+    };
+
+    const stateWithZeroWeights = {
+      ...baselineState,
+      workout: workoutWithZeroWeights,
+    };
+
+    const resCtx = buildResolutionContext(mockUid, todayStr, stateWithZeroWeights, undefined, mockDb);
+    const execCtx: ExecutionContext = { uid: mockUid, db: mockDb, todayStr, userState: stateWithZeroWeights };
+
+    const { preview, result } = await defaultCommandRegistry.executeCommand(
+      "workout.adapt",
+      {
+        reason: "My workouts don't show what weight i should be lifting for which exercise. Add weights.",
+        prescribeWeights: true,
+      },
+      resCtx,
+      execCtx
+    );
+
+    assert.equal(preview.commandName, "workout.adapt");
+    assert.ok(preview.summary.includes("Calibrated starting weights"));
+
+    // Dumbbell Bench Press should have received 10kg baseline
+    assert.equal(result.exercises[0].sets[0].targetWeightKg, 10);
+    // Goblet Squat should have received 12kg baseline
+    assert.equal(result.exercises[1].sets[0].targetWeightKg, 12);
+    // Plank Hold (bodyweight) should remain 0kg
+    assert.equal(result.exercises[2].sets[0].targetWeightKg, 0);
+  });
 });

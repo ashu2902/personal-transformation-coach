@@ -283,12 +283,16 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
 
             // 2. CONVERSATION MESSAGE LIST (Natively Pinned to Bottom with reverse: true)
             Expanded(
-              child: ListView.builder(
-                controller: _scrollController,
-                reverse: true, // Offset 0 is at bottom (latest messages)
-                physics: const BouncingScrollPhysics(),
-                padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
-                itemCount: totalCount,
+              child: RefreshIndicator(
+                color: auraTheme.primary,
+                backgroundColor: auraTheme.surfaceCard,
+                onRefresh: () => ref.read(transformationEngineProvider.notifier).refreshState(),
+                child: ListView.builder(
+                  controller: _scrollController,
+                  reverse: true, // Offset 0 is at bottom (latest messages)
+                  physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                  padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+                  itemCount: totalCount,
                 itemBuilder: (context, index) {
                   // If thinking, render the dynamic AI thinking indicator at the bottom (index 0)
                   if (isThinking && index == 0) {
@@ -611,6 +615,7 @@ class _CoachScreenState extends ConsumerState<CoachScreen> with SingleTickerProv
                 },
               ),
             ),
+          ),
 
             // 2.5 PENDING STRUCTURAL CONFIRMATIONS (Security Gate)
             if (state.pendingActions.isNotEmpty)

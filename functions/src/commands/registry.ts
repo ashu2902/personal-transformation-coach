@@ -108,8 +108,19 @@ export class CommandRegistry {
       throw new Error(`Unknown command: '${rawName}'`);
     }
 
-    // Phase 1: Input schema validation
-    const parseResult = cmd.inputSchema.safeParse(rawParameters || {});
+    // Phase 1: Input schema validation (sanitize nulls to undefined for LLM compatibility)
+    let sanitizedParams = rawParameters || {};
+    try {
+      if (typeof sanitizedParams === "object" && sanitizedParams !== null) {
+        sanitizedParams = JSON.parse(
+          JSON.stringify(sanitizedParams),
+          (_, v) => (v === null ? undefined : v)
+        );
+      }
+    } catch (_) {
+      sanitizedParams = rawParameters || {};
+    }
+    const parseResult = cmd.inputSchema.safeParse(sanitizedParams);
     if (!parseResult.success) {
       const issues = parseResult.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join(", ");
       throw new Error(`Malformed input for '${cmd.name}': ${issues}`);

@@ -57,12 +57,16 @@ class ProfileScreen extends ConsumerWidget {
       body: Center(
         child: ConstrainedBox(
           constraints: BoxConstraints(maxWidth: context.maxFluidContentWidth),
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+          child: RefreshIndicator(
+            color: auraTheme.primary,
+            backgroundColor: auraTheme.surfaceCard,
+            onRefresh: () => ref.read(transformationEngineProvider.notifier).refreshState(),
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
             // 1. User Header Card
             AuraCard(
               padding: const EdgeInsets.all(18),
@@ -403,6 +407,7 @@ class ProfileScreen extends ConsumerWidget {
       ),
     ),
   ),
+),
 );
   }
 

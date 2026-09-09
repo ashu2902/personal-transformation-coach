@@ -2,7 +2,8 @@ import { onRequest } from "firebase-functions/v2/https";
 import { defineSecret } from "firebase-functions/params";
 import * as admin from "firebase-admin";
 import * as crypto from "crypto";
-import { executeGeminiCall, sanitizeUserPrompt } from "./gemini";
+import { sanitizeUserPrompt } from "./gemini";
+import { executeAiGatewayCall, CoachSoulType } from "./aiGateway";
 import { buildResolutionContext, compressSemanticState } from "./context/contextBuilder";
 import { defaultCommandRegistry } from "./commands/registry";
 import { ExecutionContext } from "./commands/types";
@@ -10,6 +11,7 @@ import { ExecutionContext } from "./commands/types";
 admin.initializeApp();
 
 const geminiApiKey = defineSecret("GEMINI_API_KEY");
+const openrouterApiKey = defineSecret("OPENROUTER_API_KEY");
 
 /**
  * OpenFoodFacts API Integration for macro verification and enrichment.
@@ -51,7 +53,7 @@ async function lookupFoodMacros(foodName: string): Promise<{ calories?: number; 
  */
 export const processAiCommand = onRequest(
   {
-    secrets: [geminiApiKey],
+    secrets: [geminiApiKey, openrouterApiKey],
     cors: true,
     timeoutSeconds: 180,
     maxInstances: 20,
@@ -83,6 +85,15 @@ export const processAiCommand = onRequest(
     if (!apiKey) {
       res.status(500).json({ error: "Server Gemini API key secret is not configured." });
       return;
+    }
+
+    let openRouterKey = process.env.OPENROUTER_API_KEY || "";
+    if (!openRouterKey) {
+      try {
+        openRouterKey = openrouterApiKey.value() || "";
+      } catch (_) {
+        // OpenRouter secret not configured in GCP; fallback to direct Gemini API
+      }
     }
 
     const {
@@ -174,8 +185,8 @@ You MUST generate your empathetic "coachResponse" string FIRST in the JSON outpu
 
 AVAILABLE COMMANDS TO EMIT:
 - workout.substituteExercise: { "targetExercise": string | null, "reason": string | null, "replacementExercise": string | null }
-- workout.adjustVolume: { "targetExercise": string | null, "targetSetIndex": number | string | null, "deltaWeightKg": number | null, "deltaSets": number | null, "deltaReps": number | null, "scaleFactor": number | null, "reason": string | null }
-- workout.adapt: { "reason": string, "timeLimitMin": number | null, "intensityReduction": number | null }
+- workout.adjustVolume: { "targetExercise": string | null, "targetSetIndex": number | string | null, "deltaWeightKg": number | null, "targetWeightKg": number | null, "deltaSets": number | null, "deltaReps": number | null, "scaleFactor": number | null, "reason": string | null }
+- workout.adapt: { "reason": string, "timeLimitMin": number | null, "intensityReduction": number | null, "prescribeWeights": boolean | null }
 - workout.updateStatus: { "status": "completed" | "skipped" }
 - nutrition.logMeal: { "meals": [{ "name": string, "calories": number, "proteinG": number, "carbsG": number, "fatG": number }], "waterMl": number | null, "targetDate": string | null }
 - nutrition.updatePortion: { "mealName": string, "calories": number, "proteinG": number, "carbsG": number, "fatG": number, "targetDate": string | null }
@@ -189,10 +200,11 @@ AVAILABLE COMMANDS TO EMIT:
 
 INTENT & NATURAL LANGUAGE TARGET RESOLUTION RULES:
 1. If the user says "swap this", "swap it", "hurts my knee, swap it" or refers to an exercise without naming it, set targetExercise to "this exercise" and extract the reason (e.g. "knee pain").
-2. If the user says "make it 5kg heavier", "add 5kg", or asks to adjust weights/sets/reps, set targetExercise to "it" or the active exercise, and deltaWeightKg to 5.
+2. If the user says "make it 5kg heavier", "add 5kg", or asks to adjust weights/sets/reps, set targetExercise to "it" or the active exercise, and deltaWeightKg to 5 (or set targetWeightKg for specific absolute loads).
 3. If the user reports multi-domain updates (e.g. "ate 3 eggs and slept 6 hours"), emit MULTIPLE commands in the "commands" array (e.g. nutrition.logMeal + recovery.log).
 4. If the user buys equipment (e.g. "bought 20kg kettlebell") or changes schedule (e.g. "train 4 days a week"), emit the respective profile commands.
 5. If the user says "I'm exhausted today, take it easy" or has a time limit ("only 30 minutes"), emit workout.adapt with the reason or timeLimitMin.
+6. If the user says "My workouts don't show what weight i should be lifting", "add weights", "tell me what weights to lift", or asks to prescribe weights, emit workout.adapt with { "reason": "prescribe progressive baseline weights", "prescribeWeights": true }. In coachResponse, warmly explain that you have populated recommended target weights across their exercises, encouraging them to treat this week as a safe calibration baseline.
 
 Return strictly JSON:
 {
@@ -201,8 +213,23 @@ Return strictly JSON:
     { "name": "command.name", "parameters": {} }
   ]
 }`;
-          const result = await executeGeminiCall(apiKey, prompt, true, finalImageBase64, mimeType);
-          const parsed = JSON.parse(result.text.replace(/```json/g, "").replace(/```/g, "").trim());
+          const result = await executeAiGatewayCall({
+            prompt,
+            isJson: true,
+            soul: soul as CoachSoulType,
+            taskType: finalImageBase64 ? "vision" : "chat",
+            imageBase64: finalImageBase64,
+            mimeType,
+            openrouterApiKey: openRouterKey,
+            geminiApiKey: apiKey,
+          });
+          let parsed: any = {};
+          try {
+            parsed = JSON.parse(result.text.replace(/```json/g, "").replace(/```/g, "").trim());
+          } catch (pe) {
+            console.error(`[AI GATEWAY] JSON parse failed: ${pe}`);
+            parsed = { coachResponse: result.text, commands: [] };
+          }
           const incomingCommands: any[] = Array.isArray(parsed.commands)
             ? parsed.commands
             : (Array.isArray(parsed.actions) ? parsed.actions : []);
@@ -310,7 +337,14 @@ Return strictly JSON:
   "followUpQuestion": "string",
   "dynamicQuickReplies": ["string"]
 }`;
-          const result = await executeGeminiCall(apiKey, prompt, true);
+          const result = await executeAiGatewayCall({
+            prompt,
+            isJson: true,
+            soul: soul as CoachSoulType,
+            taskType: "chat",
+            openrouterApiKey: openRouterKey,
+            geminiApiKey: apiKey,
+          });
           const parsed = JSON.parse(result.text.replace(/```json/g, "").replace(/```/g, "").trim());
           res.status(200).json(parsed);
           return;
@@ -337,7 +371,15 @@ Return strictly JSON:
   "primaryNextStep": "1 actionable goal for next week",
   "adherenceScore": number
 }`;
-          const result = await executeGeminiCall(apiKey, prompt, true);
+          const result = await executeAiGatewayCall({
+            prompt,
+            isJson: true,
+            soul: soul as CoachSoulType,
+            taskType: "reasoning",
+            openrouterApiKey: openRouterKey,
+            geminiApiKey: apiKey,
+            preferredGeminiModel: "gemini-3.8-flash",
+          });
           const parsed = JSON.parse(result.text.replace(/```json/g, "").replace(/```/g, "").trim());
           res.status(200).json(parsed);
           return;
@@ -355,7 +397,14 @@ Return strictly JSON:
   "carbsG": number,
   "fatG": number
 }`;
-          const result = await executeGeminiCall(apiKey, prompt, true);
+          const result = await executeAiGatewayCall({
+            prompt,
+            isJson: true,
+            soul: soul as CoachSoulType,
+            taskType: "general",
+            openrouterApiKey: openRouterKey,
+            geminiApiKey: apiKey,
+          });
           const parsed = JSON.parse(result.text.replace(/```json/g, "").replace(/```/g, "").trim());
 
           if (uid) {
@@ -392,7 +441,15 @@ Return strictly JSON:
   "targetWaterMl": 2800,
   "reasoning": "string"
 }`;
-          const result = await executeGeminiCall(apiKey, prompt, true);
+          const result = await executeAiGatewayCall({
+            prompt,
+            isJson: true,
+            soul: soul as CoachSoulType,
+            taskType: "reasoning",
+            openrouterApiKey: openRouterKey,
+            geminiApiKey: apiKey,
+            preferredGeminiModel: "gemini-3.8-flash",
+          });
           const parsed = JSON.parse(result.text.replace(/```json/g, "").replace(/```/g, "").trim());
 
           if (uid) {
@@ -429,7 +486,14 @@ Return JSON:
   "targetFatG": number,
   "targetWaterMl": number
 }`;
-          const result = await executeGeminiCall(apiKey, prompt, true);
+          const result = await executeAiGatewayCall({
+            prompt,
+            isJson: true,
+            soul: soul as CoachSoulType,
+            taskType: "action",
+            openrouterApiKey: openRouterKey,
+            geminiApiKey: apiKey,
+          });
           const parsed = JSON.parse(result.text.replace(/```json/g, "").replace(/```/g, "").trim());
 
           if (uid) {
@@ -485,7 +549,15 @@ Return JSON:
     }
   ]
 }`;
-          const result = await executeGeminiCall(apiKey, prompt, true);
+          const result = await executeAiGatewayCall({
+            prompt,
+            isJson: true,
+            soul: soul as CoachSoulType,
+            taskType: "reasoning",
+            openrouterApiKey: openRouterKey,
+            geminiApiKey: apiKey,
+            preferredGeminiModel: "gemini-3.8-flash",
+          });
           const parsed = JSON.parse(result.text.replace(/```json/g, "").replace(/```/g, "").trim());
 
           const weekId = `w_${Date.now()}`;
@@ -555,7 +627,14 @@ Return JSON:
     }
   ]
 }`;
-          const result = await executeGeminiCall(apiKey, prompt, true);
+          const result = await executeAiGatewayCall({
+            prompt,
+            isJson: true,
+            soul: soul as CoachSoulType,
+            taskType: "action",
+            openrouterApiKey: openRouterKey,
+            geminiApiKey: apiKey,
+          });
           const parsed = JSON.parse(result.text.replace(/```json/g, "").replace(/```/g, "").trim());
 
           if (uid) {
@@ -612,7 +691,14 @@ Extract structured data. Return JSON:
   "energyLevel": 0,
   "coachFeedback": "1-2 sentences feedback written in your specific personality style"
 }`;
-          const result = await executeGeminiCall(apiKey, prompt, true);
+          const result = await executeAiGatewayCall({
+            prompt,
+            isJson: true,
+            soul: soul as CoachSoulType,
+            taskType: "general",
+            openrouterApiKey: openRouterKey,
+            geminiApiKey: apiKey,
+          });
           const parsed = JSON.parse(result.text.replace(/```json/g, "").replace(/```/g, "").trim());
           res.status(200).json(parsed);
           return;
@@ -627,11 +713,18 @@ Return strictly JSON:
 {
   "title": "string",
   "focusArea": "string",
-  "estimatedDurationMin": 45,
-  "adaptationNote": "string",
-  "exercises": [{"name": "string", "targetMuscle": "string", "equipmentRequired": "string", "targetSets": 3, "targetReps": 10, "targetWeightKg": 0, "notes": "string"}]
-}`;
-          const result = await executeGeminiCall(apiKey, prompt, true);
+  "exercises": [{"name": "string", "targetMuscle": "string", "equipmentRequired": "string", "targetSets": 3, "targetReps": 10, "targetWeightKg": 10, "notes": "string"}]
+}
+NOTE: For targetWeightKg, assign a realistic starting weight (e.g. 10-15kg for dumbbell/barbell lifts, or 0 for bodyweight exercises).`;
+          const result = await executeAiGatewayCall({
+            prompt,
+            isJson: true,
+            soul: soul as CoachSoulType,
+            taskType: "reasoning",
+            openrouterApiKey: openRouterKey,
+            geminiApiKey: apiKey,
+            preferredGeminiModel: "gemini-3.8-flash",
+          });
           const parsed = JSON.parse(result.text.replace(/```json/g, "").replace(/```/g, "").trim());
 
           if (uid) {

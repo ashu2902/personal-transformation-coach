@@ -113,23 +113,8 @@ class WorkoutScreen extends ConsumerWidget {
                 onPressed: isCompleted
                     ? null
                     : () {
-                        // Mark all sets done atomically in bulk
-                        notifier.markAllExercisesCompleted();
-                        notifier.trackProgressForToday();
-
-                        // Track Core Value Moment in Mixpanel
-                        ref.read(analyticsServiceProvider).logEvent(
-                          AuraAnalyticsEvents.prescriptionCompleted,
-                          properties: {
-                            'workout_type': workout.title,
-                            'focus_area': workout.focusArea,
-                            'estimated_duration_min': workout.estimatedDurationMin,
-                            'exercise_count': workout.exercises.length,
-                            'total_sets': totalSets,
-                            'is_adapted': workout.adaptationNote != null && workout.adaptationNote!.isNotEmpty,
-                            'coach_soul': state.profile.coachSoul.name,
-                          },
-                        );
+                        // Complete workout atomically (marks all sets, updates status & history, logs Mixpanel)
+                        notifier.completeWorkout();
 
                         _showWorkoutCompletedDialog(context, state, workout);
                       },
@@ -142,12 +127,16 @@ class WorkoutScreen extends ConsumerWidget {
       body: Center(
         child: ConstrainedBox(
           constraints: BoxConstraints(maxWidth: context.maxFluidContentWidth),
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.fromLTRB(16.0, 12.0, 16.0, 40.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
+          child: RefreshIndicator(
+            color: auraTheme.primary,
+            backgroundColor: auraTheme.surfaceCard,
+            onRefresh: () => ref.read(transformationEngineProvider.notifier).refreshState(),
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+              padding: const EdgeInsets.fromLTRB(16.0, 12.0, 16.0, 40.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
                 // 1. Workout Overview Card
                 AuraCard(
                   padding: const EdgeInsets.all(16),
@@ -418,7 +407,8 @@ class WorkoutScreen extends ConsumerWidget {
           ),
         ),
       ),
-    );
+    ),
+  );
   }
 
   void _showWorkoutCompletedDialog(

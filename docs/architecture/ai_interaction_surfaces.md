@@ -338,9 +338,11 @@ The Workout Screen also has two **non-AI** interaction mechanisms that are criti
 ### Gemini Model Fallback Chain
 ```typescript
 const candidateModels = [
-  "gemini-3.5-flash-lite",   // Primary (fastest, cheapest)
-  "gemini-3.1-flash-lite",   // Fallback 1
-  "gemini-3.5-flash",        // Fallback 2 (most capable)
+  "gemini-3.5-flash-lite",   // Primary (500 RPD, 15 RPM, ~800ms)
+  "gemini-3.1-flash-lite",   // Secondary Lite (500 RPD, 15 RPM)
+  "gemini-flash-lite-latest", // Auto-updating Lite alias
+  "gemini-3.8-flash",        // High-IQ Fallback & structural planner (20 RPD)
+  "gemini-3.6-flash",        // Mid-tier Flash Fallback (20 RPD)
 ];
 ```
 Each model gets 2 retry attempts. 400ms backoff on 503/429. No wildcard discovery.

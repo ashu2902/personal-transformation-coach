@@ -77,10 +77,17 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
       body: Center(
         child: ConstrainedBox(
           constraints: BoxConstraints(maxWidth: context.maxFluidContentWidth),
-          child: SingleChildScrollView(
-            physics: const BouncingScrollPhysics(),
-            padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
-            child: Column(
+          child: RefreshIndicator(
+            color: auraTheme.primary,
+            backgroundColor: auraTheme.surfaceCard,
+            onRefresh: () async {
+              await ref.read(transformationEngineProvider.notifier).refreshState();
+              _loadWeeklyDebrief();
+            },
+            child: SingleChildScrollView(
+              physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+              padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 16.0),
+              child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 // Screen Header
@@ -372,7 +379,8 @@ class _InsightsScreenState extends ConsumerState<InsightsScreen> {
           ),
         ),
       ),
-    );
+    ),
+  );
   }
 
   Widget _buildWeeklyDebriefHero(AuraThemeExtension auraTheme, CoachSoul soul) {

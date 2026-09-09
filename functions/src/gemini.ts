@@ -22,14 +22,20 @@ export async function executeGeminiCall(
   prompt: string,
   isJson: boolean = false,
   imageBase64?: string,
-  mimeType?: string
+  mimeType?: string,
+  preferredModel?: string
 ): Promise<{ text: string; model: string }> {
-  const candidateModels = [
-    "gemini-2.5-flash-lite",
-    "gemini-2.5-flash",
-    "gemini-2.0-flash",
-    "gemini-1.5-flash",
+  const defaultCandidateModels = [
+    "gemini-3.5-flash-lite", // Primary: Ultra-fast 3.5 Flash Lite
+    "gemini-3.1-flash-lite", // Secondary: Low-latency 3.1 Lite
+    "gemini-flash-latest", // Auto-updating Flash alias
+    "gemini-3.8-flash", // High-IQ Fallback & structural planner
+    "gemini-3.6-flash", // Mid-tier Flash Fallback
   ];
+
+  const candidateModels = preferredModel
+    ? [preferredModel, ...defaultCandidateModels.filter((m) => m !== preferredModel)]
+    : defaultCandidateModels;
 
   const parts: Array<Record<string, any>> = [];
   if (imageBase64 && typeof imageBase64 === "string" && imageBase64.trim().length > 0) {

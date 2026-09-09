@@ -33,8 +33,13 @@ class NutritionScreen extends StatelessWidget {
         return Center(
           child: ConstrainedBox(
             constraints: BoxConstraints(maxWidth: context.maxFluidContentWidth),
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(16.0),
+            child: RefreshIndicator(
+              color: auraTheme.primary,
+              backgroundColor: auraTheme.surfaceCard,
+              onRefresh: () => ref.read(transformationEngineProvider.notifier).refreshState(),
+              child: SingleChildScrollView(
+                physics: const AlwaysScrollableScrollPhysics(parent: BouncingScrollPhysics()),
+                padding: const EdgeInsets.all(16.0),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -259,7 +264,8 @@ class NutritionScreen extends StatelessWidget {
           ),
         ),
       ),
-    );
+    ),
+  );
       },
     );
   }

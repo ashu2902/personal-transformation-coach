@@ -15,10 +15,11 @@ const logMealInputSchema = z.object({
         fatG: z.number().optional().describe("Fat in grams"),
       })
     )
-    .min(1)
+    .optional()
+    .default([])
     .describe("List of meals or foods to log"),
-  waterMl: z.number().optional().describe("Water intake in milliliters to add"),
-  targetDate: z.string().optional().describe("Date 'YYYY-MM-DD', defaults to today"),
+  waterMl: z.number().nullish().describe("Water intake in milliliters to add"),
+  targetDate: z.string().nullish().describe("Date 'YYYY-MM-DD', defaults to today"),
 });
 
 interface ResolvedMealLog {
@@ -51,6 +52,12 @@ export const nutritionLogMealCommand: CommandDefinition<
     const verifiedMeals: ResolvedMealLog["meals"] = [];
 
     for (const m of input.meals) {
+      const lowerName = m.name.toLowerCase().trim();
+      // Skip pure water entries from solid food list if waterMl is logged
+      if (lowerName === "water" || lowerName === "glass of water" || lowerName === "bottle of water" || lowerName === "hydration") {
+        continue;
+      }
+
       let cal = Number(m.calories) || 0;
       let prot = Number(m.proteinG) || 0;
       let carb = Number(m.carbsG) || 0;
@@ -58,9 +65,12 @@ export const nutritionLogMealCommand: CommandDefinition<
 
       // If user provided a meal with no/low macros, enrich with basic estimation if available
       if (cal === 0 && prot === 0) {
-        // Fallback default estimation for common items like eggs
-        const lowerName = m.name.toLowerCase();
-        if (lowerName.includes("egg")) {
+        if (lowerName.includes("water") || lowerName.includes("black coffee") || lowerName.includes("green tea") || lowerName.includes("diet soda") || lowerName.includes("diet coke")) {
+          cal = 0;
+          prot = 0;
+          carb = 0;
+          fat = 0;
+        } else if (lowerName.includes("egg")) {
           const countMatch = lowerName.match(/(\d+)\s*egg/);
           const count = countMatch ? parseInt(countMatch[1], 10) : 1;
           cal = count * 75;
