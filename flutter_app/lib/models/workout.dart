@@ -57,6 +57,11 @@ enum WorkoutStatus {
 abstract class DailyWorkout with _$DailyWorkout {
   const DailyWorkout._();
 
+  bool get isRestDay =>
+      exercises.isEmpty ||
+      title.toLowerCase().contains('rest') ||
+      title.toLowerCase().contains('fasting');
+
   const factory DailyWorkout({
     required String id,
     required String date,

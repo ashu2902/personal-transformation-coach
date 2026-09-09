@@ -514,6 +514,108 @@ Return JSON:
           return;
         }
 
+        case "curateMealPlanChat": {
+          const userMessage = sanitizedMessage || "Curate today's meal plan";
+          const historyStr = Array.isArray(history)
+            ? history.map((m: any) => `${m.sender === "user" ? "User" : "Coach"}: ${m.text}`).join("\n")
+            : "";
+          const profile = effectiveState?.profile || {};
+          const workout = effectiveState?.workout || {};
+          const nutrition = effectiveState?.nutrition || {};
+          const targetCal = nutrition.targetCalories || 2000;
+          const targetProt = nutrition.targetProteinG || 150;
+          const targetCarb = nutrition.targetCarbsG || 200;
+          const targetFat = nutrition.targetFatG || 60;
+
+          const prompt = `SYSTEM INSTRUCTION:
+${coachToneInstruction}
+
+You are the AURA Nutrition & Meal Curation Coach.
+Your goal is to guide the user to a curated, highly practical daily meal plan tailored specifically to their day.
+
+User Context:
+- Name: ${profile.name || "Client"}
+- Goal: ${profile.goal || "general transformation"}
+- Dietary Preference: ${profile.dietaryPreference || "nonVeg"}
+- Current Weight: ${profile.weightKg || 70}kg
+- Target Macros: ${targetCal} kcal, ${targetProt}g Protein, ${targetCarb}g Carbs, ${targetFat}g Fat
+- Today's Workout: ${workout.title || "Daily Training"} (${workout.focusArea || "General"}, ${workout.estimatedDurationMin || 45} mins, isRestDay: ${workout.isRestDay ? "true" : "false"})
+${compressedMemory ? `Long-term Memory: ${compressedMemory}` : ""}
+
+${historyStr ? `Conversation So Far:\n${historyStr}\n` : ""}
+User's Latest Message: "${userMessage}"
+
+CRITICAL RULES:
+1. Dynamic Meal Structure: Do NOT force a rigid 4-meal slot template. Determine the number of meals (e.g. 2 large meals + a shake, 3 meals, or 4 meals) based on the user's explicit preference or context.
+2. If the user is just starting the curation and has NOT specified meal count or cooking preference yet, ask a brief, warm question and provide 3-4 "dynamicQuickReplies" (e.g. ["3 meals + 1 snack", "2 large meals + protein shake", "Quick 15-min meals", "High-protein post-workout focus"]). In this case, set "isFinalPlan": false.
+3. If the user specifies meal count, preferences, or says "curate" / "give me the plan" / picks a quick reply:
+   Generate the complete curated meal plan! Set "isFinalPlan": true.
+   The total calories of the meals must sum within 5% of target (${targetCal} kcal) and total protein within 5g of target (${targetProt}g).
+   Align carb and protein timing with today's workout (${workout.title}).
+   Provide realistic ingredients, portions, and quick 1-2 sentence cooking instructions.
+4. Always speak in the chosen Coach Soul tone (${soul}).
+
+Return strictly valid JSON:
+{
+  "coachResponse": "string (warm conversational message explaining the strategy)",
+  "dynamicQuickReplies": ["string"],
+  "isFinalPlan": boolean,
+  "curatedMealPlan": {
+    "title": "string",
+    "overview": "string (strategy connecting fuel to today's workout)",
+    "totalCalories": number,
+    "totalProteinG": number,
+    "totalCarbsG": number,
+    "totalFatG": number,
+    "meals": [
+      {
+        "id": "string",
+        "name": "string",
+        "slotName": "string (e.g. Pre-Workout Breakfast, Post-Workout Lunch, Evening Fuel)",
+        "description": "string (portions and ingredients, e.g. 180g grilled chicken, 1 cup brown rice, 150g steamed broccoli)",
+        "calories": number,
+        "proteinG": number,
+        "carbsG": number,
+        "fatG": number,
+        "prepTime": "string (e.g. 15 mins)",
+        "instructions": "string (quick prep tip)",
+        "tags": ["string (e.g. High Protein, Clean Carb)"]
+      }
+    ]
+  }
+}`;
+          const result = await executeAiGatewayCall({
+            prompt,
+            isJson: true,
+            soul: soul as CoachSoulType,
+            taskType: "reasoning",
+            openrouterApiKey: openRouterKey,
+            geminiApiKey: apiKey,
+            preferredGeminiModel: "gemini-3.8-flash",
+          });
+          const parsed = JSON.parse(result.text.replace(/```json/g, "").replace(/```/g, "").trim());
+
+          if (parsed.isFinalPlan && parsed.curatedMealPlan && uid) {
+            const planToSave = {
+              ...parsed.curatedMealPlan,
+              id: parsed.curatedMealPlan.id || `cmp_${Date.now()}`,
+              date: todayStr,
+              createdAt: new Date().toISOString(),
+            };
+            await db.collection("users").doc(uid).collection("nutrition").doc(todayStr).set(
+              {
+                curatedMealPlan: planToSave,
+                updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+              },
+              { merge: true }
+            );
+            parsed.curatedMealPlan = planToSave;
+          }
+
+          res.status(200).json(parsed);
+          return;
+        }
+
         case "generateAdaptedWorkout": {
           const reason = sanitizedMessage || "General adaptation";
           const resCtx = buildResolutionContext(uid, todayStr, effectiveState, contextEnvelope, db);

@@ -6,6 +6,7 @@ import '../../models/weekly_plan.dart';
 import '../../providers/transformation_state.dart';
 import '../../theme/theme.dart';
 import '../../widgets/common/common.dart';
+import '../meal_curation_screen.dart';
 
 /// Comprehensive modal bottom sheet allowing users to view, complete,
 /// backfill, skip, or undo workout tracking for any day of the week.
@@ -159,7 +160,76 @@ void showWorkoutDayDetailSheet({
                 const SizedBox(height: 4),
                 Text(focusArea, style: AuraTypography.bodyMedium.copyWith(color: AuraColors.textSecondary)),
               ],
-              const SizedBox(height: 16),
+              const SizedBox(height: 12),
+
+              // Nutrition Focus Strategy
+              if (planDay?.nutritionFocus != null && planDay!.nutritionFocus!.isNotEmpty) ...[
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: auraTheme.primary.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(
+                      color: auraTheme.primary.withValues(alpha: 0.2),
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        children: [
+                          Icon(LucideIcons.utensils, size: 14, color: auraTheme.primary),
+                          const SizedBox(width: 6),
+                          Text(
+                            'NUTRITION ROADMAP',
+                            style: AuraTypography.sectionHeader.copyWith(
+                              color: auraTheme.primary,
+                              fontSize: 10,
+                              fontWeight: FontWeight.bold,
+                              letterSpacing: 0.8,
+                            ),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        planDay.nutritionFocus!,
+                        style: AuraTypography.bodySmall.copyWith(
+                          color: AuraColors.textPrimary.withValues(alpha: 0.9),
+                          fontSize: 12,
+                        ),
+                      ),
+                      if (isToday) ...[
+                        const SizedBox(height: 8),
+                        InkWell(
+                          onTap: () {
+                            Navigator.of(ctx).pop();
+                            Navigator.of(context).push(
+                              MaterialPageRoute(builder: (_) => const MealCurationScreen()),
+                            );
+                          },
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(LucideIcons.sparkles, size: 12, color: auraTheme.primary),
+                              const SizedBox(width: 4),
+                              Text(
+                                'Curate Today\'s Meals →',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.bold,
+                                  color: auraTheme.primary,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
 
               // Completed Workout Details
               if (isCompleted && actualWorkout != null && actualWorkout.exercises.isNotEmpty) ...[

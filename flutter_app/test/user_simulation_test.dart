@@ -271,6 +271,91 @@ class MockSimulatedAIService implements AIService {
       actions: [],
     );
   }
+
+  @override
+  Future<CurateMealChatResult> curateMealPlanChat({
+    required String message,
+    List<Map<String, dynamic>>? history,
+    ContextEnvelope? contextEnvelope,
+  }) async {
+    if (history == null || history.isEmpty) {
+      return const CurateMealChatResult(
+        coachResponse: "Hey Ashutosh! Let's fuel your recomp workout today. How would you like to structure your meals?",
+        dynamicQuickReplies: ["3 meals + 1 snack", "2 large meals + shake", "Quick 15-min meals"],
+        isFinalPlan: false,
+      );
+    }
+    return const CurateMealChatResult(
+      coachResponse: "Here is your customized Diwali recomp meal plan! 3 power meals + 1 recovery snack tailored to hit 2650 kcal and 180g protein.",
+      dynamicQuickReplies: ["Looks delicious!", "Swap lunch", "Adjust calories"],
+      isFinalPlan: true,
+      curatedMealPlan: CuratedMealPlan(
+        id: 'cmp_sim_1',
+        date: '2026-08-25',
+        createdAt: '2026-08-25T08:00:00Z',
+        title: "Diwali Recomp High-Protein Fuel",
+        overview: "Timed nutrition around Tuesday Full-Body Hypertrophy session.",
+        totalCalories: 2650,
+        totalProteinG: 180,
+        totalCarbsG: 295,
+        totalFatG: 85,
+        meals: [
+          CuratedMeal(
+            id: 'm1',
+            name: 'High Protein Oats & Whey',
+            slotName: 'Pre-Workout Fuel',
+            description: '80g oats with 1.5 scoops whey and almond milk',
+            calories: 650,
+            proteinG: 45,
+            carbsG: 80,
+            fatG: 15,
+            prepTime: '5 mins',
+            instructions: 'Microwave oats for 2 mins, stir in protein powder.',
+            tags: ['Quick Prep', 'High Protein'],
+          ),
+          CuratedMeal(
+            id: 'm2',
+            name: 'Paneer Tofu Stir-Fry Bowl',
+            slotName: 'Post-Workout Lunch',
+            description: '200g paneer, 100g tofu, 1.5 cups brown rice and mixed vegetables',
+            calories: 950,
+            proteinG: 65,
+            carbsG: 110,
+            fatG: 30,
+            prepTime: '15 mins',
+            instructions: 'Sauté cubed paneer and tofu with soy sauce and turmeric, serve over brown rice.',
+            tags: ['Post-Workout', 'Vegetarian High Protein'],
+          ),
+          CuratedMeal(
+            id: 'm3',
+            name: 'Greek Yogurt & Pumpkin Seeds',
+            slotName: 'Afternoon Recovery Snack',
+            description: '250g Greek yogurt with 30g pumpkin seeds',
+            calories: 400,
+            proteinG: 30,
+            carbsG: 20,
+            fatG: 20,
+            prepTime: '2 mins',
+            instructions: 'Mix seeds into cold yogurt.',
+            tags: ['Clean Snack'],
+          ),
+          CuratedMeal(
+            id: 'm4',
+            name: 'Lentil Dal & Quinoa Power Plate',
+            slotName: 'Evening Fuel',
+            description: '1.5 cups cooked moong dal, 1 cup cooked quinoa, large cucumber salad',
+            calories: 650,
+            proteinG: 40,
+            carbsG: 85,
+            fatG: 20,
+            prepTime: '20 mins',
+            instructions: 'Simmer spiced moong dal and serve warm over quinoa.',
+            tags: ['Slow Digesting', 'Overnight Recovery'],
+          ),
+        ],
+      ),
+    );
+  }
 }
 
 void main() {
@@ -536,6 +621,86 @@ My focus is reducing belly fat while building broader shoulders and bigger arms.
       expect(dailyNutrition.totalCalories, 520);
       expect(dailyNutrition.totalProtein, 42);
       expect(dailyNutrition.waterMl, 1500);
+    });
+
+    test('Phase 5b: Conversational Meal Curation simulates real user multi-turn flow', () async {
+      // Step 1: User lands on empty meal state and initiates curation chat
+      final conversationHistory = <Map<String, dynamic>>[];
+      const userMessageTurn1 = "Hey coach, I'd like a custom meal plan curated for today's workout.";
+      conversationHistory.add({'sender': 'user', 'text': userMessageTurn1});
+
+      final turn1Result = await aiService.curateMealPlanChat(
+        message: userMessageTurn1,
+        history: [],
+      );
+
+      // AI asks for meal structure preferences and provides 3-4 dynamic chips
+      expect(turn1Result.isFinalPlan, isFalse);
+      expect(turn1Result.curatedMealPlan, isNull);
+      expect(turn1Result.coachResponse, contains("fuel your recomp workout"));
+      expect(turn1Result.dynamicQuickReplies, contains("3 meals + 1 snack"));
+      conversationHistory.add({'sender': 'coach', 'text': turn1Result.coachResponse});
+
+      // Step 2: User taps quick reply chip "3 meals + 1 snack"
+      final selectedQuickReply = turn1Result.dynamicQuickReplies.first;
+      expect(selectedQuickReply, "3 meals + 1 snack");
+      conversationHistory.add({'sender': 'user', 'text': selectedQuickReply});
+
+      final turn2Result = await aiService.curateMealPlanChat(
+        message: selectedQuickReply,
+        history: conversationHistory,
+      );
+
+      // AI responds with finalized plan calibrated to user target macros (2650 kcal, 180g P)
+      expect(turn2Result.isFinalPlan, isTrue);
+      expect(turn2Result.curatedMealPlan, isNotNull);
+      final plan = turn2Result.curatedMealPlan!;
+      expect(plan.title, contains("Diwali Recomp"));
+      expect(plan.meals.length, 4);
+      expect(plan.totalCalories, 2650);
+      expect(plan.totalProteinG, 180);
+
+      // Verify meal macro breakdown
+      final computedCal = plan.meals.fold(0, (sum, m) => sum + m.calories);
+      final computedProt = plan.meals.fold(0, (sum, m) => sum + m.proteinG);
+      expect(computedCal, 2650);
+      expect(computedProt, 180);
+
+      // Step 3: Populate to daily nutrition and 1-tap log meal
+      var dailyNutrition = DailyNutrition(
+        date: '2026-08-25',
+        targetCalories: 2650,
+        targetProteinG: 180,
+        targetCarbsG: 295,
+        targetFatG: 85,
+        waterMl: 1500,
+        meals: const [],
+        curatedMealPlan: plan,
+      );
+
+      // 1-Tap Log Meal 1 (Pre-Workout Fuel)
+      final mealToLog = plan.meals.first;
+      final loggedItem = MealItem(
+        name: '${mealToLog.slotName}: ${mealToLog.name}',
+        calories: mealToLog.calories,
+        proteinG: mealToLog.proteinG,
+        carbsG: mealToLog.carbsG,
+        fatG: mealToLog.fatG,
+      );
+
+      final updatedPlan = plan.copyWith(
+        meals: plan.meals.map((m) => m.id == mealToLog.id ? m.copyWith(isLogged: true) : m).toList(),
+      );
+
+      dailyNutrition = dailyNutrition.copyWith(
+        meals: [...dailyNutrition.meals, loggedItem],
+        curatedMealPlan: updatedPlan,
+      );
+
+      expect(dailyNutrition.curatedMealPlan!.meals.first.isLogged, isTrue);
+      expect(dailyNutrition.curatedMealPlan!.meals[1].isLogged, isFalse);
+      expect(dailyNutrition.totalCalories, 650);
+      expect(dailyNutrition.totalProtein, 45);
     });
 
     test('Phase 6: Pro Coach Soul Theme Adherence & Tone Verification', () {

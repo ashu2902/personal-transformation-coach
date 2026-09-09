@@ -8,4 +8,5 @@ export 'master_context.dart';
 export 'exercise_definition.dart';
 export 'context_envelope.dart';
 export 'command_preview.dart';
+export 'curated_meal_plan.dart';
 

@@ -102,6 +102,9 @@ All Mixpanel events in AURA follow strict conventions:
 | `soul_switched` | User swaps active coach persona in settings | `soul_name`, `previous_soul`, `surface` | `lib/screens/profile_screen.dart` |
 | `goal_updated` | User recalibrates transformation goal or schedule | `previous_goal`, `new_goal`, `target_physique`, `days_per_week` | `lib/screens/profile_screen.dart` |
 | `screen_viewed` | User navigates tabs or pushes a major screen | `screen_name` (`today`, `coach`, `insights`, `profile`, `workout_active`) | `lib/main.dart` |
+| `meal_curation_started` | User initiates conversational meal curation flow | `today_workout`, `target_calories`, `target_protein_g`, `coach_soul` | `lib/screens/meal_curation_screen.dart` |
+| `meal_plan_curated` | AI generates and populates daily curated meal plan | `meal_count`, `total_calories`, `total_protein_g`, `coach_soul` | `lib/screens/meal_curation_screen.dart` |
+| `curated_meal_logged` | User 1-tap logs a curated meal into today's fuel | `slot_name`, `calories`, `protein_g`, `coach_soul` | `lib/providers/transformation_state.dart` |
 | `account_deleted` | User confirms account deletion | `reason` | `lib/services/firebase_service.dart` |
 
 ---

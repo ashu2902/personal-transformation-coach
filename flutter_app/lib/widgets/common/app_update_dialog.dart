@@ -74,9 +74,9 @@ class AppUpdateDialogs {
                         ),
                       ),
                       onPressed: () => AppVersionService.performUpdate(result.storeUrl),
-                      child: Text(
+                      child: const Text(
                         kIsWeb ? 'Refresh Now' : 'Update in Store',
-                        style: const TextStyle(
+                        style: TextStyle(
                           fontWeight: FontWeight.bold,
                           fontSize: 15,
                         ),

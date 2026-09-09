@@ -126,10 +126,10 @@ void main() {
     });
 
     test('isProgressTrackedForDate accurately distinguishes scheduled vs completed', () {
-      final pastDate = '2026-09-01';
+      const pastDate = '2026-09-01';
 
       // Scheduled workout in recentWorkouts that was never done
-      final scheduledPastWorkout = DailyWorkout(
+      final scheduledPastWorkout = const DailyWorkout(
         id: 'past_scheduled',
         date: pastDate,
         title: 'Unexecuted Workout',

@@ -392,24 +392,37 @@ class WeeklyPlanScreen extends ConsumerWidget {
                 ),
               ],
               // Nutrition focus
-              if (day.nutritionFocus != null) ...[
+              if (day.nutritionFocus != null && day.nutritionFocus!.isNotEmpty) ...[
                 const SizedBox(height: 10),
-                Row(
-                  children: [
-                    Icon(LucideIcons.utensils,
-                        size: 12,
-                        color: auraTheme.primary.withValues(alpha: 0.5)),
-                    const SizedBox(width: 6),
-                    Expanded(
-                      child: Text(
-                        day.nutritionFocus!,
-                        style: AuraTypography.bodySmall.copyWith(
-                          color: AuraColors.textTertiary,
-                          fontStyle: FontStyle.italic,
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: auraTheme.primary.withValues(alpha: 0.08),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: auraTheme.primary.withValues(alpha: 0.18),
+                    ),
+                  ),
+                  child: Row(
+                    children: [
+                      Icon(
+                        LucideIcons.utensils,
+                        size: 13,
+                        color: auraTheme.primary,
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          day.nutritionFocus!,
+                          style: AuraTypography.bodySmall.copyWith(
+                            color: AuraColors.textPrimary.withValues(alpha: 0.9),
+                            fontSize: 11,
+                            fontWeight: FontWeight.w500,
+                          ),
                         ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ],
             ],

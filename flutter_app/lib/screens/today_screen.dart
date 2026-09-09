@@ -3,14 +3,14 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:lucide_icons/lucide_icons.dart';
 import 'package:intl/intl.dart';
 import '../providers/transformation_state.dart';
-import '../models/user_profile.dart';
-import '../models/workout.dart';
-import '../models/weekly_plan.dart';
+import '../models/models.dart';
 import '../theme/theme.dart';
 import '../widgets/common/common.dart';
 import '../widgets/common/quick_coach_fab.dart';
 import 'widgets/workout_day_detail_modal.dart';
+import 'widgets/curated_meal_card.dart';
 import 'weekly_plan_screen.dart';
+import 'meal_curation_screen.dart';
 import '../services/app_version_service.dart';
 
 class TodayScreen extends ConsumerWidget {
@@ -643,6 +643,10 @@ class TodayScreen extends ConsumerWidget {
               ),
               const SizedBox(height: 24),
 
+              // 6B. CURATED DAILY MEAL PLAN
+              _buildCuratedMealPlanSection(context, ref, nutrition, workout, auraTheme),
+              const SizedBox(height: 24),
+
               // 7. DASHBOARD LATEST VERSION FOOTER
               _buildVersionFooter(context, ref, auraTheme),
               const SizedBox(height: 48),
@@ -652,6 +656,247 @@ class TodayScreen extends ConsumerWidget {
       ),
     ),
   );
+  }
+
+  Widget _buildCuratedMealPlanSection(
+    BuildContext context,
+    WidgetRef ref,
+    DailyNutrition nutrition,
+    DailyWorkout workout,
+    AuraThemeExtension auraTheme,
+  ) {
+    final curatedPlan = nutrition.curatedMealPlan;
+
+    if (curatedPlan == null) {
+      return AuraCard(
+        padding: const EdgeInsets.all(18),
+        borderColor: auraTheme.primary.withValues(alpha: 0.3),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Row(
+                  children: [
+                    Icon(LucideIcons.sparkles, size: 16, color: auraTheme.primary),
+                    const SizedBox(width: 8),
+                    Text(
+                      "CURATED DAILY MEAL PLAN",
+                      style: AuraTypography.sectionHeader.copyWith(
+                        color: auraTheme.primary,
+                        fontSize: 11,
+                        letterSpacing: 1.1,
+                      ),
+                    ),
+                  ],
+                ),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: auraTheme.primary.withValues(alpha: 0.12),
+                    borderRadius: BorderRadius.circular(6),
+                  ),
+                  child: Text(
+                    'AI Tailored',
+                    style: TextStyle(
+                      fontSize: 10,
+                      fontWeight: FontWeight.bold,
+                      color: auraTheme.primary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            Text(
+              'No Meal Plan Curated for Today',
+              style: AuraTypography.titleMedium.copyWith(
+                fontWeight: FontWeight.bold,
+                fontSize: 16,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Have AURA calibrate your daily meals and portions around today\'s workout (${workout.isRestDay ? "Active Recovery" : workout.title}) to easily hit your ${nutrition.targetCalories} kcal and ${nutrition.targetProteinG}g protein targets.',
+              style: AuraTypography.bodySmall.copyWith(
+                color: AuraColors.textSecondary,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 14),
+            AuraButton(
+              text: 'Curate Today\'s Meal Plan',
+              icon: LucideIcons.sparkles,
+              width: double.infinity,
+              height: 44,
+              variant: AuraButtonVariant.primary,
+              onPressed: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const MealCurationScreen()),
+                );
+              },
+            ),
+          ],
+        ),
+      );
+    }
+
+    final allLogged = curatedPlan.meals.isNotEmpty && curatedPlan.meals.every((m) => m.isLogged);
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                Icon(LucideIcons.sparkles, size: 14, color: auraTheme.primary),
+                const SizedBox(width: 6),
+                Text(
+                  "TODAY'S CURATED MEALS",
+                  style: AuraTypography.sectionHeader.copyWith(
+                    fontSize: 11,
+                    letterSpacing: 1.1,
+                    color: auraTheme.primary,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            InkWell(
+              onTap: () {
+                Navigator.of(context).push(
+                  MaterialPageRoute(builder: (_) => const MealCurationScreen()),
+                );
+              },
+              borderRadius: BorderRadius.circular(6),
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                child: Row(
+                  children: [
+                    Icon(LucideIcons.messageSquare, size: 12, color: auraTheme.primary),
+                    const SizedBox(width: 4),
+                    Text(
+                      'Adjust Plan',
+                      style: AuraTypography.bodySmall.copyWith(
+                        color: auraTheme.primary,
+                        fontWeight: FontWeight.bold,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 8),
+
+        AuraCard(
+          padding: const EdgeInsets.all(14),
+          margin: const EdgeInsets.only(bottom: 12),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Text(
+                      curatedPlan.title,
+                      style: AuraTypography.titleMedium.copyWith(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  if (allLogged)
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AuraColors.actionGreen.withValues(alpha: 0.15),
+                        borderRadius: BorderRadius.circular(4),
+                      ),
+                      child: const Text(
+                        'All Logged ✓',
+                        style: TextStyle(
+                          fontSize: 10,
+                          fontWeight: FontWeight.bold,
+                          color: AuraColors.actionGreen,
+                        ),
+                      ),
+                    ),
+                ],
+              ),
+              if (curatedPlan.overview.isNotEmpty) ...[
+                const SizedBox(height: 6),
+                Text(
+                  curatedPlan.overview,
+                  style: AuraTypography.bodySmall.copyWith(
+                    color: AuraColors.textSecondary,
+                    height: 1.35,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 10),
+              Row(
+                children: [
+                  _buildMacroPill('${curatedPlan.totalCalories} kcal', 'Total Cal', auraTheme.energyAccent),
+                  const SizedBox(width: 12),
+                  _buildMacroPill('${curatedPlan.totalProteinG}g', 'Protein', auraTheme.proteinAccent),
+                  const SizedBox(width: 12),
+                  _buildMacroPill('${curatedPlan.totalCarbsG}g', 'Carbs', AuraColors.carbs),
+                  const SizedBox(width: 12),
+                  _buildMacroPill('${curatedPlan.totalFatG}g', 'Fat', AuraColors.fat),
+                ],
+              ),
+            ],
+          ),
+        ),
+
+        ...curatedPlan.meals.map((meal) {
+          return CuratedMealCard(
+            meal: meal,
+            onLog: () {
+              ref.read(transformationEngineProvider.notifier).logCuratedMeal(meal);
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text('Logged ${meal.name} (+${meal.calories} kcal) to today\'s fuel!'),
+                  backgroundColor: auraTheme.primary,
+                  duration: const Duration(seconds: 2),
+                ),
+              );
+            },
+          );
+        }),
+      ],
+    );
+  }
+
+  Widget _buildMacroPill(String value, String label, Color color) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          value,
+          style: TextStyle(
+            fontSize: 11,
+            fontWeight: FontWeight.bold,
+            color: color,
+          ),
+        ),
+        const SizedBox(height: 1),
+        Text(
+          label,
+          style: AuraTypography.bodySmall.copyWith(
+            fontSize: 9,
+            color: AuraColors.textTertiary,
+          ),
+        ),
+      ],
+    );
   }
 
   Widget _buildVersionFooter(BuildContext context, WidgetRef ref, AuraThemeExtension auraTheme) {

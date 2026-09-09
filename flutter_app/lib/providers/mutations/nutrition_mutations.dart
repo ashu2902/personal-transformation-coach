@@ -1,10 +1,14 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../models/nutrition.dart';
+import '../../models/curated_meal_plan.dart';
+import '../../services/analytics_service.dart';
 import '../transformation_state.dart';
 
 /// Domain mutations for Nutrition targets, logged meals, portion corrections, and water.
 mixin NutritionMutations on StateNotifier<TransformationEngineState> {
+  IAnalyticsService? get analyticsService => null;
+
   void addWater(int amountMl) {
     final newWater = state.nutrition.waterMl + amountMl;
     debugPrint('[AURA STATE] Added +${amountMl}ml water (Total: ${newWater}ml)');
@@ -19,6 +23,54 @@ mixin NutritionMutations on StateNotifier<TransformationEngineState> {
     final updatedNutrition = state.nutrition.copyWith(meals: newMeals);
     state = state.copyWith(nutrition: updatedNutrition);
     saveNutritionToRemote(state.nutrition.date, updatedNutrition);
+  }
+
+  Future<void> logCuratedMeal(CuratedMeal meal) async {
+    debugPrint('[AURA STATE] Logging curated meal: ${meal.name} (${meal.calories} kcal)');
+    final mealItem = MealItem(
+      name: meal.name,
+      calories: meal.calories,
+      proteinG: meal.proteinG,
+      carbsG: meal.carbsG,
+      fatG: meal.fatG,
+    );
+
+    final newMeals = List<MealItem>.from(state.nutrition.meals)..add(mealItem);
+
+    CuratedMealPlan? updatedPlan;
+    if (state.nutrition.curatedMealPlan != null) {
+      final updatedCuratedMeals = state.nutrition.curatedMealPlan!.meals.map((m) {
+        if (m.id == meal.id || (m.name == meal.name && m.slotName == meal.slotName)) {
+          return m.copyWith(isLogged: true);
+        }
+        return m;
+      }).toList();
+      updatedPlan = state.nutrition.curatedMealPlan!.copyWith(meals: updatedCuratedMeals);
+    }
+
+    final updatedNutrition = state.nutrition.copyWith(
+      meals: newMeals,
+      curatedMealPlan: updatedPlan,
+    );
+    state = state.copyWith(nutrition: updatedNutrition);
+    await saveNutritionToRemote(state.nutrition.date, updatedNutrition);
+
+    analyticsService?.logEvent(
+      AuraAnalyticsEvents.curatedMealLogged,
+      properties: {
+        'slot_name': meal.slotName,
+        'calories': meal.calories,
+        'protein_g': meal.proteinG,
+        'coach_soul': state.profile.coachSoul.name,
+      },
+    );
+  }
+
+  Future<void> clearCuratedMealPlan() async {
+    debugPrint('[AURA STATE] Clearing curated meal plan for today...');
+    final updatedNutrition = state.nutrition.copyWith(clearCuratedMealPlan: true);
+    state = state.copyWith(nutrition: updatedNutrition);
+    await saveNutritionToRemote(state.nutrition.date, updatedNutrition);
   }
 
   void clearTodayNutrition() {

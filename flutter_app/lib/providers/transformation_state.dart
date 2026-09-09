@@ -386,6 +386,9 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
   }
 
   @override
+  IAnalyticsService? get analyticsService => _analytics;
+
+  @override
   Future<void> saveNutritionToRemote(String date, DailyNutrition nutrition) async {
     final uid = _auth.uid;
     if (uid != null) {
@@ -659,10 +662,10 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
 
         // Guard against stale stream snapshot overwrite if local state has newer completed sets or status
         final localCompletedCount = state.workout.exercises.fold<int>(
-          0, (sum, ex) => sum + ex.sets.where((s) => s.completed).length,
+          0, (total, ex) => total + ex.sets.where((s) => s.completed).length,
         );
         final remoteCompletedCount = remoteWorkout.exercises.fold<int>(
-          0, (sum, ex) => sum + ex.sets.where((s) => s.completed).length,
+          0, (total, ex) => total + ex.sets.where((s) => s.completed).length,
         );
 
         if (remoteWorkout.date == state.workout.date &&
@@ -1138,7 +1141,7 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
     _repository.saveProgressEntry(progressEntry);
 
     // Mixpanel event: prescription_completed (Core Value Moment)
-    final totalSets = completedWorkout.exercises.fold<int>(0, (sum, ex) => sum + ex.sets.length);
+    final totalSets = completedWorkout.exercises.fold<int>(0, (total, ex) => total + ex.sets.length);
     _analytics.logEvent(
       AuraAnalyticsEvents.prescriptionCompleted,
       properties: {
@@ -1295,7 +1298,7 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
     }
     _repository.saveProgressEntry(entry);
 
-    final totalSets = completedWorkout.exercises.fold<int>(0, (sum, ex) => sum + ex.sets.length);
+    final totalSets = completedWorkout.exercises.fold<int>(0, (total, ex) => total + ex.sets.length);
     _analytics.logEvent(
       AuraAnalyticsEvents.prescriptionCompleted,
       properties: {
@@ -1889,6 +1892,47 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
     if (preview.inverseCommand == null || preview.inverseCommand!.isEmpty) return;
     debugPrint('[AURA STATE] Reversing action via inverse command: ${preview.inverseCommand}');
     await addChatMessage(preview.inverseCommand!);
+  }
+
+  Future<CurateMealChatResult> sendMealCurationMessage(
+    String userMessage, {
+    List<Map<String, dynamic>>? history,
+    ContextEnvelope? contextEnvelope,
+  }) async {
+    final effectiveEnvelope = contextEnvelope ??
+        ContextEnvelope(
+          activeScreen: 'meal_curation',
+          todayWorkoutTitle: state.workout.title,
+          activeWorkoutDate: state.workout.date,
+        );
+
+    final result = await _aiService.curateMealPlanChat(
+      message: userMessage,
+      history: history,
+      contextEnvelope: effectiveEnvelope,
+    );
+
+    if (result.isFinalPlan && result.curatedMealPlan != null) {
+      final updatedNutrition = state.nutrition.copyWith(
+        curatedMealPlan: result.curatedMealPlan,
+      );
+      state = state.copyWith(nutrition: updatedNutrition);
+      final uid = _auth.uid;
+      if (uid != null) {
+        await _firestore.saveCuratedMealPlan(uid, state.nutrition.date, result.curatedMealPlan);
+      }
+      _analytics.logEvent(
+        AuraAnalyticsEvents.mealPlanCurated,
+        properties: {
+          'meal_count': result.curatedMealPlan!.meals.length,
+          'total_calories': result.curatedMealPlan!.totalCalories,
+          'total_protein_g': result.curatedMealPlan!.totalProteinG,
+          'coach_soul': state.profile.coachSoul.name,
+        },
+      );
+    }
+
+    return result;
   }
 
 

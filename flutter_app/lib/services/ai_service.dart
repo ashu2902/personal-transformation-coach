@@ -32,6 +32,11 @@ abstract class AIService {
     UserProfile currentProfile, {
     List<Map<String, String>>? conversationHistory,
   });
+  Future<CurateMealChatResult> curateMealPlanChat({
+    required String message,
+    List<Map<String, dynamic>>? history,
+    ContextEnvelope? contextEnvelope,
+  });
 }
 
 class GeminiAIProvider implements AIService {
@@ -467,4 +472,64 @@ class GeminiAIProvider implements AIService {
       );
     }
   }
+
+  @override
+  Future<CurateMealChatResult> curateMealPlanChat({
+    required String message,
+    List<Map<String, dynamic>>? history,
+    ContextEnvelope? contextEnvelope,
+  }) async {
+    try {
+      final json = await _callProcessAiCommand(
+        command: 'curateMealPlanChat',
+        message: message,
+        history: history,
+        contextEnvelope: contextEnvelope?.toJson(),
+      );
+      return CurateMealChatResult.fromJson(json);
+    } catch (e) {
+      debugPrint('[AURA AI] curateMealPlanChat failed: $e');
+      return const CurateMealChatResult(
+        coachResponse:
+            "I'm ready to dial in your nutrition for today. How would you like to structure your meals?",
+        dynamicQuickReplies: [
+          "3 meals + 1 snack",
+          "2 large meals (IF)",
+          "Quick 15-min prep",
+          "Vegetarian only today",
+        ],
+        isFinalPlan: false,
+      );
+    }
+  }
 }
+
+class CurateMealChatResult {
+  final String coachResponse;
+  final List<String> dynamicQuickReplies;
+  final bool isFinalPlan;
+  final CuratedMealPlan? curatedMealPlan;
+
+  const CurateMealChatResult({
+    required this.coachResponse,
+    this.dynamicQuickReplies = const [],
+    this.isFinalPlan = false,
+    this.curatedMealPlan,
+  });
+
+  factory CurateMealChatResult.fromJson(Map<String, dynamic> json) {
+    return CurateMealChatResult(
+      coachResponse:
+          json['coachResponse']?.toString() ?? "I'm ready to dial in your fuel.",
+      dynamicQuickReplies: (json['dynamicQuickReplies'] as List? ?? [])
+          .map((e) => e.toString())
+          .toList(),
+      isFinalPlan: json['isFinalPlan'] == true,
+      curatedMealPlan: json['curatedMealPlan'] != null
+          ? CuratedMealPlan.fromJson(
+              Map<String, dynamic>.from(json['curatedMealPlan'] as Map))
+          : null,
+    );
+  }
+}
+

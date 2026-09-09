@@ -18,6 +18,9 @@ class AuraAnalyticsEvents {
   static const String exerciseSetLogged = 'exercise_set_logged';
   static const String recoveryLogged = 'recovery_logged';
   static const String hydrationLogged = 'hydration_logged';
+  static const String mealCurationStarted = 'meal_curation_started';
+  static const String mealPlanCurated = 'meal_plan_curated';
+  static const String curatedMealLogged = 'curated_meal_logged';
 
   // Conversational AI & Multi-modal
   static const String chatMessageSent = 'chat_message_sent';

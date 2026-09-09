@@ -7,6 +7,7 @@ import 'package:http/http.dart' as http;
 import '../models/user_profile.dart';
 import '../models/workout.dart';
 import '../models/nutrition.dart';
+import '../models/curated_meal_plan.dart';
 import '../models/recovery.dart';
 import '../models/chat_and_ai.dart';
 import '../models/weekly_plan.dart';
@@ -427,6 +428,25 @@ class FirebaseFirestoreService {
       }
     } catch (e) {
       debugPrint('[FIRESTORE ERROR] updateDailyNutritionField failed: $e');
+    }
+  }
+
+  Future<void> saveCuratedMealPlan(String uid, String dateStr, CuratedMealPlan? plan) async {
+    try {
+      if (_db != null) {
+        await _db!
+            .collection('users')
+            .doc(uid)
+            .collection('nutrition')
+            .doc(dateStr)
+            .set({
+              'curatedMealPlan': plan?.toJson(),
+              'updatedAt': FieldValue.serverTimestamp(),
+            }, SetOptions(merge: true))
+            .timeout(const Duration(seconds: 15));
+      }
+    } catch (e) {
+      debugPrint('[FIRESTORE ERROR] saveCuratedMealPlan failed: $e');
     }
   }
 
@@ -995,6 +1015,8 @@ class FirebaseFirestoreService {
         'carbsG': m.carbsG,
         'fatG': m.fatG,
       }).toList(),
+      if (nutrition.curatedMealPlan != null)
+        'curatedMealPlan': nutrition.curatedMealPlan!.toJson(),
     };
   }
 
@@ -1016,6 +1038,10 @@ class FirebaseFirestoreService {
           fatG: m['fatG'] ?? 0,
         );
       }).toList(),
+      curatedMealPlan: map['curatedMealPlan'] != null
+          ? CuratedMealPlan.fromJson(
+              Map<String, dynamic>.from(map['curatedMealPlan'] as Map))
+          : null,
     );
   }
 
