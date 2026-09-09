@@ -53,12 +53,15 @@ mixin WorkoutMutations on StateNotifier<TransformationEngineState> {
     int setIndex, {
     int? targetReps,
     double? targetWeightKg,
+    int? targetDurationSeconds,
     int? newReps,
     double? newWeightKg,
+    int? newDurationSeconds,
   }) {
     final finalReps = targetReps ?? newReps;
     final finalWeight = targetWeightKg ?? newWeightKg;
-    debugPrint('[AURA STATE] Micro-Deviation: $exerciseId Set #${setIndex + 1} -> Reps: $finalReps, Weight: $finalWeight kg');
+    final finalDuration = targetDurationSeconds ?? newDurationSeconds;
+    debugPrint('[AURA STATE] Micro-Deviation: $exerciseId Set #${setIndex + 1} -> Reps: $finalReps, Weight: $finalWeight kg, Duration: $finalDuration s');
     final updatedExercises = state.workout.exercises.map((ex) {
       if (ex.id != exerciseId) return ex;
       final updatedSets = List<ExerciseSet>.from(ex.sets);
@@ -66,6 +69,7 @@ mixin WorkoutMutations on StateNotifier<TransformationEngineState> {
       updatedSets[setIndex] = current.copyWith(
         targetReps: finalReps ?? current.targetReps,
         targetWeightKg: finalWeight ?? current.targetWeightKg,
+        targetDurationSeconds: finalDuration ?? current.targetDurationSeconds,
       );
       return ex.copyWith(sets: updatedSets);
     }).toList();

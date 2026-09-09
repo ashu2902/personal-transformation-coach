@@ -52,7 +52,7 @@ Map<String, dynamic> _$QuickLogParsedResultToJson(
     <String, dynamic>{
       'workoutStatus': _$WorkoutStatusEnumMap[instance.workoutStatus],
       'workoutReason': instance.workoutReason,
-      'mealsToAdd': instance.mealsToAdd.map((e) => e.toJson()).toList(),
+      'mealsToAdd': instance.mealsToAdd,
       'skippedMeals': instance.skippedMeals,
       'sleepHours': instance.sleepHours,
       'weightKg': instance.weightKg,
@@ -114,7 +114,7 @@ _AIOrchestratorResult _$AIOrchestratorResultFromJson(
 Map<String, dynamic> _$AIOrchestratorResultToJson(
         _AIOrchestratorResult instance) =>
     <String, dynamic>{
-      'actions': instance.actions.map((e) => e.toJson()).toList(),
+      'actions': instance.actions,
       'coachResponse': instance.coachResponse,
-      'pendingActions': instance.pendingActions.map((e) => e.toJson()).toList(),
+      'pendingActions': instance.pendingActions,
     };

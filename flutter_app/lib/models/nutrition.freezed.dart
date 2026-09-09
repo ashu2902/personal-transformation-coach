@@ -273,8 +273,7 @@ extension MealItemPatterns on MealItem {
 }
 
 /// @nodoc
-
-@JsonSerializable(explicitToJson: true)
+@JsonSerializable()
 class _MealItem extends MealItem {
   const _MealItem(
       {required this.name,
@@ -736,8 +735,7 @@ extension DailyNutritionPatterns on DailyNutrition {
 }
 
 /// @nodoc
-
-@JsonSerializable(explicitToJson: true)
+@JsonSerializable()
 class _DailyNutrition extends DailyNutrition {
   const _DailyNutrition(
       {required this.date,

@@ -228,5 +228,101 @@ void main() {
       expect(notifier.state.workout.exercises.first.name, 'Incline Dumbbell Press');
       expect(notifier.state.recentWorkouts[todayStr]!.exercises.first.name, 'Incline Dumbbell Press');
     });
+
+    test('updateSetTarget updates targetDurationSeconds and reflects in recentWorkouts', () {
+      final todayStr = notifier.state.workout.date;
+      final firstEx = notifier.state.workout.exercises.first;
+
+      // Update target duration to 45s (e.g. plank hold)
+      notifier.updateSetTarget(firstEx.id, 0, newDurationSeconds: 45);
+
+      expect(notifier.state.workout.exercises.first.sets.first.targetDurationSeconds, 45);
+      expect(notifier.state.recentWorkouts[todayStr]!.exercises.first.sets.first.targetDurationSeconds, 45);
+    });
+
+    test('autoDeriveTodayWorkout hydrates ExerciseTrackingType and targetDurationSeconds from weeklyPlan plannedExercises', () async {
+      final now = DateTime.now();
+      final todayStr = now.toIso8601String().split('T')[0];
+      final dayIndex = now.weekday - 1;
+
+      final targetDayPlan = WeeklyDayPlan(
+        dayName: 'Today',
+        date: todayStr,
+        title: 'Active Recovery & Core',
+        focusArea: 'Core & Mobility',
+        isRestDay: true,
+        plannedExercises: [
+          const PlannedExercise(
+            name: 'Light Walking or Stationary Cycling (30 mins)',
+            trackingType: ExerciseTrackingType.duration,
+            targetSets: 1,
+            targetDurationSeconds: 1800,
+            notes: 'Zone 2 steady state',
+          ),
+          const PlannedExercise(
+            name: 'Plank Hold',
+            trackingType: ExerciseTrackingType.duration,
+            targetSets: 3,
+            targetDurationSeconds: 45,
+            notes: 'Hold flat core',
+          ),
+          const PlannedExercise(
+            name: 'Full Body Dynamic Stretching',
+            trackingType: ExerciseTrackingType.completion,
+            targetSets: 1,
+            targetDurationSeconds: 600,
+            notes: 'Gentle mobility',
+          ),
+        ],
+      );
+
+      final days = List.generate(7, (i) {
+        if (i == dayIndex) return targetDayPlan;
+        return WeeklyDayPlan(
+          dayName: 'Day $i',
+          date: '2026-09-0$i',
+          title: 'Other Day',
+          focusArea: 'Rest',
+          isRestDay: true,
+        );
+      });
+
+      final weeklyPlan = WeeklyPlan(
+        weekId: 'w_test_planned',
+        startDate: todayStr,
+        endDate: todayStr,
+        overview: 'Test overview',
+        createdAt: todayStr,
+        days: days,
+      );
+
+      await notifier.autoDeriveTodayWorkoutIfMissing('user_123', todayStr, explicitPlan: weeklyPlan);
+
+      final derived = notifier.state.workout;
+      expect(derived.exercises.length, 3);
+
+      // 1. Walking: duration with 1 set of 1800s
+      final walkingEx = derived.exercises[0];
+      expect(walkingEx.name, 'Light Walking or Stationary Cycling (30 mins)');
+      expect(walkingEx.trackingType, ExerciseTrackingType.duration);
+      expect(walkingEx.sets.length, 1);
+      expect(walkingEx.sets.first.targetDurationSeconds, 1800);
+
+      // 2. Plank: duration with 3 sets of 45s
+      final plankEx = derived.exercises[1];
+      expect(plankEx.name, 'Plank Hold');
+      expect(plankEx.trackingType, ExerciseTrackingType.duration);
+      expect(plankEx.sets.length, 3);
+      expect(plankEx.sets[0].targetDurationSeconds, 45);
+      expect(plankEx.sets[1].targetDurationSeconds, 45);
+      expect(plankEx.sets[2].targetDurationSeconds, 45);
+
+      // 3. Dynamic Stretching: completion with 1 set
+      final stretchEx = derived.exercises[2];
+      expect(stretchEx.name, 'Full Body Dynamic Stretching');
+      expect(stretchEx.trackingType, ExerciseTrackingType.completion);
+      expect(stretchEx.sets.length, 1);
+      expect(stretchEx.sets.first.targetDurationSeconds, 600);
+    });
   });
 }

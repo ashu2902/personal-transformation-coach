@@ -145,11 +145,16 @@ class LocalTransformationRepository implements ITransformationRepository {
             name: e['name'],
             targetMuscle: e['targetMuscle'],
             equipmentRequired: e['equipmentRequired']?.toString() ?? 'bodyweight',
+            trackingType: ExerciseTrackingType.values.firstWhere(
+              (t) => t.name == e['trackingType'],
+              orElse: () => ExerciseTrackingType.reps,
+            ),
             sets: (e['sets'] as List? ?? []).map((s) {
               return ExerciseSet(
                 setNumber: s['setNumber'],
-                targetReps: s['targetReps'],
+                targetReps: s['targetReps'] ?? 10,
                 targetWeightKg: (s['targetWeightKg'] as num?)?.toDouble() ?? 0.0,
+                targetDurationSeconds: s['targetDurationSeconds'] ?? 0,
                 completed: s['completed'] ?? false,
               );
             }).toList(),
@@ -180,10 +185,12 @@ class LocalTransformationRepository implements ITransformationRepository {
         'name': e.name,
         'targetMuscle': e.targetMuscle,
         'equipmentRequired': e.equipmentRequired,
+        'trackingType': e.trackingType.name,
         'sets': e.sets.map((s) => {
           'setNumber': s.setNumber,
           'targetReps': s.targetReps,
           'targetWeightKg': s.targetWeightKg,
+          'targetDurationSeconds': s.targetDurationSeconds,
           'completed': s.completed,
         }).toList(),
       }).toList(),

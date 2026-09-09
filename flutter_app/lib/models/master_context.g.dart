@@ -108,6 +108,6 @@ _MasterContext _$MasterContextFromJson(Map<String, dynamic> json) =>
 
 Map<String, dynamic> _$MasterContextToJson(_MasterContext instance) =>
     <String, dynamic>{
-      'deduced': instance.deduced.toJson(),
-      'rollingSummary': instance.rollingSummary.toJson(),
+      'deduced': instance.deduced,
+      'rollingSummary': instance.rollingSummary,
     };

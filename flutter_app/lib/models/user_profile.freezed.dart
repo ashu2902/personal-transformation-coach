@@ -263,8 +263,7 @@ extension EquipmentItemPatterns on EquipmentItem {
 }
 
 /// @nodoc
-
-@JsonSerializable(explicitToJson: true)
+@JsonSerializable()
 class _EquipmentItem extends EquipmentItem {
   const _EquipmentItem(
       {required this.name,
@@ -904,8 +903,7 @@ extension UserProfilePatterns on UserProfile {
 }
 
 /// @nodoc
-
-@JsonSerializable(explicitToJson: true)
+@JsonSerializable()
 class _UserProfile extends UserProfile {
   const _UserProfile(
       {required this.name,

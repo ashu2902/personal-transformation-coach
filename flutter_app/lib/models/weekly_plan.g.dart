@@ -17,6 +17,10 @@ _WeeklyDayPlan _$WeeklyDayPlanFromJson(Map<String, dynamic> json) =>
               ?.map((e) => e as String)
               .toList() ??
           const [],
+      plannedExercises: (json['plannedExercises'] as List<dynamic>?)
+              ?.map((e) => PlannedExercise.fromJson(e as Map<String, dynamic>))
+              .toList() ??
+          const [],
       nutritionFocus: json['nutritionFocus'] as String?,
     );
 
@@ -28,6 +32,7 @@ Map<String, dynamic> _$WeeklyDayPlanToJson(_WeeklyDayPlan instance) =>
       'focusArea': instance.focusArea,
       'isRestDay': instance.isRestDay,
       'exerciseNames': instance.exerciseNames,
+      'plannedExercises': instance.plannedExercises,
       'nutritionFocus': instance.nutritionFocus,
     };
 
@@ -50,6 +55,6 @@ Map<String, dynamic> _$WeeklyPlanToJson(_WeeklyPlan instance) =>
       'endDate': instance.endDate,
       'overview': instance.overview,
       'coachNote': instance.coachNote,
-      'days': instance.days.map((e) => e.toJson()).toList(),
+      'days': instance.days,
       'createdAt': instance.createdAt,
     };

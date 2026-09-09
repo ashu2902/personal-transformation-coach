@@ -19,7 +19,7 @@ mixin _$ChatMessage {
   String get text;
   String? get timestamp;
   DateTime? get createdAt;
-  @JsonKey(ignore: true)
+  @JsonKey(includeFromJson: false, includeToJson: false)
   Uint8List? get imageBytes;
   String? get imageUrl;
 
@@ -74,7 +74,8 @@ abstract mixin class $ChatMessageCopyWith<$Res> {
       String text,
       String? timestamp,
       DateTime? createdAt,
-      @JsonKey(ignore: true) Uint8List? imageBytes,
+      @JsonKey(includeFromJson: false, includeToJson: false)
+      Uint8List? imageBytes,
       String? imageUrl});
 }
 
@@ -230,7 +231,8 @@ extension ChatMessagePatterns on ChatMessage {
             String text,
             String? timestamp,
             DateTime? createdAt,
-            @JsonKey(ignore: true) Uint8List? imageBytes,
+            @JsonKey(includeFromJson: false, includeToJson: false)
+            Uint8List? imageBytes,
             String? imageUrl)?
         $default, {
     required TResult orElse(),
@@ -266,7 +268,8 @@ extension ChatMessagePatterns on ChatMessage {
             String text,
             String? timestamp,
             DateTime? createdAt,
-            @JsonKey(ignore: true) Uint8List? imageBytes,
+            @JsonKey(includeFromJson: false, includeToJson: false)
+            Uint8List? imageBytes,
             String? imageUrl)
         $default,
   ) {
@@ -300,7 +303,8 @@ extension ChatMessagePatterns on ChatMessage {
             String text,
             String? timestamp,
             DateTime? createdAt,
-            @JsonKey(ignore: true) Uint8List? imageBytes,
+            @JsonKey(includeFromJson: false, includeToJson: false)
+            Uint8List? imageBytes,
             String? imageUrl)?
         $default,
   ) {
@@ -316,8 +320,7 @@ extension ChatMessagePatterns on ChatMessage {
 }
 
 /// @nodoc
-
-@JsonSerializable(explicitToJson: true)
+@JsonSerializable()
 class _ChatMessage extends ChatMessage {
   const _ChatMessage(
       {required this.id,
@@ -325,7 +328,7 @@ class _ChatMessage extends ChatMessage {
       required this.text,
       this.timestamp,
       this.createdAt,
-      @JsonKey(ignore: true) this.imageBytes,
+      @JsonKey(includeFromJson: false, includeToJson: false) this.imageBytes,
       this.imageUrl})
       : super._();
   factory _ChatMessage.fromJson(Map<String, dynamic> json) =>
@@ -342,7 +345,7 @@ class _ChatMessage extends ChatMessage {
   @override
   final DateTime? createdAt;
   @override
-  @JsonKey(ignore: true)
+  @JsonKey(includeFromJson: false, includeToJson: false)
   final Uint8List? imageBytes;
   @override
   final String? imageUrl;
@@ -405,7 +408,8 @@ abstract mixin class _$ChatMessageCopyWith<$Res>
       String text,
       String? timestamp,
       DateTime? createdAt,
-      @JsonKey(ignore: true) Uint8List? imageBytes,
+      @JsonKey(includeFromJson: false, includeToJson: false)
+      Uint8List? imageBytes,
       String? imageUrl});
 }
 
@@ -811,8 +815,7 @@ extension QuickLogParsedResultPatterns on QuickLogParsedResult {
 }
 
 /// @nodoc
-
-@JsonSerializable(explicitToJson: true)
+@JsonSerializable()
 class _QuickLogParsedResult extends QuickLogParsedResult {
   const _QuickLogParsedResult(
       {this.workoutStatus,
@@ -1231,8 +1234,7 @@ extension AIActionCallPatterns on AIActionCall {
 }
 
 /// @nodoc
-
-@JsonSerializable(explicitToJson: true)
+@JsonSerializable()
 class _AIActionCall extends AIActionCall {
   const _AIActionCall(
       {required this.functionName,
@@ -1598,8 +1600,7 @@ extension PendingActionPatterns on PendingAction {
 }
 
 /// @nodoc
-
-@JsonSerializable(explicitToJson: true)
+@JsonSerializable()
 class _PendingAction extends PendingAction {
   const _PendingAction(
       {required this.id,
@@ -1988,8 +1989,7 @@ extension AIOrchestratorResultPatterns on AIOrchestratorResult {
 }
 
 /// @nodoc
-
-@JsonSerializable(explicitToJson: true)
+@JsonSerializable()
 class _AIOrchestratorResult extends AIOrchestratorResult {
   const _AIOrchestratorResult(
       {final List<AIActionCall> actions = const [],

@@ -908,6 +908,7 @@ class FirebaseFirestoreService {
       'name': e.name,
       'targetMuscle': e.targetMuscle,
       'equipmentRequired': e.equipmentRequired,
+      'trackingType': e.trackingType.name,
       'notes': e.notes,
       'instructions': e.instructions,
       'videoUrl': e.videoUrl,
@@ -917,6 +918,8 @@ class FirebaseFirestoreService {
         'actualReps': s.actualReps,
         'targetWeightKg': s.targetWeightKg,
         'actualWeightKg': s.actualWeightKg,
+        'targetDurationSeconds': s.targetDurationSeconds,
+        'actualDurationSeconds': s.actualDurationSeconds,
         'completed': s.completed,
       }).toList(),
     }).toList();
@@ -950,6 +953,10 @@ class FirebaseFirestoreService {
           name: e['name'] ?? '',
           targetMuscle: e['targetMuscle'] ?? '',
           equipmentRequired: e['equipmentRequired']?.toString() ?? 'bodyweight',
+          trackingType: ExerciseTrackingType.values.firstWhere(
+            (t) => t.name == e['trackingType'],
+            orElse: () => ExerciseTrackingType.reps,
+          ),
           notes: e['notes'],
           instructions: e['instructions'],
           videoUrl: e['videoUrl'],
@@ -960,6 +967,8 @@ class FirebaseFirestoreService {
               actualReps: s['actualReps'],
               targetWeightKg: (s['targetWeightKg'] as num?)?.toDouble() ?? 0.0,
               actualWeightKg: (s['actualWeightKg'] as num?)?.toDouble(),
+              targetDurationSeconds: s['targetDurationSeconds'] ?? 0,
+              actualDurationSeconds: s['actualDurationSeconds'],
               completed: s['completed'] ?? false,
             );
           }).toList(),
@@ -1055,6 +1064,7 @@ class FirebaseFirestoreService {
         'focusArea': d.focusArea,
         'isRestDay': d.isRestDay,
         'exerciseNames': d.exerciseNames,
+        'plannedExercises': d.plannedExercises.map((p) => p.toJson()).toList(),
         'nutritionFocus': d.nutritionFocus,
       }).toList(),
     };
@@ -1082,13 +1092,25 @@ class FirebaseFirestoreService {
         final calculatedDay = baseDate.add(Duration(days: i));
         dateStr = calculatedDay.toIso8601String().split('T')[0];
       }
+
+      final rawPlanned = (d['plannedExercises'] as List? ?? []);
+      final plannedExercises = rawPlanned
+          .map((p) => PlannedExercise.fromJson(p as Map<String, dynamic>))
+          .toList();
+      final exerciseNames = (d['exerciseNames'] as List? ?? [])
+          .map((e) => e.toString())
+          .toList();
+
       days.add(WeeklyDayPlan(
         dayName: d['dayName']?.toString() ?? '',
         date: dateStr,
         title: d['title']?.toString() ?? '',
         focusArea: d['focusArea']?.toString() ?? '',
         isRestDay: d['isRestDay'] == true,
-        exerciseNames: (d['exerciseNames'] as List? ?? []).map((e) => e.toString()).toList(),
+        exerciseNames: exerciseNames.isNotEmpty
+            ? exerciseNames
+            : plannedExercises.map((p) => p.name).toList(),
+        plannedExercises: plannedExercises,
         nutritionFocus: d['nutritionFocus']?.toString(),
       ));
     }

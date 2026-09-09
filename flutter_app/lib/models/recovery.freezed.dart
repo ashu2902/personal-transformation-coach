@@ -351,8 +351,7 @@ extension RecoveryCheckInPatterns on RecoveryCheckIn {
 }
 
 /// @nodoc
-
-@JsonSerializable(explicitToJson: true)
+@JsonSerializable()
 class _RecoveryCheckIn extends RecoveryCheckIn {
   const _RecoveryCheckIn(
       {required this.date,
@@ -787,8 +786,7 @@ extension ProgressEntryPatterns on ProgressEntry {
 }
 
 /// @nodoc
-
-@JsonSerializable(explicitToJson: true)
+@JsonSerializable()
 class _ProgressEntry extends ProgressEntry {
   const _ProgressEntry(
       {required this.date,

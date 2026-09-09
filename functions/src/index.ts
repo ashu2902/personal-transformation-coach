@@ -532,7 +532,10 @@ CRITICAL SCHEDULING CONSTRAINTS:
 1. Examine Client Context carefully for explicit preferred training days (e.g. "Tue, Thu, Sat") and fasting protocols.
 2. You MUST strictly place workout days (isRestDay: false) on the client's designated training days.
 3. If the client has a fasting day, designate that day as active recovery/rest (isRestDay: true) and specify a hydration protocol in "nutritionFocus".
-4. Design a weekly split matching their training frequency (${effectiveState?.profile?.daysPerWeek || 3} days/week).
+5. You MUST include structured "exercises" for EVERY day (including rest/active recovery days with walks, stretches, or light core):
+   - Use trackingType: "reps" for resistance/calisthenics (targetSets: 3, targetReps: 10, targetDurationSeconds: 0).
+   - Use trackingType: "duration" for isometric holds (e.g. Plank: targetSets: 3, targetDurationSeconds: 45) or cardio sessions (e.g. Light Walking: targetSets: 1, targetDurationSeconds: 1800).
+   - Use trackingType: "completion" for routines/mobility (e.g. Full Body Dynamic Stretching: targetSets: 1, targetDurationSeconds: 600).
 Return JSON:
 {
   "overview": "string (1 paragraph overview of the week's strategy)",
@@ -544,7 +547,17 @@ Return JSON:
       "title": "string",
       "focusArea": "string",
       "isRestDay": boolean,
-      "exerciseNames": ["string"],
+      "exercises": [
+        {
+          "name": "string",
+          "trackingType": "reps | duration | completion",
+          "targetSets": number,
+          "targetReps": number,
+          "targetWeightKg": number,
+          "targetDurationSeconds": number,
+          "notes": "string"
+        }
+      ],
       "nutritionFocus": "string"
     }
   ]
@@ -569,9 +582,23 @@ Return JSON:
           const days = (parsed.days || []).map((d: any, i: number) => {
             const dayDate = new Date(monday);
             dayDate.setDate(monday.getDate() + i);
+            const plannedExercises = (d.exercises || []).map((ex: any) => ({
+              name: ex.name || "Exercise",
+              trackingType: ["reps", "duration", "completion"].includes(ex.trackingType) ? ex.trackingType : "reps",
+              targetSets: Number(ex.targetSets) || 3,
+              targetReps: Number(ex.targetReps) || 10,
+              targetWeightKg: Number(ex.targetWeightKg) || 0,
+              targetDurationSeconds: Number(ex.targetDurationSeconds) || 0,
+              notes: ex.notes || "",
+            }));
+            const exerciseNames = plannedExercises.length > 0
+              ? plannedExercises.map((e: any) => e.name)
+              : (Array.isArray(d.exerciseNames) ? d.exerciseNames : []);
             return {
               ...d,
               date: dayDate.toISOString().split("T")[0],
+              plannedExercises,
+              exerciseNames,
             };
           });
 

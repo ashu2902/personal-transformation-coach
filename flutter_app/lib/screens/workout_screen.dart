@@ -351,22 +351,26 @@ class WorkoutScreen extends ConsumerWidget {
                                 Expanded(
                                   child: GestureDetector(
                                     onTap: () {
-                                      _showSetAdjustmentModal(context, notifier, ex, setIndex, setItem);
+                                      if (ex.trackingType == ExerciseTrackingType.completion) {
+                                        notifier.updateExerciseSet(ex.id, setIndex, !setItem.completed);
+                                      } else {
+                                        _showSetAdjustmentModal(context, notifier, ex, setIndex, setItem);
+                                      }
                                     },
                                     child: Row(
                                       children: [
                                         Text(
-                                          setItem.targetWeightKg > 0
-                                              ? '${setItem.targetWeightKg} kg × ${setItem.targetReps} reps'
-                                              : '${setItem.targetReps} reps',
+                                          _formatSetDescription(ex, setItem),
                                           style: AuraTypography.bodyMedium.copyWith(
                                             decoration: setItem.completed ? TextDecoration.lineThrough : null,
                                             color: setItem.completed ? AuraColors.textTertiary : AuraColors.textPrimary,
                                             fontWeight: FontWeight.w600,
                                           ),
                                         ),
-                                        const SizedBox(width: 6),
-                                        const Icon(LucideIcons.edit2, size: 12, color: AuraColors.textTertiary),
+                                        if (ex.trackingType != ExerciseTrackingType.completion) ...[
+                                          const SizedBox(width: 6),
+                                          const Icon(LucideIcons.edit2, size: 12, color: AuraColors.textTertiary),
+                                        ],
                                       ],
                                     ),
                                   ),
@@ -689,6 +693,31 @@ class WorkoutScreen extends ConsumerWidget {
     );
   }
 
+  String _formatSetDescription(Exercise ex, ExerciseSet setItem) {
+    switch (ex.trackingType) {
+      case ExerciseTrackingType.duration:
+        final secs = setItem.targetDurationSeconds;
+        if (secs >= 60) {
+          final mins = (secs / 60).round();
+          return '$mins min';
+        } else if (secs > 0) {
+          return '${secs}s hold';
+        } else {
+          return '${setItem.targetReps} reps';
+        }
+      case ExerciseTrackingType.completion:
+        if (setItem.targetDurationSeconds >= 60) {
+          final mins = (setItem.targetDurationSeconds / 60).round();
+          return '$mins min routine';
+        }
+        return 'Full routine';
+      case ExerciseTrackingType.reps:
+        return setItem.targetWeightKg > 0
+            ? '${setItem.targetWeightKg} kg × ${setItem.targetReps} reps'
+            : '${setItem.targetReps} reps';
+    }
+  }
+
   void _showSetAdjustmentModal(
     BuildContext context,
     TransformationEngineNotifier notifier,
@@ -698,6 +727,9 @@ class WorkoutScreen extends ConsumerWidget {
   ) {
     int reps = currentSet.targetReps;
     double weight = currentSet.targetWeightKg;
+    int durationSecs = currentSet.targetDurationSeconds > 0 ? currentSet.targetDurationSeconds : 30;
+    final bool isMinutes = durationSecs >= 60;
+    int durationMins = isMinutes ? (durationSecs / 60).round() : 1;
 
     showModalBottomSheet(
       context: context,
@@ -768,96 +800,152 @@ class WorkoutScreen extends ConsumerWidget {
                   ),
                   const SizedBox(height: 24),
 
-                  // Reps Stepper
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Target Reps',
-                        style: GoogleFonts.plusJakartaSans(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      Row(
-                        children: [
-                          _buildStepperBtn(
-                            icon: LucideIcons.minus,
-                            onTap: () {
-                              if (reps > 1) {
-                                setModalState(() => reps -= 1);
-                              }
-                            },
+                  if (ex.trackingType == ExerciseTrackingType.duration) ...[
+                    // Duration Stepper
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          isMinutes ? 'Target Duration (mins)' : 'Target Duration (sec)',
+                          style: GoogleFonts.plusJakartaSans(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
                           ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 16.0),
-                            child: Text(
-                              '$reps',
-                              style: GoogleFonts.syne(
-                                color: Colors.white,
-                                fontSize: 20,
-                                fontWeight: FontWeight.bold,
+                        ),
+                        Row(
+                          children: [
+                            _buildStepperBtn(
+                              icon: LucideIcons.minus,
+                              onTap: () {
+                                if (isMinutes) {
+                                  if (durationMins > 1) {
+                                    setModalState(() => durationMins -= (durationMins > 5 ? 5 : 1));
+                                  }
+                                } else {
+                                  if (durationSecs > 5) {
+                                    setModalState(() => durationSecs -= 5);
+                                  }
+                                }
+                              },
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                              child: Text(
+                                isMinutes ? '$durationMins min' : '$durationSecs s',
+                                style: GoogleFonts.syne(
+                                  color: Colors.white,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
+                            _buildStepperBtn(
+                              icon: LucideIcons.plus,
+                              onTap: () {
+                                if (isMinutes) {
+                                  setModalState(() => durationMins += 5);
+                                } else {
+                                  setModalState(() => durationSecs += 5);
+                                }
+                              },
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ] else ...[
+                    // Reps Stepper
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Target Reps',
+                          style: GoogleFonts.plusJakartaSans(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
                           ),
-                          _buildStepperBtn(
-                            icon: LucideIcons.plus,
-                            onTap: () {
-                              setModalState(() => reps += 1);
-                            },
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 18),
+                        ),
+                        Row(
+                          children: [
+                            _buildStepperBtn(
+                              icon: LucideIcons.minus,
+                              onTap: () {
+                                if (reps > 1) {
+                                  setModalState(() => reps -= 1);
+                                }
+                              },
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 16.0),
+                              child: Text(
+                                '$reps',
+                                style: GoogleFonts.syne(
+                                  color: Colors.white,
+                                  fontSize: 20,
+                                  fontWeight: FontWeight.bold,
+                                ),
+                              ),
+                            ),
+                            _buildStepperBtn(
+                              icon: LucideIcons.plus,
+                              onTap: () {
+                                setModalState(() => reps += 1);
+                              },
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 18),
 
-                  // Weight Stepper (if applicable)
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      Text(
-                        'Target Weight (kg)',
-                        style: GoogleFonts.plusJakartaSans(
-                          color: Colors.white,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                      Row(
-                        children: [
-                          _buildStepperBtn(
-                            icon: LucideIcons.minus,
-                            onTap: () {
-                              if (weight >= 2.5) {
-                                setModalState(() => weight -= 2.5);
-                              } else {
-                                setModalState(() => weight = 0.0);
-                              }
-                            },
+                    // Weight Stepper (if applicable)
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text(
+                          'Target Weight (kg)',
+                          style: GoogleFonts.plusJakartaSans(
+                            color: Colors.white,
+                            fontSize: 15,
+                            fontWeight: FontWeight.w600,
                           ),
-                          Padding(
-                            padding: const EdgeInsets.symmetric(horizontal: 14.0),
-                            child: Text(
-                              '${weight.toStringAsFixed(weight.truncateToDouble() == weight ? 0 : 1)} kg',
-                              style: GoogleFonts.syne(
-                                color: Colors.white,
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
+                        ),
+                        Row(
+                          children: [
+                            _buildStepperBtn(
+                              icon: LucideIcons.minus,
+                              onTap: () {
+                                if (weight >= 2.5) {
+                                  setModalState(() => weight -= 2.5);
+                                } else {
+                                  setModalState(() => weight = 0.0);
+                                }
+                              },
+                            ),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 14.0),
+                              child: Text(
+                                '${weight.toStringAsFixed(weight.truncateToDouble() == weight ? 0 : 1)} kg',
+                                style: GoogleFonts.syne(
+                                  color: Colors.white,
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                ),
                               ),
                             ),
-                          ),
-                          _buildStepperBtn(
-                            icon: LucideIcons.plus,
-                            onTap: () {
-                              setModalState(() => weight += 2.5);
-                            },
-                          ),
-                        ],
-                      ),
-                    ],
-                  ),
+                            _buildStepperBtn(
+                              icon: LucideIcons.plus,
+                              onTap: () {
+                                setModalState(() => weight += 2.5);
+                              },
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ],
                   const SizedBox(height: 28),
 
                   // Save Button
@@ -876,6 +964,7 @@ class WorkoutScreen extends ConsumerWidget {
                           setIndex,
                           newReps: reps,
                           newWeightKg: weight,
+                          newDurationSeconds: isMinutes ? durationMins * 60 : durationSecs,
                         );
                         Navigator.pop(ctx);
                       },

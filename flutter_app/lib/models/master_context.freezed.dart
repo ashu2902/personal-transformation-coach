@@ -441,8 +441,7 @@ extension DeducedKnowledgePatterns on DeducedKnowledge {
 }
 
 /// @nodoc
-
-@JsonSerializable(explicitToJson: true)
+@JsonSerializable()
 class _DeducedKnowledge extends DeducedKnowledge {
   const _DeducedKnowledge(
       {this.activityLevel,
@@ -1101,8 +1100,7 @@ extension RollingSummaryPatterns on RollingSummary {
 }
 
 /// @nodoc
-
-@JsonSerializable(explicitToJson: true)
+@JsonSerializable()
 class _RollingSummary extends RollingSummary {
   const _RollingSummary(
       {this.periodDays = 7,
@@ -1587,8 +1585,7 @@ extension MasterContextPatterns on MasterContext {
 }
 
 /// @nodoc
-
-@JsonSerializable(explicitToJson: true)
+@JsonSerializable()
 class _MasterContext extends MasterContext {
   const _MasterContext(
       {this.deduced = const DeducedKnowledge(),

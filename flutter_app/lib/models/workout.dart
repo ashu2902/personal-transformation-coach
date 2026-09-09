@@ -3,16 +3,24 @@ import 'package:freezed_annotation/freezed_annotation.dart';
 part 'workout.freezed.dart';
 part 'workout.g.dart';
 
+enum ExerciseTrackingType {
+  @JsonValue('reps') reps,
+  @JsonValue('duration') duration,
+  @JsonValue('completion') completion,
+}
+
 @freezed
 abstract class ExerciseSet with _$ExerciseSet {
   const ExerciseSet._();
 
   const factory ExerciseSet({
     required int setNumber,
-    required int targetReps,
+    @Default(10) int targetReps,
     int? actualReps,
-    required double targetWeightKg,
+    @Default(0.0) double targetWeightKg,
     double? actualWeightKg,
+    @Default(0) int targetDurationSeconds,
+    int? actualDurationSeconds,
     @Default(false) bool completed,
   }) = _ExerciseSet;
 
@@ -28,6 +36,7 @@ abstract class Exercise with _$Exercise {
     required String name,
     required String targetMuscle,
     required String equipmentRequired,
+    @Default(ExerciseTrackingType.reps) ExerciseTrackingType trackingType,
     required List<ExerciseSet> sets,
     String? notes,
     String? instructions,

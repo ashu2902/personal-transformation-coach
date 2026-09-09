@@ -71,7 +71,7 @@ Map<String, dynamic> _$UserProfileToJson(_UserProfile instance) =>
       'goal': _$GoalTypeEnumMap[instance.goal]!,
       'daysPerWeek': instance.daysPerWeek,
       'targetPhysique': instance.targetPhysique,
-      'equipmentList': instance.equipmentList.map((e) => e.toJson()).toList(),
+      'equipmentList': instance.equipmentList,
       'experienceLevel': _$ExperienceLevelEnumMap[instance.experienceLevel]!,
       'benchPress1RMKg': instance.benchPress1RMKg,
       'squat1RMKg': instance.squat1RMKg,

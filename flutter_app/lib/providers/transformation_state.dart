@@ -518,6 +518,10 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
     }
   }
 
+  @visibleForTesting
+  Future<void> autoDeriveTodayWorkoutIfMissing(String uid, String todayStr, {WeeklyPlan? explicitPlan}) =>
+      _autoDeriveTodayWorkoutIfMissing(uid, todayStr, explicitPlan: explicitPlan);
+
   Future<void> _autoDeriveTodayWorkoutIfMissing(String uid, String todayStr, {WeeklyPlan? explicitPlan}) async {
     DailyWorkout? derivedWorkout;
     final activePlan = explicitPlan ?? state.weeklyPlan;
@@ -526,7 +530,7 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
       final dayIndex = now.weekday - 1; // 0 for Monday, 6 for Sunday
       if (dayIndex >= 0 && dayIndex < activePlan.days.length) {
         final dayPlan = activePlan.days[dayIndex];
-        if (dayPlan.isRestDay && dayPlan.exerciseNames.isEmpty) {
+        if (dayPlan.isRestDay && dayPlan.exerciseNames.isEmpty && dayPlan.plannedExercises.isEmpty) {
           derivedWorkout = DailyWorkout(
             id: 'plan_rest_$todayStr',
             date: todayStr,
@@ -538,19 +542,45 @@ class TransformationEngineNotifier extends StateNotifier<TransformationEngineSta
             adaptationNote: 'Scheduled rest day from weekly plan.',
           );
         } else {
-          final exercises = dayPlan.exerciseNames.map((name) {
-            return Exercise(
-              id: 'ex_${name.toLowerCase().replaceAll(' ', '_')}',
-              name: name,
-              targetMuscle: dayPlan.focusArea.isNotEmpty ? dayPlan.focusArea : 'Mobility & Core',
-              equipmentRequired: 'bodyweight',
-              sets: [
-                const ExerciseSet(setNumber: 1, targetReps: 10, targetWeightKg: 0.0),
-                const ExerciseSet(setNumber: 2, targetReps: 10, targetWeightKg: 0.0),
-                const ExerciseSet(setNumber: 3, targetReps: 10, targetWeightKg: 0.0),
-              ],
-            );
-          }).toList();
+          final List<Exercise> exercises;
+          if (dayPlan.plannedExercises.isNotEmpty) {
+            exercises = dayPlan.plannedExercises.map((p) {
+              final setCount = p.targetSets > 0 ? p.targetSets : 1;
+              final sets = List.generate(setCount, (i) {
+                return ExerciseSet(
+                  setNumber: i + 1,
+                  targetReps: p.targetReps,
+                  targetWeightKg: p.targetWeightKg,
+                  targetDurationSeconds: p.targetDurationSeconds,
+                  completed: false,
+                );
+              });
+              return Exercise(
+                id: 'ex_${p.name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_')}',
+                name: p.name,
+                targetMuscle: dayPlan.focusArea.isNotEmpty ? dayPlan.focusArea : 'Mobility & Core',
+                equipmentRequired: 'bodyweight',
+                trackingType: p.trackingType,
+                sets: sets,
+                notes: p.notes,
+              );
+            }).toList();
+          } else {
+            exercises = dayPlan.exerciseNames.map((name) {
+              return Exercise(
+                id: 'ex_${name.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]'), '_')}',
+                name: name,
+                targetMuscle: dayPlan.focusArea.isNotEmpty ? dayPlan.focusArea : 'Mobility & Core',
+                equipmentRequired: 'bodyweight',
+                trackingType: ExerciseTrackingType.reps,
+                sets: [
+                  const ExerciseSet(setNumber: 1, targetReps: 10, targetWeightKg: 0.0),
+                  const ExerciseSet(setNumber: 2, targetReps: 10, targetWeightKg: 0.0),
+                  const ExerciseSet(setNumber: 3, targetReps: 10, targetWeightKg: 0.0),
+                ],
+              );
+            }).toList();
+          }
 
           derivedWorkout = DailyWorkout(
             id: 'plan_$todayStr',

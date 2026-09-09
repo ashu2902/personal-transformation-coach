@@ -46,5 +46,5 @@ Map<String, dynamic> _$DailyNutritionToJson(_DailyNutrition instance) =>
       'targetFatG': instance.targetFatG,
       'waterMl': instance.waterMl,
       'targetWaterMl': instance.targetWaterMl,
-      'meals': instance.meals.map((e) => e.toJson()).toList(),
+      'meals': instance.meals,
     };

@@ -19,6 +19,8 @@ mixin _$ExerciseSet {
   int? get actualReps;
   double get targetWeightKg;
   double? get actualWeightKg;
+  int get targetDurationSeconds;
+  int? get actualDurationSeconds;
   bool get completed;
 
   /// Create a copy of ExerciseSet
@@ -46,18 +48,30 @@ mixin _$ExerciseSet {
                 other.targetWeightKg == targetWeightKg) &&
             (identical(other.actualWeightKg, actualWeightKg) ||
                 other.actualWeightKg == actualWeightKg) &&
+            (identical(other.targetDurationSeconds, targetDurationSeconds) ||
+                other.targetDurationSeconds == targetDurationSeconds) &&
+            (identical(other.actualDurationSeconds, actualDurationSeconds) ||
+                other.actualDurationSeconds == actualDurationSeconds) &&
             (identical(other.completed, completed) ||
                 other.completed == completed));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode => Object.hash(runtimeType, setNumber, targetReps,
-      actualReps, targetWeightKg, actualWeightKg, completed);
+  int get hashCode => Object.hash(
+      runtimeType,
+      setNumber,
+      targetReps,
+      actualReps,
+      targetWeightKg,
+      actualWeightKg,
+      targetDurationSeconds,
+      actualDurationSeconds,
+      completed);
 
   @override
   String toString() {
-    return 'ExerciseSet(setNumber: $setNumber, targetReps: $targetReps, actualReps: $actualReps, targetWeightKg: $targetWeightKg, actualWeightKg: $actualWeightKg, completed: $completed)';
+    return 'ExerciseSet(setNumber: $setNumber, targetReps: $targetReps, actualReps: $actualReps, targetWeightKg: $targetWeightKg, actualWeightKg: $actualWeightKg, targetDurationSeconds: $targetDurationSeconds, actualDurationSeconds: $actualDurationSeconds, completed: $completed)';
   }
 }
 
@@ -73,6 +87,8 @@ abstract mixin class $ExerciseSetCopyWith<$Res> {
       int? actualReps,
       double targetWeightKg,
       double? actualWeightKg,
+      int targetDurationSeconds,
+      int? actualDurationSeconds,
       bool completed});
 }
 
@@ -93,6 +109,8 @@ class _$ExerciseSetCopyWithImpl<$Res> implements $ExerciseSetCopyWith<$Res> {
     Object? actualReps = freezed,
     Object? targetWeightKg = null,
     Object? actualWeightKg = freezed,
+    Object? targetDurationSeconds = null,
+    Object? actualDurationSeconds = freezed,
     Object? completed = null,
   }) {
     return _then(_self.copyWith(
@@ -116,6 +134,14 @@ class _$ExerciseSetCopyWithImpl<$Res> implements $ExerciseSetCopyWith<$Res> {
           ? _self.actualWeightKg
           : actualWeightKg // ignore: cast_nullable_to_non_nullable
               as double?,
+      targetDurationSeconds: null == targetDurationSeconds
+          ? _self.targetDurationSeconds
+          : targetDurationSeconds // ignore: cast_nullable_to_non_nullable
+              as int,
+      actualDurationSeconds: freezed == actualDurationSeconds
+          ? _self.actualDurationSeconds
+          : actualDurationSeconds // ignore: cast_nullable_to_non_nullable
+              as int?,
       completed: null == completed
           ? _self.completed
           : completed // ignore: cast_nullable_to_non_nullable
@@ -217,16 +243,30 @@ extension ExerciseSetPatterns on ExerciseSet {
 
   @optionalTypeArgs
   TResult maybeWhen<TResult extends Object?>(
-    TResult Function(int setNumber, int targetReps, int? actualReps,
-            double targetWeightKg, double? actualWeightKg, bool completed)?
+    TResult Function(
+            int setNumber,
+            int targetReps,
+            int? actualReps,
+            double targetWeightKg,
+            double? actualWeightKg,
+            int targetDurationSeconds,
+            int? actualDurationSeconds,
+            bool completed)?
         $default, {
     required TResult orElse(),
   }) {
     final _that = this;
     switch (_that) {
       case _ExerciseSet() when $default != null:
-        return $default(_that.setNumber, _that.targetReps, _that.actualReps,
-            _that.targetWeightKg, _that.actualWeightKg, _that.completed);
+        return $default(
+            _that.setNumber,
+            _that.targetReps,
+            _that.actualReps,
+            _that.targetWeightKg,
+            _that.actualWeightKg,
+            _that.targetDurationSeconds,
+            _that.actualDurationSeconds,
+            _that.completed);
       case _:
         return orElse();
     }
@@ -247,15 +287,29 @@ extension ExerciseSetPatterns on ExerciseSet {
 
   @optionalTypeArgs
   TResult when<TResult extends Object?>(
-    TResult Function(int setNumber, int targetReps, int? actualReps,
-            double targetWeightKg, double? actualWeightKg, bool completed)
+    TResult Function(
+            int setNumber,
+            int targetReps,
+            int? actualReps,
+            double targetWeightKg,
+            double? actualWeightKg,
+            int targetDurationSeconds,
+            int? actualDurationSeconds,
+            bool completed)
         $default,
   ) {
     final _that = this;
     switch (_that) {
       case _ExerciseSet():
-        return $default(_that.setNumber, _that.targetReps, _that.actualReps,
-            _that.targetWeightKg, _that.actualWeightKg, _that.completed);
+        return $default(
+            _that.setNumber,
+            _that.targetReps,
+            _that.actualReps,
+            _that.targetWeightKg,
+            _that.actualWeightKg,
+            _that.targetDurationSeconds,
+            _that.actualDurationSeconds,
+            _that.completed);
       case _:
         throw StateError('Unexpected subclass');
     }
@@ -275,15 +329,29 @@ extension ExerciseSetPatterns on ExerciseSet {
 
   @optionalTypeArgs
   TResult? whenOrNull<TResult extends Object?>(
-    TResult? Function(int setNumber, int targetReps, int? actualReps,
-            double targetWeightKg, double? actualWeightKg, bool completed)?
+    TResult? Function(
+            int setNumber,
+            int targetReps,
+            int? actualReps,
+            double targetWeightKg,
+            double? actualWeightKg,
+            int targetDurationSeconds,
+            int? actualDurationSeconds,
+            bool completed)?
         $default,
   ) {
     final _that = this;
     switch (_that) {
       case _ExerciseSet() when $default != null:
-        return $default(_that.setNumber, _that.targetReps, _that.actualReps,
-            _that.targetWeightKg, _that.actualWeightKg, _that.completed);
+        return $default(
+            _that.setNumber,
+            _that.targetReps,
+            _that.actualReps,
+            _that.targetWeightKg,
+            _that.actualWeightKg,
+            _that.targetDurationSeconds,
+            _that.actualDurationSeconds,
+            _that.completed);
       case _:
         return null;
     }
@@ -291,15 +359,16 @@ extension ExerciseSetPatterns on ExerciseSet {
 }
 
 /// @nodoc
-
-@JsonSerializable(explicitToJson: true)
+@JsonSerializable()
 class _ExerciseSet extends ExerciseSet {
   const _ExerciseSet(
       {required this.setNumber,
-      required this.targetReps,
+      this.targetReps = 10,
       this.actualReps,
-      required this.targetWeightKg,
+      this.targetWeightKg = 0.0,
       this.actualWeightKg,
+      this.targetDurationSeconds = 0,
+      this.actualDurationSeconds,
       this.completed = false})
       : super._();
   factory _ExerciseSet.fromJson(Map<String, dynamic> json) =>
@@ -308,13 +377,20 @@ class _ExerciseSet extends ExerciseSet {
   @override
   final int setNumber;
   @override
+  @JsonKey()
   final int targetReps;
   @override
   final int? actualReps;
   @override
+  @JsonKey()
   final double targetWeightKg;
   @override
   final double? actualWeightKg;
+  @override
+  @JsonKey()
+  final int targetDurationSeconds;
+  @override
+  final int? actualDurationSeconds;
   @override
   @JsonKey()
   final bool completed;
@@ -349,18 +425,30 @@ class _ExerciseSet extends ExerciseSet {
                 other.targetWeightKg == targetWeightKg) &&
             (identical(other.actualWeightKg, actualWeightKg) ||
                 other.actualWeightKg == actualWeightKg) &&
+            (identical(other.targetDurationSeconds, targetDurationSeconds) ||
+                other.targetDurationSeconds == targetDurationSeconds) &&
+            (identical(other.actualDurationSeconds, actualDurationSeconds) ||
+                other.actualDurationSeconds == actualDurationSeconds) &&
             (identical(other.completed, completed) ||
                 other.completed == completed));
   }
 
   @JsonKey(includeFromJson: false, includeToJson: false)
   @override
-  int get hashCode => Object.hash(runtimeType, setNumber, targetReps,
-      actualReps, targetWeightKg, actualWeightKg, completed);
+  int get hashCode => Object.hash(
+      runtimeType,
+      setNumber,
+      targetReps,
+      actualReps,
+      targetWeightKg,
+      actualWeightKg,
+      targetDurationSeconds,
+      actualDurationSeconds,
+      completed);
 
   @override
   String toString() {
-    return 'ExerciseSet(setNumber: $setNumber, targetReps: $targetReps, actualReps: $actualReps, targetWeightKg: $targetWeightKg, actualWeightKg: $actualWeightKg, completed: $completed)';
+    return 'ExerciseSet(setNumber: $setNumber, targetReps: $targetReps, actualReps: $actualReps, targetWeightKg: $targetWeightKg, actualWeightKg: $actualWeightKg, targetDurationSeconds: $targetDurationSeconds, actualDurationSeconds: $actualDurationSeconds, completed: $completed)';
   }
 }
 
@@ -378,6 +466,8 @@ abstract mixin class _$ExerciseSetCopyWith<$Res>
       int? actualReps,
       double targetWeightKg,
       double? actualWeightKg,
+      int targetDurationSeconds,
+      int? actualDurationSeconds,
       bool completed});
 }
 
@@ -398,6 +488,8 @@ class __$ExerciseSetCopyWithImpl<$Res> implements _$ExerciseSetCopyWith<$Res> {
     Object? actualReps = freezed,
     Object? targetWeightKg = null,
     Object? actualWeightKg = freezed,
+    Object? targetDurationSeconds = null,
+    Object? actualDurationSeconds = freezed,
     Object? completed = null,
   }) {
     return _then(_ExerciseSet(
@@ -421,6 +513,14 @@ class __$ExerciseSetCopyWithImpl<$Res> implements _$ExerciseSetCopyWith<$Res> {
           ? _self.actualWeightKg
           : actualWeightKg // ignore: cast_nullable_to_non_nullable
               as double?,
+      targetDurationSeconds: null == targetDurationSeconds
+          ? _self.targetDurationSeconds
+          : targetDurationSeconds // ignore: cast_nullable_to_non_nullable
+              as int,
+      actualDurationSeconds: freezed == actualDurationSeconds
+          ? _self.actualDurationSeconds
+          : actualDurationSeconds // ignore: cast_nullable_to_non_nullable
+              as int?,
       completed: null == completed
           ? _self.completed
           : completed // ignore: cast_nullable_to_non_nullable
@@ -435,6 +535,7 @@ mixin _$Exercise {
   String get name;
   String get targetMuscle;
   String get equipmentRequired;
+  ExerciseTrackingType get trackingType;
   List<ExerciseSet> get sets;
   String? get notes;
   String? get instructions;
@@ -461,6 +562,8 @@ mixin _$Exercise {
                 other.targetMuscle == targetMuscle) &&
             (identical(other.equipmentRequired, equipmentRequired) ||
                 other.equipmentRequired == equipmentRequired) &&
+            (identical(other.trackingType, trackingType) ||
+                other.trackingType == trackingType) &&
             const DeepCollectionEquality().equals(other.sets, sets) &&
             (identical(other.notes, notes) || other.notes == notes) &&
             (identical(other.instructions, instructions) ||
@@ -477,6 +580,7 @@ mixin _$Exercise {
       name,
       targetMuscle,
       equipmentRequired,
+      trackingType,
       const DeepCollectionEquality().hash(sets),
       notes,
       instructions,
@@ -484,7 +588,7 @@ mixin _$Exercise {
 
   @override
   String toString() {
-    return 'Exercise(id: $id, name: $name, targetMuscle: $targetMuscle, equipmentRequired: $equipmentRequired, sets: $sets, notes: $notes, instructions: $instructions, videoUrl: $videoUrl)';
+    return 'Exercise(id: $id, name: $name, targetMuscle: $targetMuscle, equipmentRequired: $equipmentRequired, trackingType: $trackingType, sets: $sets, notes: $notes, instructions: $instructions, videoUrl: $videoUrl)';
   }
 }
 
@@ -498,6 +602,7 @@ abstract mixin class $ExerciseCopyWith<$Res> {
       String name,
       String targetMuscle,
       String equipmentRequired,
+      ExerciseTrackingType trackingType,
       List<ExerciseSet> sets,
       String? notes,
       String? instructions,
@@ -520,6 +625,7 @@ class _$ExerciseCopyWithImpl<$Res> implements $ExerciseCopyWith<$Res> {
     Object? name = null,
     Object? targetMuscle = null,
     Object? equipmentRequired = null,
+    Object? trackingType = null,
     Object? sets = null,
     Object? notes = freezed,
     Object? instructions = freezed,
@@ -542,6 +648,10 @@ class _$ExerciseCopyWithImpl<$Res> implements $ExerciseCopyWith<$Res> {
           ? _self.equipmentRequired
           : equipmentRequired // ignore: cast_nullable_to_non_nullable
               as String,
+      trackingType: null == trackingType
+          ? _self.trackingType
+          : trackingType // ignore: cast_nullable_to_non_nullable
+              as ExerciseTrackingType,
       sets: null == sets
           ? _self.sets
           : sets // ignore: cast_nullable_to_non_nullable
@@ -660,6 +770,7 @@ extension ExercisePatterns on Exercise {
             String name,
             String targetMuscle,
             String equipmentRequired,
+            ExerciseTrackingType trackingType,
             List<ExerciseSet> sets,
             String? notes,
             String? instructions,
@@ -675,6 +786,7 @@ extension ExercisePatterns on Exercise {
             _that.name,
             _that.targetMuscle,
             _that.equipmentRequired,
+            _that.trackingType,
             _that.sets,
             _that.notes,
             _that.instructions,
@@ -704,6 +816,7 @@ extension ExercisePatterns on Exercise {
             String name,
             String targetMuscle,
             String equipmentRequired,
+            ExerciseTrackingType trackingType,
             List<ExerciseSet> sets,
             String? notes,
             String? instructions,
@@ -718,6 +831,7 @@ extension ExercisePatterns on Exercise {
             _that.name,
             _that.targetMuscle,
             _that.equipmentRequired,
+            _that.trackingType,
             _that.sets,
             _that.notes,
             _that.instructions,
@@ -746,6 +860,7 @@ extension ExercisePatterns on Exercise {
             String name,
             String targetMuscle,
             String equipmentRequired,
+            ExerciseTrackingType trackingType,
             List<ExerciseSet> sets,
             String? notes,
             String? instructions,
@@ -760,6 +875,7 @@ extension ExercisePatterns on Exercise {
             _that.name,
             _that.targetMuscle,
             _that.equipmentRequired,
+            _that.trackingType,
             _that.sets,
             _that.notes,
             _that.instructions,
@@ -771,14 +887,14 @@ extension ExercisePatterns on Exercise {
 }
 
 /// @nodoc
-
-@JsonSerializable(explicitToJson: true)
+@JsonSerializable()
 class _Exercise extends Exercise {
   const _Exercise(
       {required this.id,
       required this.name,
       required this.targetMuscle,
       required this.equipmentRequired,
+      this.trackingType = ExerciseTrackingType.reps,
       required final List<ExerciseSet> sets,
       this.notes,
       this.instructions,
@@ -796,6 +912,9 @@ class _Exercise extends Exercise {
   final String targetMuscle;
   @override
   final String equipmentRequired;
+  @override
+  @JsonKey()
+  final ExerciseTrackingType trackingType;
   final List<ExerciseSet> _sets;
   @override
   List<ExerciseSet> get sets {
@@ -837,6 +956,8 @@ class _Exercise extends Exercise {
                 other.targetMuscle == targetMuscle) &&
             (identical(other.equipmentRequired, equipmentRequired) ||
                 other.equipmentRequired == equipmentRequired) &&
+            (identical(other.trackingType, trackingType) ||
+                other.trackingType == trackingType) &&
             const DeepCollectionEquality().equals(other._sets, _sets) &&
             (identical(other.notes, notes) || other.notes == notes) &&
             (identical(other.instructions, instructions) ||
@@ -853,6 +974,7 @@ class _Exercise extends Exercise {
       name,
       targetMuscle,
       equipmentRequired,
+      trackingType,
       const DeepCollectionEquality().hash(_sets),
       notes,
       instructions,
@@ -860,7 +982,7 @@ class _Exercise extends Exercise {
 
   @override
   String toString() {
-    return 'Exercise(id: $id, name: $name, targetMuscle: $targetMuscle, equipmentRequired: $equipmentRequired, sets: $sets, notes: $notes, instructions: $instructions, videoUrl: $videoUrl)';
+    return 'Exercise(id: $id, name: $name, targetMuscle: $targetMuscle, equipmentRequired: $equipmentRequired, trackingType: $trackingType, sets: $sets, notes: $notes, instructions: $instructions, videoUrl: $videoUrl)';
   }
 }
 
@@ -876,6 +998,7 @@ abstract mixin class _$ExerciseCopyWith<$Res>
       String name,
       String targetMuscle,
       String equipmentRequired,
+      ExerciseTrackingType trackingType,
       List<ExerciseSet> sets,
       String? notes,
       String? instructions,
@@ -898,6 +1021,7 @@ class __$ExerciseCopyWithImpl<$Res> implements _$ExerciseCopyWith<$Res> {
     Object? name = null,
     Object? targetMuscle = null,
     Object? equipmentRequired = null,
+    Object? trackingType = null,
     Object? sets = null,
     Object? notes = freezed,
     Object? instructions = freezed,
@@ -920,6 +1044,10 @@ class __$ExerciseCopyWithImpl<$Res> implements _$ExerciseCopyWith<$Res> {
           ? _self.equipmentRequired
           : equipmentRequired // ignore: cast_nullable_to_non_nullable
               as String,
+      trackingType: null == trackingType
+          ? _self.trackingType
+          : trackingType // ignore: cast_nullable_to_non_nullable
+              as ExerciseTrackingType,
       sets: null == sets
           ? _self._sets
           : sets // ignore: cast_nullable_to_non_nullable
@@ -1283,8 +1411,7 @@ extension DailyWorkoutPatterns on DailyWorkout {
 }
 
 /// @nodoc
-
-@JsonSerializable(explicitToJson: true)
+@JsonSerializable()
 class _DailyWorkout extends DailyWorkout {
   const _DailyWorkout(
       {required this.id,

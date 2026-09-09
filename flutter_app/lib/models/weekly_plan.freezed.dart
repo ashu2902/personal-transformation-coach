@@ -20,6 +20,7 @@ mixin _$WeeklyDayPlan {
   String get focusArea;
   bool get isRestDay;
   List<String> get exerciseNames;
+  List<PlannedExercise> get plannedExercises;
   String? get nutritionFocus;
 
   /// Create a copy of WeeklyDayPlan
@@ -47,6 +48,8 @@ mixin _$WeeklyDayPlan {
                 other.isRestDay == isRestDay) &&
             const DeepCollectionEquality()
                 .equals(other.exerciseNames, exerciseNames) &&
+            const DeepCollectionEquality()
+                .equals(other.plannedExercises, plannedExercises) &&
             (identical(other.nutritionFocus, nutritionFocus) ||
                 other.nutritionFocus == nutritionFocus));
   }
@@ -61,11 +64,12 @@ mixin _$WeeklyDayPlan {
       focusArea,
       isRestDay,
       const DeepCollectionEquality().hash(exerciseNames),
+      const DeepCollectionEquality().hash(plannedExercises),
       nutritionFocus);
 
   @override
   String toString() {
-    return 'WeeklyDayPlan(dayName: $dayName, date: $date, title: $title, focusArea: $focusArea, isRestDay: $isRestDay, exerciseNames: $exerciseNames, nutritionFocus: $nutritionFocus)';
+    return 'WeeklyDayPlan(dayName: $dayName, date: $date, title: $title, focusArea: $focusArea, isRestDay: $isRestDay, exerciseNames: $exerciseNames, plannedExercises: $plannedExercises, nutritionFocus: $nutritionFocus)';
   }
 }
 
@@ -82,6 +86,7 @@ abstract mixin class $WeeklyDayPlanCopyWith<$Res> {
       String focusArea,
       bool isRestDay,
       List<String> exerciseNames,
+      List<PlannedExercise> plannedExercises,
       String? nutritionFocus});
 }
 
@@ -104,6 +109,7 @@ class _$WeeklyDayPlanCopyWithImpl<$Res>
     Object? focusArea = null,
     Object? isRestDay = null,
     Object? exerciseNames = null,
+    Object? plannedExercises = null,
     Object? nutritionFocus = freezed,
   }) {
     return _then(_self.copyWith(
@@ -131,6 +137,10 @@ class _$WeeklyDayPlanCopyWithImpl<$Res>
           ? _self.exerciseNames
           : exerciseNames // ignore: cast_nullable_to_non_nullable
               as List<String>,
+      plannedExercises: null == plannedExercises
+          ? _self.plannedExercises
+          : plannedExercises // ignore: cast_nullable_to_non_nullable
+              as List<PlannedExercise>,
       nutritionFocus: freezed == nutritionFocus
           ? _self.nutritionFocus
           : nutritionFocus // ignore: cast_nullable_to_non_nullable
@@ -239,6 +249,7 @@ extension WeeklyDayPlanPatterns on WeeklyDayPlan {
             String focusArea,
             bool isRestDay,
             List<String> exerciseNames,
+            List<PlannedExercise> plannedExercises,
             String? nutritionFocus)?
         $default, {
     required TResult orElse(),
@@ -246,8 +257,15 @@ extension WeeklyDayPlanPatterns on WeeklyDayPlan {
     final _that = this;
     switch (_that) {
       case _WeeklyDayPlan() when $default != null:
-        return $default(_that.dayName, _that.date, _that.title, _that.focusArea,
-            _that.isRestDay, _that.exerciseNames, _that.nutritionFocus);
+        return $default(
+            _that.dayName,
+            _that.date,
+            _that.title,
+            _that.focusArea,
+            _that.isRestDay,
+            _that.exerciseNames,
+            _that.plannedExercises,
+            _that.nutritionFocus);
       case _:
         return orElse();
     }
@@ -275,14 +293,22 @@ extension WeeklyDayPlanPatterns on WeeklyDayPlan {
             String focusArea,
             bool isRestDay,
             List<String> exerciseNames,
+            List<PlannedExercise> plannedExercises,
             String? nutritionFocus)
         $default,
   ) {
     final _that = this;
     switch (_that) {
       case _WeeklyDayPlan():
-        return $default(_that.dayName, _that.date, _that.title, _that.focusArea,
-            _that.isRestDay, _that.exerciseNames, _that.nutritionFocus);
+        return $default(
+            _that.dayName,
+            _that.date,
+            _that.title,
+            _that.focusArea,
+            _that.isRestDay,
+            _that.exerciseNames,
+            _that.plannedExercises,
+            _that.nutritionFocus);
       case _:
         throw StateError('Unexpected subclass');
     }
@@ -309,14 +335,22 @@ extension WeeklyDayPlanPatterns on WeeklyDayPlan {
             String focusArea,
             bool isRestDay,
             List<String> exerciseNames,
+            List<PlannedExercise> plannedExercises,
             String? nutritionFocus)?
         $default,
   ) {
     final _that = this;
     switch (_that) {
       case _WeeklyDayPlan() when $default != null:
-        return $default(_that.dayName, _that.date, _that.title, _that.focusArea,
-            _that.isRestDay, _that.exerciseNames, _that.nutritionFocus);
+        return $default(
+            _that.dayName,
+            _that.date,
+            _that.title,
+            _that.focusArea,
+            _that.isRestDay,
+            _that.exerciseNames,
+            _that.plannedExercises,
+            _that.nutritionFocus);
       case _:
         return null;
     }
@@ -324,8 +358,7 @@ extension WeeklyDayPlanPatterns on WeeklyDayPlan {
 }
 
 /// @nodoc
-
-@JsonSerializable(explicitToJson: true)
+@JsonSerializable()
 class _WeeklyDayPlan extends WeeklyDayPlan {
   const _WeeklyDayPlan(
       {required this.dayName,
@@ -334,8 +367,10 @@ class _WeeklyDayPlan extends WeeklyDayPlan {
       required this.focusArea,
       this.isRestDay = false,
       final List<String> exerciseNames = const [],
+      final List<PlannedExercise> plannedExercises = const [],
       this.nutritionFocus})
       : _exerciseNames = exerciseNames,
+        _plannedExercises = plannedExercises,
         super._();
   factory _WeeklyDayPlan.fromJson(Map<String, dynamic> json) =>
       _$WeeklyDayPlanFromJson(json);
@@ -358,6 +393,16 @@ class _WeeklyDayPlan extends WeeklyDayPlan {
     if (_exerciseNames is EqualUnmodifiableListView) return _exerciseNames;
     // ignore: implicit_dynamic_type
     return EqualUnmodifiableListView(_exerciseNames);
+  }
+
+  final List<PlannedExercise> _plannedExercises;
+  @override
+  @JsonKey()
+  List<PlannedExercise> get plannedExercises {
+    if (_plannedExercises is EqualUnmodifiableListView)
+      return _plannedExercises;
+    // ignore: implicit_dynamic_type
+    return EqualUnmodifiableListView(_plannedExercises);
   }
 
   @override
@@ -392,6 +437,8 @@ class _WeeklyDayPlan extends WeeklyDayPlan {
                 other.isRestDay == isRestDay) &&
             const DeepCollectionEquality()
                 .equals(other._exerciseNames, _exerciseNames) &&
+            const DeepCollectionEquality()
+                .equals(other._plannedExercises, _plannedExercises) &&
             (identical(other.nutritionFocus, nutritionFocus) ||
                 other.nutritionFocus == nutritionFocus));
   }
@@ -406,11 +453,12 @@ class _WeeklyDayPlan extends WeeklyDayPlan {
       focusArea,
       isRestDay,
       const DeepCollectionEquality().hash(_exerciseNames),
+      const DeepCollectionEquality().hash(_plannedExercises),
       nutritionFocus);
 
   @override
   String toString() {
-    return 'WeeklyDayPlan(dayName: $dayName, date: $date, title: $title, focusArea: $focusArea, isRestDay: $isRestDay, exerciseNames: $exerciseNames, nutritionFocus: $nutritionFocus)';
+    return 'WeeklyDayPlan(dayName: $dayName, date: $date, title: $title, focusArea: $focusArea, isRestDay: $isRestDay, exerciseNames: $exerciseNames, plannedExercises: $plannedExercises, nutritionFocus: $nutritionFocus)';
   }
 }
 
@@ -429,6 +477,7 @@ abstract mixin class _$WeeklyDayPlanCopyWith<$Res>
       String focusArea,
       bool isRestDay,
       List<String> exerciseNames,
+      List<PlannedExercise> plannedExercises,
       String? nutritionFocus});
 }
 
@@ -451,6 +500,7 @@ class __$WeeklyDayPlanCopyWithImpl<$Res>
     Object? focusArea = null,
     Object? isRestDay = null,
     Object? exerciseNames = null,
+    Object? plannedExercises = null,
     Object? nutritionFocus = freezed,
   }) {
     return _then(_WeeklyDayPlan(
@@ -478,6 +528,10 @@ class __$WeeklyDayPlanCopyWithImpl<$Res>
           ? _self._exerciseNames
           : exerciseNames // ignore: cast_nullable_to_non_nullable
               as List<String>,
+      plannedExercises: null == plannedExercises
+          ? _self._plannedExercises
+          : plannedExercises // ignore: cast_nullable_to_non_nullable
+              as List<PlannedExercise>,
       nutritionFocus: freezed == nutritionFocus
           ? _self.nutritionFocus
           : nutritionFocus // ignore: cast_nullable_to_non_nullable
@@ -796,8 +850,7 @@ extension WeeklyPlanPatterns on WeeklyPlan {
 }
 
 /// @nodoc
-
-@JsonSerializable(explicitToJson: true)
+@JsonSerializable()
 class _WeeklyPlan extends WeeklyPlan {
   const _WeeklyPlan(
       {required this.weekId,

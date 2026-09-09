@@ -8,10 +8,13 @@ part of 'workout.dart';
 
 _ExerciseSet _$ExerciseSetFromJson(Map<String, dynamic> json) => _ExerciseSet(
       setNumber: (json['setNumber'] as num).toInt(),
-      targetReps: (json['targetReps'] as num).toInt(),
+      targetReps: (json['targetReps'] as num?)?.toInt() ?? 10,
       actualReps: (json['actualReps'] as num?)?.toInt(),
-      targetWeightKg: (json['targetWeightKg'] as num).toDouble(),
+      targetWeightKg: (json['targetWeightKg'] as num?)?.toDouble() ?? 0.0,
       actualWeightKg: (json['actualWeightKg'] as num?)?.toDouble(),
+      targetDurationSeconds:
+          (json['targetDurationSeconds'] as num?)?.toInt() ?? 0,
+      actualDurationSeconds: (json['actualDurationSeconds'] as num?)?.toInt(),
       completed: json['completed'] as bool? ?? false,
     );
 
@@ -22,6 +25,8 @@ Map<String, dynamic> _$ExerciseSetToJson(_ExerciseSet instance) =>
       'actualReps': instance.actualReps,
       'targetWeightKg': instance.targetWeightKg,
       'actualWeightKg': instance.actualWeightKg,
+      'targetDurationSeconds': instance.targetDurationSeconds,
+      'actualDurationSeconds': instance.actualDurationSeconds,
       'completed': instance.completed,
     };
 
@@ -30,6 +35,9 @@ _Exercise _$ExerciseFromJson(Map<String, dynamic> json) => _Exercise(
       name: json['name'] as String,
       targetMuscle: json['targetMuscle'] as String,
       equipmentRequired: json['equipmentRequired'] as String,
+      trackingType: $enumDecodeNullable(
+              _$ExerciseTrackingTypeEnumMap, json['trackingType']) ??
+          ExerciseTrackingType.reps,
       sets: (json['sets'] as List<dynamic>)
           .map((e) => ExerciseSet.fromJson(e as Map<String, dynamic>))
           .toList(),
@@ -43,11 +51,18 @@ Map<String, dynamic> _$ExerciseToJson(_Exercise instance) => <String, dynamic>{
       'name': instance.name,
       'targetMuscle': instance.targetMuscle,
       'equipmentRequired': instance.equipmentRequired,
-      'sets': instance.sets.map((e) => e.toJson()).toList(),
+      'trackingType': _$ExerciseTrackingTypeEnumMap[instance.trackingType]!,
+      'sets': instance.sets,
       'notes': instance.notes,
       'instructions': instance.instructions,
       'videoUrl': instance.videoUrl,
     };
+
+const _$ExerciseTrackingTypeEnumMap = {
+  ExerciseTrackingType.reps: 'reps',
+  ExerciseTrackingType.duration: 'duration',
+  ExerciseTrackingType.completion: 'completion',
+};
 
 _DailyWorkout _$DailyWorkoutFromJson(Map<String, dynamic> json) =>
     _DailyWorkout(
@@ -71,7 +86,7 @@ Map<String, dynamic> _$DailyWorkoutToJson(_DailyWorkout instance) =>
       'title': instance.title,
       'focusArea': instance.focusArea,
       'estimatedDurationMin': instance.estimatedDurationMin,
-      'exercises': instance.exercises.map((e) => e.toJson()).toList(),
+      'exercises': instance.exercises,
       'status': _$WorkoutStatusEnumMap[instance.status]!,
       'adaptationNote': instance.adaptationNote,
     };
