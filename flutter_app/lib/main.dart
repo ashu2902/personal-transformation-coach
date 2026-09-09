@@ -20,6 +20,8 @@ import 'screens/coach_screen.dart';
 import 'screens/insights_screen.dart';
 import 'screens/profile_screen.dart';
 import 'screens/onboarding_screen.dart';
+import 'services/app_version_service.dart';
+import 'widgets/common/app_update_dialog.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -126,6 +128,9 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAppVersion();
+    });
   }
 
   @override
@@ -137,13 +142,32 @@ class _MainShellState extends State<MainShell> with WidgetsBindingObserver {
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      debugPrint('[AURA LIFECYCLE] App resumed from background. Checking day status...');
+      debugPrint('[AURA LIFECYCLE] App resumed from background. Syncing latest state from remote Firestore...');
       try {
         final container = ProviderScope.containerOf(context, listen: false);
         container.read(transformationEngineProvider.notifier).checkAndRefreshForNewDay();
+        container.read(transformationEngineProvider.notifier).refreshState();
       } catch (e) {
-        debugPrint('[AURA LIFECYCLE] Failed to refresh day on resume: $e');
+        debugPrint('[AURA LIFECYCLE] Failed to refresh state on resume: $e');
       }
+      _checkAppVersion();
+    }
+  }
+
+  Future<void> _checkAppVersion() async {
+    try {
+      final versionService = AppVersionService();
+      final result = await versionService.checkVersion();
+
+      if (!mounted) return;
+
+      if (result.type == UpdateType.force) {
+        AppUpdateDialogs.showForceUpdateDialog(context, result: result);
+      } else if (result.type == UpdateType.soft) {
+        AppUpdateDialogs.showSoftUpdateNotification(context, result: result);
+      }
+    } catch (e) {
+      debugPrint('[AURA VERSION] Error checking version: $e');
     }
   }
 
